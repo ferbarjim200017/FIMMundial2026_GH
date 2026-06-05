@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+dist
+build
+
+.env
+.env.local
+.env.*.local
+
+*.log
+.DS_Store
+.vercel
+.firebase
+firebase-debug.log
+*-debug.log
+service-account.json

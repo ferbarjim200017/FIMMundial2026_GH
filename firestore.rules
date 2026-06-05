@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---------- Users ----------
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // Crear: solo el propio usuario, sin auto-asignarse rol admin desde el cliente
+      allow create: if isSelf(userId)
+        && request.resource.data.role in ['member', 'admin'];
+      // Actualizar:
+      //   - El propio usuario puede tocar su perfil, stats y currentBalance
+      //     (necesario para las transacciones cliente que liquidan apuestas).
+      //     PERO no puede cambiar su rol ni su initialBalance.
+      //   - El admin puede hacer cualquier cambio.
+      allow update: if (isSelf(userId)
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.initialBalance == resource.data.initialBalance)
+                     || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Bets ----------
+    match /bets/{betId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+    }
+
+    // ---------- Matches / Teams / Groups (solo admin escribe) ----------
+    match /matches/{id}      { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /teams/{id}        { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /groups/{id}       { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /playerStats/{id}  { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /thirdPlaceTable/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /rankings/{id}     { allow read: if isSignedIn(); allow write: if false; }
+
+    // ---------- Predictions ----------
+    match /predictions/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(userId)
+        && (!('lockedAt' in resource.data) || resource.data.lockedAt > request.time);
+    }
+
+    // ---------- Achievements ----------
+    match /achievements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /userAchievements/{userId}/{achId} {
+      allow read: if isSignedIn();
+      allow write: if false; // solo Cloud Functions
+    }
+
+    // ---------- Feed ----------
+    match /feed/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn(); // reacciones
+      allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      }
+    }
+
+    // ---------- Seasons / Audit ----------
+    match /seasons/{id}   { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /auditLog/{id}  { allow read: if isAdmin();   allow write: if false; }
+  }
+}
