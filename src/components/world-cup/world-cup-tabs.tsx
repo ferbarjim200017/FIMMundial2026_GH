@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, Layers3, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const TABS = [
+const TABS: { href: string; label: string; icon: typeof CalendarDays; exact?: boolean }[] = [
   { href: "/world-cup", label: "Calendario", icon: CalendarDays, exact: true },
   { href: "/world-cup/groups", label: "Fase de grupos", icon: Layers3 },
   { href: "/world-cup/knockout", label: "Eliminatorias", icon: Trophy },
-] as const;
+];
 
 export function WorldCupTabs() {
   const pathname = usePathname();
