@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde047"/>
+      <stop offset="0.55" stop-color="#facc15"/>
+      <stop offset="1" stop-color="#ca8a04"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffbeb" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#fffbeb" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo azul redondeado -->
+  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
+
+  <!-- Asa izquierda (forma de C maciza) -->
+  <path d="M 16 18
+           C 5 18, 5 40, 16 40
+           L 16 33
+           C 11 33, 11 25, 16 25
+           Z" fill="url(#gold)"/>
+
+  <!-- Asa derecha -->
+  <path d="M 48 18
+           C 59 18, 59 40, 48 40
+           L 48 33
+           C 53 33, 53 25, 48 25
+           Z" fill="url(#gold)"/>
+
+  <!-- Cuerpo de la copa -->
+  <path d="M 16 13
+           L 48 13
+           L 48 32
+           Q 48 44 32 44
+           Q 16 44 16 32
+           Z" fill="url(#gold)"/>
+
+  <!-- Brillo diagonal en el cuerpo -->
+  <path d="M 19 14 L 32 14 L 19 30 Z" fill="url(#shine)"/>
+
+  <!-- Globo terráqueo dentro de la copa -->
+  <circle cx="32" cy="27" r="7" fill="#1e3a8a"/>
+  <ellipse cx="32" cy="27" rx="7" ry="3" fill="none" stroke="#fde047" stroke-width="0.7"/>
+  <line x1="32" y1="20" x2="32" y2="34" stroke="#fde047" stroke-width="0.7"/>
+  <path d="M 25.5 27 a 6.5 4 0 0 1 13 0" fill="none" stroke="#fde047" stroke-width="0.7"/>
+
+  <!-- Tallo -->
+  <rect x="28" y="44" width="8" height="5" fill="url(#gold)"/>
+
+  <!-- Bases (dos niveles para dar profundidad) -->
+  <rect x="18" y="49" width="28" height="5" rx="1" fill="url(#gold)"/>
+  <rect x="13" y="54" width="38" height="4" rx="1" fill="url(#gold)"/>
+</svg>
