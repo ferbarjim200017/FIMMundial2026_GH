@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
+import { BottomNav } from "@/components/layout/bottom-nav";
 import { RankingCarousel } from "@/components/layout/ranking-carousel";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -12,8 +13,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <TopBar />
         <div className="flex flex-1">
           <Sidebar />
-          <main className="flex-1 overflow-x-hidden p-4 md:p-6">{children}</main>
+          {/* En móvil dejamos espacio inferior para la BottomNav (h-14 + safe-area). */}
+          <main className="flex-1 overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6">
+            {children}
+          </main>
         </div>
+        <BottomNav />
       </div>
     </AuthGuard>
   );

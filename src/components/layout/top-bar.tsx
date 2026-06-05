@@ -29,10 +29,16 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur">
+    <header className="flex h-14 items-center justify-between border-b border-border bg-background/80 px-3 backdrop-blur sm:px-4">
       <div className="flex items-center gap-3">
         <Link href={ROUTES.dashboard} className="flex items-center gap-2">
-          <span className="text-base font-bold tracking-tight">⚽ {APP_NAME}</span>
+          {/* En móvil mostramos solo el icono + año para ahorrar espacio. */}
+          <span className="text-base font-bold tracking-tight sm:hidden">
+            ⚽ Mundial 26
+          </span>
+          <span className="hidden text-base font-bold tracking-tight sm:inline">
+            ⚽ {APP_NAME}
+          </span>
         </Link>
       </div>
 
