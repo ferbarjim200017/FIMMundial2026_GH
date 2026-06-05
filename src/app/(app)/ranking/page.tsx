@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LineChart } from "lucide-react";
+import { BarChart3, LineChart } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { RankingChart } from "@/components/ranking/ranking-chart";
+import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -50,29 +51,54 @@ export default function RankingPage() {
 
   return (
     <div className="space-y-6">
-      {/* ─── Gráfica de evolución ─── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <LineChart className="h-4 w-4 text-primary" />
-            Evolución del saldo
-          </CardTitle>
-          <CardDescription>
-            Cada línea muestra cómo ha evolucionado el saldo de un usuario a
-            partir de sus apuestas liquidadas. Click en un nombre para
-            ocultar/mostrar su línea.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {users === null ? (
-            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-              Cargando…
-            </div>
-          ) : (
-            <RankingChart users={users} bets={bets} />
-          )}
-        </CardContent>
-      </Card>
+      {/* ─── Bloque de gráficas ─── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LineChart className="h-4 w-4 text-primary" />
+              Evolución del saldo
+            </CardTitle>
+            <CardDescription>
+              Todos los usuarios arrancan hoy con su saldo actual. La línea
+              sube o baja con cada apuesta liquidada. Click en un nombre
+              para ocultar/mostrar su línea.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users === null ? (
+              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                Cargando…
+              </div>
+            ) : (
+              <RankingChart users={users} bets={bets} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Apuestas por día
+            </CardTitle>
+            <CardDescription>
+              Número de apuestas registradas cada día desde hoy, apiladas
+              por usuario. El número encima de cada barra es el total del
+              día.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users === null ? (
+              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                Cargando…
+              </div>
+            ) : (
+              <BetsBarChart users={users} bets={bets} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ─── Tabla de clasificación ─── */}
       <Card>

@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  DAY_MS,
+  pickChartColor,
+  todayStartMs,
+} from "@/components/ranking/chart-palette";
 import type { AppUser, Bet } from "@/types/domain";
 
 interface Props {
@@ -16,27 +21,6 @@ interface Series {
   points: { t: number; balance: number }[];
 }
 
-/** Paleta para asignar un color estable a cada usuario. */
-const PALETTE = [
-  "#22c55e", // green
-  "#3b82f6", // blue
-  "#f59e0b", // amber
-  "#ec4899", // pink
-  "#8b5cf6", // violet
-  "#06b6d4", // cyan
-  "#ef4444", // red
-  "#84cc16", // lime
-  "#f97316", // orange
-  "#14b8a6", // teal
-  "#a855f7", // purple
-  "#eab308", // yellow
-];
-
-function pickColor(index: number): string {
-  return PALETTE[index % PALETTE.length];
-}
-
-/** Genera tick values "bonitos" entre min y max (250, 500, 1k…). */
 function niceTicks(min: number, max: number, count: number): number[] {
   if (max === min) return [min];
   const span = max - min;
@@ -53,7 +37,17 @@ function niceTicks(min: number, max: number, count: number): number[] {
   return ticks;
 }
 
-function buildSeries(user: AppUser, bets: Bet[]): Series["points"] {
+/**
+ * Serie temporal de saldo de un usuario partiendo de hoy.
+ *
+ * - Punto inicial: (hoy 00:00, currentBalance) — el saldo del usuario a
+ *   día de hoy es el ancla de todas las líneas.
+ * - Puntos siguientes: cada apuesta liquidada (won/lost/cashout) desde
+ *   hoy en adelante, acumulando profit.
+ * - Si no hay apuestas desde hoy, añadimos un punto en "ahora" para que
+ *   la línea sea visible (plana).
+ */
+function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number): Series["points"] {
   const settled = bets
     .filter((b) => b.userId === user.uid)
     .filter(
@@ -66,23 +60,18 @@ function buildSeries(user: AppUser, bets: Bet[]): Series["points"] {
       ms: (b.settledAt ?? b.createdAt).toMillis(),
       profit: b.profit ?? 0,
     }))
+    .filter((b) => b.ms >= startMs)
     .sort((a, b) => a.ms - b.ms);
 
-  const initial = user.initialBalance ?? 0;
-  if (settled.length === 0) {
-    return [
-      { t: 0, balance: initial },
-      { t: 1, balance: initial },
-    ];
-  }
-
-  const points: Series["points"] = [
-    { t: settled[0].ms - 1, balance: initial },
-  ];
+  const initial = user.currentBalance ?? user.initialBalance ?? 0;
+  const points: Series["points"] = [{ t: startMs, balance: initial }];
   let acc = initial;
   for (const s of settled) {
     acc += s.profit;
     points.push({ t: s.ms, balance: acc });
+  }
+  if (points.length === 1) {
+    points.push({ t: Math.max(nowMs, startMs + DAY_MS), balance: acc });
   }
   return points;
 }
@@ -104,75 +93,72 @@ function formatDateShort(ms: number): string {
 
 export function RankingChart({ users, bets }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(900);
+  const [width, setWidth] = useState(500);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [hover, setHover] = useState<
     | { sid: string; t: number; balance: number; x: number; y: number }
     | null
   >(null);
 
-  // Mide el ancho real del contenedor para que el SVG se renderice en
-  // píxeles 1:1 (sin estirar/distorsionar). Esto es lo que mantiene el
-  // texto y las líneas perfectamente nítidos a cualquier resolución.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setWidth(Math.max(560, Math.floor(el.clientWidth)));
+    const update = () => setWidth(Math.max(320, Math.floor(el.clientWidth)));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
+  const startMs = useMemo(() => todayStartMs(), []);
+  const nowMs = Date.now();
+
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
       uid: u.uid,
       username: u.username,
-      color: pickColor(i),
-      points: buildSeries(u, bets),
+      color: pickChartColor(i),
+      points: buildSeries(u, bets, startMs, nowMs),
     }));
-  }, [users, bets]);
+  }, [users, bets, startMs, nowMs]);
 
   const visibleSeries = series.filter((s) => !hidden.has(s.uid));
 
   const bounds = useMemo(() => {
-    let minT = Infinity;
-    let maxT = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
+    let maxT = startMs + DAY_MS;
     for (const s of series) {
       for (const p of s.points) {
-        if (p.t < minT) minT = p.t;
-        if (p.t > maxT) maxT = p.t;
         if (p.balance < minY) minY = p.balance;
         if (p.balance > maxY) maxY = p.balance;
+        if (p.t > maxT) maxT = p.t;
       }
-    }
-    if (!Number.isFinite(minT)) {
-      minT = 0;
-      maxT = 1;
     }
     if (!Number.isFinite(minY)) {
       minY = 0;
       maxY = 100;
     }
+    if (minY === maxY) {
+      minY -= 50;
+      maxY += 50;
+    }
     const ySpan = Math.max(1, maxY - minY);
     const pad = ySpan * 0.12;
     return {
-      minT,
-      maxT,
+      minT: startMs,
+      maxT: Math.max(maxT, startMs + DAY_MS),
       minY: minY - pad,
       maxY: maxY + pad,
     };
-  }, [series]);
+  }, [series, startMs]);
 
-  // Dimensiones reales del SVG en píxeles
   const W = width;
-  const H = 400;
-  const PAD_LEFT = 72;
-  const PAD_RIGHT = 24;
-  const PAD_TOP = 24;
-  const PAD_BOT = 44;
+  const H = 360;
+  const PAD_LEFT = 64;
+  const PAD_RIGHT = 18;
+  const PAD_TOP = 20;
+  const PAD_BOT = 40;
   const PLOT_W = W - PAD_LEFT - PAD_RIGHT;
   const PLOT_H = H - PAD_TOP - PAD_BOT;
 
@@ -188,10 +174,10 @@ export function RankingChart({ users, bets }: Props) {
   };
 
   const yTicks = useMemo(
-    () => niceTicks(bounds.minY, bounds.maxY, 6),
+    () => niceTicks(bounds.minY, bounds.maxY, 5),
     [bounds]
   );
-  const xTickCount = Math.max(2, Math.min(7, Math.floor(PLOT_W / 110)));
+  const xTickCount = Math.max(2, Math.min(5, Math.floor(PLOT_W / 90)));
   const xTicks = useMemo(() => {
     if (bounds.maxT === bounds.minT) return [bounds.minT];
     const out: number[] = [];
@@ -221,7 +207,7 @@ export function RankingChart({ users, bets }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div ref={containerRef} className="relative w-full">
         <svg
           width={W}
@@ -231,7 +217,6 @@ export function RankingChart({ users, bets }: Props) {
           textRendering="geometricPrecision"
           style={{ display: "block" }}
         >
-          {/* ── Gridlines horizontales (tick Y) ── */}
           {yTicks.map((v) => {
             const y = yFor(v);
             return (
@@ -243,14 +228,13 @@ export function RankingChart({ users, bets }: Props) {
                 y2={y}
                 stroke="currentColor"
                 className="text-border"
-                strokeOpacity={0.6}
+                strokeOpacity={0.55}
                 strokeDasharray="2 4"
                 strokeWidth={1}
               />
             );
           })}
 
-          {/* ── Línea de cero ── */}
           {zeroY !== null && (
             <line
               x1={PAD_LEFT}
@@ -259,12 +243,11 @@ export function RankingChart({ users, bets }: Props) {
               y2={zeroY}
               stroke="currentColor"
               className="text-muted-foreground"
-              strokeOpacity={0.5}
+              strokeOpacity={0.6}
               strokeWidth={1}
             />
           )}
 
-          {/* ── Ejes ── */}
           <line
             x1={PAD_LEFT}
             x2={PAD_LEFT}
@@ -284,13 +267,12 @@ export function RankingChart({ users, bets }: Props) {
             strokeWidth={1.25}
           />
 
-          {/* ── Ticks + labels Y ── */}
           {yTicks.map((v) => {
             const y = yFor(v);
             return (
               <g key={`yt-${v}`}>
                 <line
-                  x1={PAD_LEFT - 5}
+                  x1={PAD_LEFT - 4}
                   x2={PAD_LEFT}
                   y1={y}
                   y2={y}
@@ -300,11 +282,11 @@ export function RankingChart({ users, bets }: Props) {
                   strokeWidth={1}
                 />
                 <text
-                  x={PAD_LEFT - 10}
+                  x={PAD_LEFT - 8}
                   y={y}
                   textAnchor="end"
                   dominantBaseline="middle"
-                  fontSize={12}
+                  fontSize={11}
                   className="fill-muted-foreground"
                   style={{
                     fontFamily:
@@ -317,7 +299,6 @@ export function RankingChart({ users, bets }: Props) {
             );
           })}
 
-          {/* ── Ticks + labels X ── */}
           {xTicks.map((t, i) => {
             const x = xFor(t);
             return (
@@ -326,7 +307,7 @@ export function RankingChart({ users, bets }: Props) {
                   x1={x}
                   x2={x}
                   y1={PAD_TOP + PLOT_H}
-                  y2={PAD_TOP + PLOT_H + 5}
+                  y2={PAD_TOP + PLOT_H + 4}
                   stroke="currentColor"
                   className="text-muted-foreground"
                   strokeOpacity={0.7}
@@ -334,9 +315,9 @@ export function RankingChart({ users, bets }: Props) {
                 />
                 <text
                   x={x}
-                  y={PAD_TOP + PLOT_H + 20}
+                  y={PAD_TOP + PLOT_H + 18}
                   textAnchor="middle"
-                  fontSize={12}
+                  fontSize={11}
                   className="fill-muted-foreground"
                 >
                   {formatDateShort(t)}
@@ -345,24 +326,13 @@ export function RankingChart({ users, bets }: Props) {
             );
           })}
 
-          {/* ── Etiqueta de eje Y ── */}
-          <text
-            x={18}
-            y={PAD_TOP + PLOT_H / 2}
-            transform={`rotate(-90 18 ${PAD_TOP + PLOT_H / 2})`}
-            textAnchor="middle"
-            fontSize={11}
-            className="fill-muted-foreground"
-            opacity={0.8}
-          >
-            Saldo (€)
-          </text>
-
-          {/* ── Líneas de cada usuario ── */}
           {visibleSeries.map((s) => {
             if (s.points.length === 0) return null;
             const d = s.points
-              .map((p, i) => `${i === 0 ? "M" : "L"}${xFor(p.t).toFixed(2)},${yFor(p.balance).toFixed(2)}`)
+              .map(
+                (p, i) =>
+                  `${i === 0 ? "M" : "L"}${xFor(p.t).toFixed(2)},${yFor(p.balance).toFixed(2)}`
+              )
               .join(" ");
             return (
               <path
@@ -377,14 +347,13 @@ export function RankingChart({ users, bets }: Props) {
             );
           })}
 
-          {/* ── Markers (donut) ── */}
           {visibleSeries.map((s) =>
             s.points.map((p, i) => (
               <circle
                 key={`m-${s.uid}-${i}`}
                 cx={xFor(p.t)}
                 cy={yFor(p.balance)}
-                r={4.5}
+                r={4}
                 fill={s.color}
                 stroke="hsl(var(--card))"
                 strokeWidth={2}
@@ -403,15 +372,14 @@ export function RankingChart({ users, bets }: Props) {
             ))
           )}
 
-          {/* ── Tooltip ── */}
           {hover &&
             (() => {
               const s = series.find((x) => x.uid === hover.sid);
               if (!s) return null;
-              const tooltipW = 190;
-              const tooltipH = 50;
+              const tooltipW = 180;
+              const tooltipH = 48;
               let tx = hover.x - tooltipW / 2;
-              let ty = hover.y - tooltipH - 14;
+              let ty = hover.y - tooltipH - 12;
               tx = Math.max(4, Math.min(W - tooltipW - 4, tx));
               if (ty < 4) ty = hover.y + 14;
               return (
@@ -422,16 +390,9 @@ export function RankingChart({ users, bets }: Props) {
                     y1={PAD_TOP}
                     y2={PAD_TOP + PLOT_H}
                     stroke={s.color}
-                    strokeOpacity={0.35}
+                    strokeOpacity={0.3}
                     strokeDasharray="3 4"
                     strokeWidth={1}
-                  />
-                  <circle
-                    cx={hover.x}
-                    cy={hover.y}
-                    r={6.5}
-                    fill={s.color}
-                    fillOpacity={0.2}
                   />
                   <rect
                     x={tx}
@@ -441,17 +402,9 @@ export function RankingChart({ users, bets }: Props) {
                     rx={8}
                     fill="hsl(var(--popover))"
                     stroke="hsl(var(--border))"
-                    style={{
-                      filter:
-                        "drop-shadow(0 4px 6px rgb(0 0 0 / 0.08))",
-                    }}
+                    style={{ filter: "drop-shadow(0 4px 6px rgb(0 0 0 / 0.08))" }}
                   />
-                  <circle
-                    cx={tx + 12}
-                    cy={ty + 18}
-                    r={4}
-                    fill={s.color}
-                  />
+                  <circle cx={tx + 12} cy={ty + 18} r={4} fill={s.color} />
                   <text
                     x={tx + 22}
                     y={ty + 22}
@@ -476,7 +429,6 @@ export function RankingChart({ users, bets }: Props) {
         </svg>
       </div>
 
-      {/* Leyenda interactiva */}
       <div className="flex flex-wrap gap-2">
         {series.map((s) => {
           const isHidden = hidden.has(s.uid);
@@ -486,14 +438,10 @@ export function RankingChart({ users, bets }: Props) {
               type="button"
               onClick={() => toggle(s.uid)}
               className={cn(
-                "flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs transition-all hover:shadow-sm",
+                "flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs transition-all hover:shadow-sm",
                 isHidden && "opacity-40 grayscale"
               )}
-              style={
-                !isHidden
-                  ? { borderColor: `${s.color}55` }
-                  : undefined
-              }
+              style={!isHidden ? { borderColor: `${s.color}55` } : undefined}
             >
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full"
