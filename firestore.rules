@@ -23,13 +23,13 @@ service cloud.firestore {
       allow create: if isSelf(userId)
         && request.resource.data.role in ['member', 'admin'];
       // Actualizar:
-      //   - El propio usuario puede tocar su perfil, stats y currentBalance
-      //     (necesario para las transacciones cliente que liquidan apuestas).
-      //     PERO no puede cambiar su rol ni su initialBalance.
+      //   - El propio usuario puede tocar su perfil, stats, currentBalance e
+      //     initialBalance(s) — los saldos iniciales por casa son
+      //     configurables por cada usuario desde el dashboard.
+      //     PERO no puede cambiar su rol.
       //   - El admin puede hacer cualquier cambio.
       allow update: if (isSelf(userId)
-                        && request.resource.data.role == resource.data.role
-                        && request.resource.data.initialBalance == resource.data.initialBalance)
+                        && request.resource.data.role == resource.data.role)
                      || isAdmin();
       allow delete: if isAdmin();
     }

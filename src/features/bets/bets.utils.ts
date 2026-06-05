@@ -1,5 +1,11 @@
-import type { Bet, BetStatus, UserStats } from "@/types/domain";
-import { EMPTY_USER_STATS } from "@/types/domain";
+import type {
+  AppUser,
+  Bet,
+  BetStatus,
+  BookmakerBalances,
+  UserStats,
+} from "@/types/domain";
+import { EMPTY_BOOKMAKER_BALANCES, EMPTY_USER_STATS } from "@/types/domain";
 
 /**
  * Calcula el beneficio (€) de una apuesta dada su selección final.
@@ -122,4 +128,59 @@ export function bookmakerLabel(
   if (bookmaker === "bet365") return "Bet365";
   if (bookmaker === "winamax") return "Winamax";
   return custom?.trim() || "Otra";
+}
+
+export interface BookmakerSummary {
+  initial: number;
+  profit: number;
+  current: number;
+  pendingStake: number;
+  betsCount: number;
+}
+
+export type BookmakerKey = keyof BookmakerBalances;
+
+const KEYS: BookmakerKey[] = ["bet365", "winamax", "other"];
+
+export function getInitialBalances(user: AppUser): BookmakerBalances {
+  return user.initialBalances ?? EMPTY_BOOKMAKER_BALANCES;
+}
+
+/**
+ * Calcula el saldo (inicial, profit, actual) por casa de apuestas para un
+ * usuario. El profit por casa es la suma del campo `profit` de sus apuestas
+ * liquidadas en esa casa; el saldo actual = inicial + profit.
+ */
+export function computeBookmakerSummary(
+  user: AppUser,
+  bets: Bet[]
+): Record<BookmakerKey, BookmakerSummary> & { total: BookmakerSummary } {
+  const initials = getInitialBalances(user);
+  const result = {} as Record<BookmakerKey, BookmakerSummary>;
+
+  for (const key of KEYS) {
+    const houseBets = bets.filter((b) => b.bookmaker === key);
+    const profit = houseBets.reduce((acc, b) => acc + (b.profit ?? 0), 0);
+    const pendingStake = houseBets
+      .filter((b) => b.status === "pending")
+      .reduce((acc, b) => acc + b.stake, 0);
+    const initial = initials[key] ?? 0;
+    result[key] = {
+      initial: round2(initial),
+      profit: round2(profit),
+      current: round2(initial + profit),
+      pendingStake: round2(pendingStake),
+      betsCount: houseBets.length,
+    };
+  }
+
+  const total: BookmakerSummary = {
+    initial: round2(KEYS.reduce((a, k) => a + result[k].initial, 0)),
+    profit: round2(KEYS.reduce((a, k) => a + result[k].profit, 0)),
+    current: round2(KEYS.reduce((a, k) => a + result[k].current, 0)),
+    pendingStake: round2(KEYS.reduce((a, k) => a + result[k].pendingStake, 0)),
+    betsCount: KEYS.reduce((a, k) => a + result[k].betsCount, 0),
+  };
+
+  return { ...result, total };
 }

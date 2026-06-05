@@ -13,7 +13,13 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { userConverter } from "@/lib/firebase/converters";
-import { EMPTY_USER_STATS, type AppUser, type UserRole } from "@/types/domain";
+import {
+  EMPTY_BOOKMAKER_BALANCES,
+  EMPTY_USER_STATS,
+  type AppUser,
+  type BookmakerBalances,
+  type UserRole,
+} from "@/types/domain";
 import { ADMIN_EMAILS } from "@/lib/constants";
 
 const USERS = "users";
@@ -95,6 +101,36 @@ export async function updateUserProfile(
 
 export async function setUserRole(uid: string, role: UserRole): Promise<void> {
   await updateDoc(doc(db, USERS, uid), { role });
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Actualiza los saldos iniciales por casa de apuestas. Recalcula también
+ * `initialBalance` (suma) y `currentBalance` (= initial + totalProfit) para
+ * que el ranking global se mantenga consistente.
+ */
+export async function updateInitialBalances(
+  uid: string,
+  patch: Partial<BookmakerBalances>
+): Promise<void> {
+  const user = await getUser(uid);
+  if (!user) throw new Error("Usuario no encontrado");
+  const current = user.initialBalances ?? EMPTY_BOOKMAKER_BALANCES;
+  const merged: BookmakerBalances = {
+    bet365: round2(patch.bet365 ?? current.bet365),
+    winamax: round2(patch.winamax ?? current.winamax),
+    other: round2(patch.other ?? current.other),
+  };
+  const initialBalance = round2(merged.bet365 + merged.winamax + merged.other);
+  const totalProfit = user.stats?.totalProfit ?? 0;
+  await updateDoc(doc(db, USERS, uid), {
+    initialBalances: merged,
+    initialBalance,
+    currentBalance: round2(initialBalance + totalProfit),
+  });
 }
 
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {

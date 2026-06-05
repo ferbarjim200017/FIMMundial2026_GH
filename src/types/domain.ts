@@ -24,6 +24,18 @@ export interface UserStats {
   totalStaked: number;
 }
 
+export interface BookmakerBalances {
+  bet365: number;
+  winamax: number;
+  other: number;
+}
+
+export const EMPTY_BOOKMAKER_BALANCES: BookmakerBalances = {
+  bet365: 0,
+  winamax: 0,
+  other: 0,
+};
+
 export interface AppUser {
   uid: string;
   username: string;
@@ -31,8 +43,9 @@ export interface AppUser {
   avatarUrl: string | null;
   role: UserRole;
   joinedAt: Timestamp;
-  initialBalance: number;     // configurable por admin / usuario al alta
-  currentBalance: number;     // initial + totalProfit
+  initialBalance: number;             // suma de initialBalances (mantenido para el ranking)
+  currentBalance: number;             // initialBalance + totalProfit
+  initialBalances?: BookmakerBalances; // saldo inicial por casa (configurable por el usuario)
   stats: UserStats;
 }
 
