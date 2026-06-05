@@ -5,6 +5,10 @@ import {
   updateDoc,
   collection,
   getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  limit as limitTo,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -30,6 +34,17 @@ export async function getUser(uid: string): Promise<AppUser | null> {
 export async function listUsers(): Promise<AppUser[]> {
   const snap = await getDocs(usersCol());
   return snap.docs.map((d) => d.data());
+}
+
+export function subscribeToRanking(
+  callback: (users: AppUser[]) => void,
+  max?: number
+) {
+  const constraints = [orderBy("currentBalance", "desc")];
+  const q = max
+    ? query(usersCol(), ...constraints, limitTo(max))
+    : query(usersCol(), ...constraints);
+  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => d.data())));
 }
 
 export interface CreateUserInput {

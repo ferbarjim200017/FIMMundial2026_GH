@@ -16,8 +16,6 @@ export const ROUTES = {
   ranking: "/ranking",
   profile: (uid: string) => `/profile/${uid}`,
   worldCup: "/world-cup",
-  predictions: "/predictions",
   feed: "/feed",
-  achievements: "/achievements",
   admin: "/admin",
 } as const;
