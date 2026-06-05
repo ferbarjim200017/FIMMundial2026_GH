@@ -344,6 +344,11 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
               {actionVerb(bet.status)}
             </span>
             <BetStatusBadge status={bet.status} />
+            {bet.isFreebet && (
+              <span className="rounded-full bg-purple-600/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">
+                Freebet
+              </span>
+            )}
           </div>
 
           <Link

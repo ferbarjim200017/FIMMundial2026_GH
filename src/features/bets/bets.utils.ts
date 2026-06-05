@@ -10,8 +10,8 @@ import { EMPTY_BOOKMAKER_BALANCES, EMPTY_USER_STATS } from "@/types/domain";
 /**
  * Calcula el beneficio (€) de una apuesta dada su selección final.
  * - pending: 0
- * - won:    stake * (odds - 1)
- * - lost:   -stake
+ * - won:    stake * (odds - 1) (igual con o sin freebet)
+ * - lost:   -stake si es dinero real; 0 si es freebet (el dinero no era tuyo)
  * - void:   0
  * - cashout: valor proporcionado manualmente
  */
@@ -19,13 +19,14 @@ export function calcProfit(
   stake: number,
   odds: number,
   status: BetStatus,
-  cashoutProfit?: number
+  cashoutProfit?: number,
+  isFreebet?: boolean
 ): number {
   switch (status) {
     case "won":
       return round2(stake * (odds - 1));
     case "lost":
-      return round2(-stake);
+      return isFreebet ? 0 : round2(-stake);
     case "void":
       return 0;
     case "cashout":
@@ -53,9 +54,13 @@ export function computeUserStats(bets: Bet[]): UserStats {
   stats.betsLost = bets.filter((b) => b.status === "lost").length;
   stats.betsVoid = bets.filter((b) => b.status === "void").length;
 
-  // Para ROI/Yield: solo cuentan las apuestas decididas (no pending, no void).
+  // Para ROI/Yield: solo cuentan las apuestas decididas (no pending, no void)
+  // Y excluimos freebets: el stake no era dinero del usuario, así que no
+  // debe entrar como denominador del ROI.
   const decided = settled.filter((b) => b.status !== "void");
-  const totalStaked = decided.reduce((acc, b) => acc + b.stake, 0);
+  const totalStaked = decided
+    .filter((b) => !b.isFreebet)
+    .reduce((acc, b) => acc + b.stake, 0);
   const totalProfit = settled.reduce((acc, b) => acc + b.profit, 0);
 
   stats.totalStaked = round2(totalStaked);
@@ -161,8 +166,10 @@ export function computeBookmakerSummary(
   for (const key of KEYS) {
     const houseBets = bets.filter((b) => b.bookmaker === key);
     const profit = houseBets.reduce((acc, b) => acc + (b.profit ?? 0), 0);
+    // Las freebets no inmovilizan dinero del usuario, así que su stake
+    // pendiente no debe restar al saldo disponible.
     const pendingStake = houseBets
-      .filter((b) => b.status === "pending")
+      .filter((b) => b.status === "pending" && !b.isFreebet)
       .reduce((acc, b) => acc + b.stake, 0);
     const initial = initials[key] ?? 0;
     result[key] = {

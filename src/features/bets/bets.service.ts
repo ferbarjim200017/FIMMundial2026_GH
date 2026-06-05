@@ -128,6 +128,7 @@ export async function createBet(input: CreateBetInput): Promise<string> {
     status: "pending" as BetStatus,
     profit: 0,
     isCombo: input.market === "combo" || matchIds.length > 1,
+    isFreebet: !!input.isFreebet,
     notes: input.notes?.trim() ?? "",
   };
 
@@ -167,6 +168,7 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
     createdAt: Timestamp.fromDate(new Date(input.placedAt)),
     notes: input.notes?.trim() ?? "",
     isCombo: input.market === "combo" || matchIds.length > 1,
+    isFreebet: !!input.isFreebet,
   };
 
   let userIdToRecompute: string | null = null;
@@ -179,13 +181,16 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
 
     const oldProfit = bet.profit ?? 0;
     // Para cashout mantenemos el profit que metió el usuario en settleBet;
-    // para won/lost recalculamos con la nueva stake/odds.
+    // para won/lost recalculamos con la nueva stake/odds (y respetando si
+    // es freebet: una freebet perdida no resta del saldo).
+    const isFreebet =
+      input.isFreebet !== undefined ? !!input.isFreebet : !!bet.isFreebet;
     const newProfit =
       bet.status === "pending"
         ? 0
         : bet.status === "cashout"
         ? oldProfit
-        : calcProfit(stake, odds, bet.status);
+        : calcProfit(stake, odds, bet.status, undefined, isFreebet);
 
     patch.profit = round2(newProfit);
     tx.update(betRef, patch);
@@ -237,7 +242,13 @@ export async function settleBet(
     //    inconsistencia: ok para grupo privado).
     //    En su lugar, podemos recalcular incrementalmente desde el delta.
     const oldProfit = bet.profit ?? 0;
-    const newProfit = calcProfit(bet.stake, bet.odds, newStatus, cashoutProfit);
+    const newProfit = calcProfit(
+      bet.stake,
+      bet.odds,
+      newStatus,
+      cashoutProfit,
+      !!bet.isFreebet
+    );
     const deltaProfit = newProfit - oldProfit;
 
     // 4. Update apuesta

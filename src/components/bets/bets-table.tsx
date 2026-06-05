@@ -88,7 +88,17 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                 </td>
                 <td className="px-3 py-2 text-right font-mono">{b.odds.toFixed(2)}</td>
                 <td className="px-3 py-2 text-right font-mono">
-                  {formatCurrency(b.stake)}
+                  <div className="flex items-center justify-end gap-1.5">
+                    {b.isFreebet && (
+                      <span
+                        className="rounded-[3px] bg-purple-600 px-1 py-0 text-[9px] font-semibold uppercase tracking-wide text-white"
+                        title="Freebet: el stake no era dinero del usuario"
+                      >
+                        FB
+                      </span>
+                    )}
+                    <span>{formatCurrency(b.stake)}</span>
+                  </div>
                 </td>
                 <td className={`px-3 py-2 text-right font-mono ${profitClass(b.profit)}`}>
                   {b.status === "pending"

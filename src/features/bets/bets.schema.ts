@@ -71,6 +71,7 @@ export const betFormSchema = z
       .min(0.01, "El stake debe ser > 0")
       .max(100000, "Stake demasiado alto"),
     placedAt: z.string().min(1, "Selecciona fecha"),
+    isFreebet: z.boolean().optional().default(false),
     notes: z.string().max(500).optional().default(""),
   })
   .refine(

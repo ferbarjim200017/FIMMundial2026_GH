@@ -64,6 +64,7 @@ export function BetForm({ userId, initial, onDone }: Props) {
     placedAt: initial
       ? toLocalDatetimeValue(initial.createdAt.toDate())
       : toLocalDatetimeValue(new Date()),
+    isFreebet: initial?.isFreebet ?? false,
     notes: initial?.notes ?? "",
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -129,6 +130,9 @@ export function BetForm({ userId, initial, onDone }: Props) {
     () => (Number(values.odds) || 0) * (Number(values.stake) || 0),
     [values.odds, values.stake]
   );
+  // stake * (odds - 1) — el beneficio potencial es igual con o sin freebet.
+  // En una freebet, sin embargo, no hay "retorno total" porque el stake
+  // era un token de la casa: solo se cobra el beneficio.
   const potentialProfit = potentialReturn - (Number(values.stake) || 0);
 
   function update<K extends keyof BetFormValues>(key: K, v: BetFormValues[K]) {
@@ -357,7 +361,9 @@ export function BetForm({ userId, initial, onDone }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="stake">Stake (€)</Label>
+            <Label htmlFor="stake">
+              Stake (€){values.isFreebet && " · freebet"}
+            </Label>
             <Input
               id="stake"
               type="number"
@@ -367,6 +373,22 @@ export function BetForm({ userId, initial, onDone }: Props) {
               onChange={(e) => update("stake", e.target.value as unknown as number)}
             />
             {errors.stake && <p className="text-xs text-destructive">{errors.stake}</p>}
+            <label className="mt-1.5 flex cursor-pointer items-start gap-2 rounded-md border bg-muted/20 px-2.5 py-2 text-xs">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!values.isFreebet}
+                onChange={(e) => update("isFreebet", e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-foreground">Freebet</span>{" "}
+                <span className="text-muted-foreground">
+                  — el stake es un token de la casa, no tu dinero. Si ganas
+                  solo sumas el beneficio (stake × (cuota − 1)); si pierdes,
+                  no se descuenta nada de tu saldo.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="space-y-1.5">
@@ -398,15 +420,26 @@ export function BetForm({ userId, initial, onDone }: Props) {
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            Retorno potencial:{" "}
-            <span className="font-mono font-medium text-foreground">
-              {formatCurrency(potentialReturn)}
-            </span>
-            <span className="mx-2 text-border">•</span>
-            Beneficio potencial:{" "}
-            <span className="font-mono font-medium text-profit">
-              {formatCurrency(potentialProfit)}
-            </span>
+            {values.isFreebet ? (
+              <>
+                Beneficio potencial (freebet):{" "}
+                <span className="font-mono font-medium text-profit">
+                  {formatCurrency(potentialProfit)}
+                </span>
+              </>
+            ) : (
+              <>
+                Retorno potencial:{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {formatCurrency(potentialReturn)}
+                </span>
+                <span className="mx-2 text-border">•</span>
+                Beneficio potencial:{" "}
+                <span className="font-mono font-medium text-profit">
+                  {formatCurrency(potentialProfit)}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex gap-2">
             <Button

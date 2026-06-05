@@ -120,6 +120,12 @@ export interface Bet {
   status: BetStatus;
   profit: number;              // se calcula al cerrar
   isCombo: boolean;
+  /** Si true, el stake es un token regalado por la casa, no dinero del
+   *  usuario. Si se pierde, profit = 0 (no se descuenta del saldo). Si
+   *  se gana, profit = stake * (odds - 1) (igual que apuesta normal). El
+   *  stake NO cuenta como dinero "en juego" en el saldo disponible ni
+   *  como denominador del ROI. */
+  isFreebet?: boolean;
   legs?: BetLeg[];
   notes?: string;
 }

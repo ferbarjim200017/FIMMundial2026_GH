@@ -40,23 +40,28 @@ const CHOICES: { value: Choice; label: string; tone: string }[] = [
 export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
   const [choice, setChoice] = useState<Choice>("won");
   // El usuario introduce el IMPORTE recibido al cerrar la apuesta. El
-  // beneficio se calcula automáticamente como cashoutAmount - stake.
+  // beneficio se calcula automáticamente. En una freebet el importe
+  // recibido ES el beneficio (no hay stake que recuperar porque no era
+  // tuyo); en una apuesta normal es importe − stake.
   const [cashoutAmount, setCashoutAmount] = useState<string>(
-    bet.stake.toFixed(2)
+    bet.isFreebet ? "0" : bet.stake.toFixed(2)
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cashoutAmountNum = Number(cashoutAmount.replace(",", "."));
   const cashoutProfit = Number.isFinite(cashoutAmountNum)
-    ? cashoutAmountNum - bet.stake
+    ? bet.isFreebet
+      ? cashoutAmountNum
+      : cashoutAmountNum - bet.stake
     : 0;
 
   const previewProfit = calcProfit(
     bet.stake,
     bet.odds,
     choice,
-    choice === "cashout" ? cashoutProfit : undefined
+    choice === "cashout" ? cashoutProfit : undefined,
+    !!bet.isFreebet
   );
 
   async function handleConfirm() {
@@ -110,7 +115,11 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
 
           {choice === "cashout" && (
             <div className="space-y-1.5">
-              <Label htmlFor="cashout">Importe del cashout (€)</Label>
+              <Label htmlFor="cashout">
+                {bet.isFreebet
+                  ? "Beneficio del cashout (€)"
+                  : "Importe del cashout (€)"}
+              </Label>
               <Input
                 id="cashout"
                 type="number"
@@ -118,17 +127,22 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
                 min="0"
                 value={cashoutAmount}
                 onChange={(e) => setCashoutAmount(e.target.value)}
-                placeholder={`Stake original: ${formatCurrency(bet.stake)}`}
+                placeholder={
+                  bet.isFreebet
+                    ? "Lo que te paga la casa (todo es beneficio)"
+                    : `Stake original: ${formatCurrency(bet.stake)}`
+                }
               />
               <p className="text-xs text-muted-foreground">
-                Indica por cuánto cerraste la apuesta. El beneficio se calcula
-                automáticamente (importe − stake).
+                {bet.isFreebet
+                  ? "En una freebet no hay stake que recuperar: lo que te pague la casa al cerrar es directamente beneficio."
+                  : "Indica por cuánto cerraste la apuesta. El beneficio se calcula automáticamente (importe − stake)."}
               </p>
             </div>
           )}
 
           <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
-            {choice === "cashout" && (
+            {choice === "cashout" && !bet.isFreebet && (
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{formatCurrency(cashoutAmountNum || 0)} − {formatCurrency(bet.stake)} (stake)</span>
               </div>
