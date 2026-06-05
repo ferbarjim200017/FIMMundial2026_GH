@@ -2,25 +2,52 @@
 
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
   type User as FirebaseUser,
 } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 import { auth, googleProvider } from "@/lib/firebase/client";
 import { ensureUserDoc } from "@/features/users/users.service";
 
-export async function signInWithGoogle() {
-  const cred = await signInWithPopup(auth, googleProvider);
-  const user = cred.user;
+async function ensureGoogleUserDoc(user: FirebaseUser) {
   await ensureUserDoc({
     uid: user.uid,
     email: user.email ?? "",
     username: user.displayName ?? user.email?.split("@")[0] ?? "Usuario",
     avatarUrl: user.photoURL ?? null,
   });
-  return user;
+}
+
+export async function signInWithGoogle() {
+  try {
+    const cred = await signInWithPopup(auth, googleProvider);
+    await ensureGoogleUserDoc(cred.user);
+    return cred.user;
+  } catch (err) {
+    if (
+      err instanceof FirebaseError &&
+      (err.code === "auth/popup-blocked" ||
+        err.code === "auth/popup-closed-by-user" ||
+        err.code === "auth/cancelled-popup-request")
+    ) {
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+export async function completeGoogleRedirect() {
+  const result = await getRedirectResult(auth);
+  if (result?.user) {
+    await ensureGoogleUserDoc(result.user);
+  }
+  return result?.user ?? null;
 }
 
 export async function signInWithEmail(email: string, password: string) {

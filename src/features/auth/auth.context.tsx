@@ -10,6 +10,7 @@ import {
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { onSnapshot } from "firebase/firestore";
 import { auth, isFirebaseConfigured } from "@/lib/firebase/client";
+import { completeGoogleRedirect } from "@/features/auth/auth.service";
 import { userDoc } from "@/features/users/users.service";
 import type { AppUser } from "@/types/domain";
 
@@ -37,6 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    completeGoogleRedirect().catch((err) => {
+      console.error("[auth redirect]", err);
+    });
     const unsub = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       if (!user) {
