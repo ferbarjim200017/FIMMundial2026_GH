@@ -93,6 +93,10 @@ export async function updateUserProfile(
   await updateDoc(doc(db, USERS, uid), data);
 }
 
+export async function setUserRole(uid: string, role: UserRole): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), { role });
+}
+
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {
   const existing = await getUser(input.uid);
   if (existing) return existing;
