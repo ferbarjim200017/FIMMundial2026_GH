@@ -15,3 +15,5 @@ build
 firebase-debug.log
 *-debug.log
 service-account.json
+
+*.tsbuildinfo
