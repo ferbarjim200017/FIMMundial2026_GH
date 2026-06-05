@@ -98,14 +98,33 @@ export function MatchCard({ match, highlightTeam, className, compact }: Props) {
         </div>
 
         {finished && r ? (
-          <div className="flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 font-mono text-lg font-bold">
-            <span className={cn(r.homeGoals > r.awayGoals && "text-profit")}>
-              {r.homeGoals}
-            </span>
-            <span className="text-muted-foreground/60">-</span>
-            <span className={cn(r.awayGoals > r.homeGoals && "text-profit")}>
-              {r.awayGoals}
-            </span>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 font-mono text-lg font-bold">
+              <span
+                className={cn(
+                  (r.homeGoals > r.awayGoals ||
+                    (r.homeGoals === r.awayGoals && r.penaltyWinner === "home")) &&
+                    "text-profit"
+                )}
+              >
+                {r.homeGoals}
+              </span>
+              <span className="text-muted-foreground/60">-</span>
+              <span
+                className={cn(
+                  (r.awayGoals > r.homeGoals ||
+                    (r.homeGoals === r.awayGoals && r.penaltyWinner === "away")) &&
+                    "text-profit"
+                )}
+              >
+                {r.awayGoals}
+              </span>
+            </div>
+            {r.homeGoals === r.awayGoals && r.penaltyWinner && (
+              <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+                Pen. {r.penaltyWinner === "home" ? "←" : "→"}
+              </span>
+            )}
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">vs</span>

@@ -158,6 +158,9 @@ export interface MatchResult {
   awayYellow: number;
   homeRed: number;
   awayRed: number;
+  /** En eliminatorias, si terminó empatado tras 90' + prórroga, quién ganó
+   *  los penaltis. Solo se rellena cuando hay empate en knockouts. */
+  penaltyWinner?: "home" | "away" | null;
 }
 
 export interface Match {

@@ -30,6 +30,7 @@ interface FormState {
   awayYellow: string;
   homeRed: string;
   awayRed: string;
+  penaltyWinner: "home" | "away" | "";
 }
 
 function initialFor(m: Match): FormState {
@@ -41,6 +42,7 @@ function initialFor(m: Match): FormState {
     awayYellow: String(r?.awayYellow ?? 0),
     homeRed: String(r?.homeRed ?? 0),
     awayRed: String(r?.awayRed ?? 0),
+    penaltyWinner: r?.penaltyWinner ?? "",
   };
 }
 
@@ -66,13 +68,30 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
     setSaving(true);
     setError(null);
     try {
+      const homeGoals = clampInt(values.homeGoals, 0, 30);
+      const awayGoals = clampInt(values.awayGoals, 0, 30);
+      const isKnockout = match.stage !== "group";
+      const isTie = homeGoals === awayGoals;
+
+      if (isKnockout && isTie && !values.penaltyWinner) {
+        setError(
+          "En eliminatorias, si el resultado fue empate hay que indicar quién ganó en penaltis."
+        );
+        setSaving(false);
+        return;
+      }
+
       const result: MatchResult = {
-        homeGoals: clampInt(values.homeGoals, 0, 30),
-        awayGoals: clampInt(values.awayGoals, 0, 30),
+        homeGoals,
+        awayGoals,
         homeYellow: clampInt(values.homeYellow, 0, 30),
         awayYellow: clampInt(values.awayYellow, 0, 30),
         homeRed: clampInt(values.homeRed, 0, 11),
         awayRed: clampInt(values.awayRed, 0, 11),
+        penaltyWinner:
+          isKnockout && isTie && values.penaltyWinner
+            ? values.penaltyWinner
+            : null,
       };
       await setMatchResult(match.id, result, firebaseUser.uid);
       onOpenChange(false);
@@ -123,6 +142,35 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
             awayTeam={match.awayLabel}
             big
           />
+
+          {match.stage !== "group" &&
+            Number(values.homeGoals) === Number(values.awayGoals) && (
+              <div className="border-t pt-3">
+                <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Empate en eliminatoria — ganador por penaltis
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      values.penaltyWinner === "home" ? "default" : "outline"
+                    }
+                    onClick={() => update("penaltyWinner", "home")}
+                  >
+                    {match.homeLabel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      values.penaltyWinner === "away" ? "default" : "outline"
+                    }
+                    onClick={() => update("penaltyWinner", "away")}
+                  >
+                    {match.awayLabel}
+                  </Button>
+                </div>
+              </div>
+            )}
 
           <div className="border-t pt-3">
             <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">

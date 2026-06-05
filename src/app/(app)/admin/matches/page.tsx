@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/auth.context";
 import {
+  applyBracketChanges,
   createMatch,
   deleteMatch,
   GROUP_IDS,
@@ -31,6 +32,11 @@ import {
   STAGE_LABELS,
   subscribeToMatches,
 } from "@/features/matches/matches.service";
+import {
+  resolveBracket,
+  type BracketPending,
+  type BracketResolutionResult,
+} from "@/features/matches/bracket-resolver";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { formatDateTime } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -71,6 +77,12 @@ export default function AdminMatchesPage() {
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
   const [resultFor, setResultFor] = useState<Match | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveSummary, setResolveSummary] = useState<
+    | (BracketResolutionResult & { applied: number })
+    | { skipped: true; pending: BracketPending[] }
+    | null
+  >(null);
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace(ROUTES.dashboard);
@@ -125,6 +137,29 @@ export default function AdminMatchesPage() {
       await deleteMatch(m.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error al eliminar");
+    }
+  }
+
+  async function handleResolveBracket() {
+    setResolving(true);
+    setResolveSummary(null);
+    try {
+      const preview = resolveBracket(matches);
+      if (preview.resolved.length === 0) {
+        setResolveSummary({ skipped: true, pending: preview.pending });
+        return;
+      }
+      const ok = confirm(
+        `Se van a actualizar ${preview.resolved.length} casillas del cuadro eliminatorio con los equipos reales. ` +
+          `¿Aplicar los cambios?`
+      );
+      if (!ok) return;
+      const res = await applyBracketChanges(preview.resolved);
+      setResolveSummary({ ...preview, applied: res.updated });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error resolviendo bracket");
+    } finally {
+      setResolving(false);
     }
   }
 
@@ -186,6 +221,76 @@ export default function AdminMatchesPage() {
         {seedMsg && (
           <CardContent>
             <p className="text-sm">{seedMsg}</p>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="border-yellow-500/40 bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-transparent">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              🏆 Resolver eliminatorias
+            </CardTitle>
+            <CardDescription>
+              Sustituye los placeholders del bracket (&quot;1.º Grupo A&quot;,
+              &quot;Ganador M73&quot;, &quot;Mejor 3.º…&quot;) por los equipos
+              reales según los resultados ya introducidos. Se puede ejecutar
+              tantas veces como quieras conforme avanza el torneo.
+            </CardDescription>
+          </div>
+          <Button onClick={handleResolveBracket} disabled={resolving}>
+            {resolving ? "Calculando…" : "Resolver bracket"}
+          </Button>
+        </CardHeader>
+        {resolveSummary && (
+          <CardContent className="space-y-3 text-sm">
+            {"skipped" in resolveSummary ? (
+              <p className="text-muted-foreground">
+                Nada que resolver: el cuadro ya está al día con los resultados
+                actuales{resolveSummary.pending.length > 0 && ", o todavía falta información para algunas casillas"}.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <p className="font-medium text-profit">
+                  ✅ {resolveSummary.applied} partidos actualizados ·{" "}
+                  {resolveSummary.resolved.length} casillas rellenadas
+                </p>
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground">
+                    Ver detalle de cambios
+                  </summary>
+                  <ul className="mt-2 space-y-0.5 pl-4">
+                    {resolveSummary.resolved.map((c, i) => (
+                      <li key={i}>
+                        <span className="font-mono">{c.matchId}</span> ·{" "}
+                        {c.field === "homeLabel" ? "local" : "visitante"}:{" "}
+                        <span className="line-through opacity-60">{c.oldLabel}</span>{" "}
+                        → <span className="text-foreground">{c.newLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+            {resolveSummary.pending.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  {resolveSummary.pending.length} casillas siguen sin resolver
+                </summary>
+                <ul className="mt-2 space-y-0.5 pl-4 text-muted-foreground">
+                  {resolveSummary.pending.slice(0, 30).map((p, i) => (
+                    <li key={i}>
+                      <span className="font-mono">{p.matchId}</span> ·{" "}
+                      <span className="text-foreground">{p.label}</span> —{" "}
+                      {p.reason}
+                    </li>
+                  ))}
+                  {resolveSummary.pending.length > 30 && (
+                    <li>… y {resolveSummary.pending.length - 30} más</li>
+                  )}
+                </ul>
+              </details>
+            )}
           </CardContent>
         )}
       </Card>

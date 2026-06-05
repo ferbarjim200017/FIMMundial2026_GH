@@ -129,6 +129,28 @@ export async function deleteMatch(id: string): Promise<void> {
   await deleteDoc(doc(db, MATCHES, id));
 }
 
+/**
+ * Aplica un conjunto de cambios al bracket en un solo batch write.
+ * Devuelve el nº de documentos actualizados.
+ */
+export async function applyBracketChanges(
+  changes: { matchId: string; field: "homeLabel" | "awayLabel"; newLabel: string }[]
+): Promise<{ updated: number }> {
+  if (changes.length === 0) return { updated: 0 };
+  const grouped = new Map<string, Record<string, string>>();
+  for (const c of changes) {
+    const cur = grouped.get(c.matchId) ?? {};
+    cur[c.field] = c.newLabel;
+    grouped.set(c.matchId, cur);
+  }
+  const batch = writeBatch(db);
+  for (const [matchId, patch] of grouped) {
+    batch.update(doc(db, MATCHES, matchId), patch);
+  }
+  await batch.commit();
+  return { updated: grouped.size };
+}
+
 // ---------- Helpers ----------
 
 export function matchLabel(m: Match): string {
