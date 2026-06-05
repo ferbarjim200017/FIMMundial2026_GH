@@ -288,9 +288,14 @@ function BookmakerCard({
       setEditing(false);
     } catch (err) {
       console.error("[updateInitialBalances]", err);
-      window.alert(
-        err instanceof Error ? `No se pudo guardar: ${err.message}` : "Error guardando"
-      );
+      const msg = err instanceof Error ? err.message : "Error guardando";
+      const friendly =
+        msg.includes("permission-denied") || msg.includes("PERMISSION_DENIED")
+          ? "Firebase ha rechazado el cambio por reglas de seguridad. " +
+            "Si eres el admin, ejecuta `firebase deploy --only firestore:rules` " +
+            "para subir las reglas actuales (las viejas no permitían editar el saldo a usuarios normales)."
+          : `No se pudo guardar: ${msg}`;
+      window.alert(friendly);
     } finally {
       setSaving(false);
     }
