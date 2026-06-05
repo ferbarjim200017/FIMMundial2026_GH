@@ -1,8 +1,9 @@
 "use client";
 
+import { Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { GROUP_COLORS, STAGE_STYLES } from "@/features/matches/stage-styles";
-import { isTveMatch } from "@/features/matches/tve-matches";
+import { isSpainTeam, isTveMatch } from "@/features/matches/tve-matches";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -41,6 +42,8 @@ export function MatchCard({
     minute: "2-digit",
   });
   const tve = isTveMatch(match);
+  const homeIsSpain = isSpainTeam(match.homeLabel);
+  const awayIsSpain = isSpainTeam(match.awayLabel);
   const tveBadge = (
     <span
       className="rounded-[3px] bg-blue-600 px-1 py-0 font-semibold text-white"
@@ -48,6 +51,12 @@ export function MatchCard({
     >
       TVE
     </span>
+  );
+  const spainStar = (
+    <Star
+      className="inline-block h-3 w-3 shrink-0 fill-yellow-400 text-yellow-500"
+      aria-label="Partido de España"
+    />
   );
 
   return (
@@ -124,13 +133,14 @@ export function MatchCard({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <div
           className={cn(
-            "text-right text-sm font-medium truncate",
+            "flex items-center justify-end gap-1 text-right text-sm font-medium truncate",
             highlightTeam === match.homeLabel && "text-primary",
             finished && r && r.homeGoals > r.awayGoals && "font-bold"
           )}
           title={match.homeLabel}
         >
-          {match.homeLabel}
+          <span className="truncate">{match.homeLabel}</span>
+          {homeIsSpain && spainStar}
         </div>
 
         {finished && r ? (
@@ -168,13 +178,14 @@ export function MatchCard({
 
         <div
           className={cn(
-            "text-left text-sm font-medium truncate",
+            "flex items-center gap-1 text-left text-sm font-medium truncate",
             highlightTeam === match.awayLabel && "text-primary",
             finished && r && r.awayGoals > r.homeGoals && "font-bold"
           )}
           title={match.awayLabel}
         >
-          {match.awayLabel}
+          {awayIsSpain && spainStar}
+          <span className="truncate">{match.awayLabel}</span>
         </div>
       </div>
 

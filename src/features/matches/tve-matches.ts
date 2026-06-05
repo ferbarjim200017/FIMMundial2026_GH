@@ -41,9 +41,10 @@ function normalize(s: string): string {
 
 const SPAIN_NAMES = new Set(["espana", "spain"]);
 
+export function isSpainTeam(label: string): boolean {
+  return SPAIN_NAMES.has(normalize(label));
+}
+
 export function isSpainMatch(match: Match): boolean {
-  return (
-    SPAIN_NAMES.has(normalize(match.homeLabel)) ||
-    SPAIN_NAMES.has(normalize(match.awayLabel))
-  );
+  return isSpainTeam(match.homeLabel) || isSpainTeam(match.awayLabel);
 }

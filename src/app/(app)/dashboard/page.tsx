@@ -65,8 +65,15 @@ export default function DashboardPage() {
       {/* ─────── Resumen general ─────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Saldo total"
-          value={formatCurrency(summary.total.current)}
+          label={summary.total.pendingStake > 0 ? "Disponible total" : "Saldo total"}
+          value={formatCurrency(
+            summary.total.current - summary.total.pendingStake
+          )}
+          subtitle={
+            summary.total.pendingStake > 0
+              ? `${formatCurrency(summary.total.current)} − ${formatCurrency(summary.total.pendingStake)} en juego`
+              : undefined
+          }
         />
         <StatCard
           label="Beneficio total"
@@ -215,16 +222,21 @@ function StatCard({
   label,
   value,
   valueClass,
+  subtitle,
 }: {
   label: string;
   value: string;
   valueClass?: string;
+  subtitle?: string;
 }) {
   return (
     <Card>
       <CardContent className="p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
         <p className={cn("mt-1 text-2xl font-bold", valueClass)}>{value}</p>
+        {subtitle && (
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -317,11 +329,19 @@ function BookmakerCard({
       <CardContent className="space-y-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Saldo actual
+            {pendingStake > 0 ? "Disponible" : "Saldo actual"}
           </p>
           <p className="font-mono text-2xl font-bold">
-            {formatCurrency(current)}
+            {formatCurrency(current - pendingStake)}
           </p>
+          {pendingStake > 0 && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Saldo total: {formatCurrency(current)} ·{" "}
+              <span className="text-amber-500 dark:text-amber-400">
+                −{formatCurrency(pendingStake)} en juego
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Beneficio</span>
@@ -410,11 +430,19 @@ function TotalBalanceCard({
       <CardContent className="space-y-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Saldo actual
+            {pendingStake > 0 ? "Disponible" : "Saldo actual"}
           </p>
           <p className="font-mono text-2xl font-bold">
-            {formatCurrency(current)}
+            {formatCurrency(current - pendingStake)}
           </p>
+          {pendingStake > 0 && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Saldo total: {formatCurrency(current)} ·{" "}
+              <span className="text-amber-500 dark:text-amber-400">
+                −{formatCurrency(pendingStake)} en juego
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Beneficio</span>
