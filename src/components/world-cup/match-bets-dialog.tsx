@@ -39,13 +39,34 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
       setBets(null);
       return;
     }
-    const unsubBets = subscribeToBetsByMatch(match.id, setBets);
+    // Reset al abrir para evitar mostrar las apuestas del partido anterior
+    setBets(null);
+
+    // Salvavidas: si la suscripción no devuelve nada en 4 s, mostramos
+    // "no hay apuestas" en vez de quedarnos en "Cargando…" para siempre.
+    const safety = window.setTimeout(() => {
+      setBets((prev) => (prev === null ? [] : prev));
+    }, 4000);
+
+    const unsubBets = subscribeToBetsByMatch(
+      match.id,
+      (bets) => {
+        window.clearTimeout(safety);
+        setBets(bets);
+      },
+      (err) => {
+        console.error("[match bets]", err);
+        window.clearTimeout(safety);
+        setBets([]); // si Firestore rechaza la query (p.ej. falta índice), no nos quedamos colgados
+      }
+    );
     const unsubUsers = subscribeToRanking((users) => {
       const map: Record<string, AppUser> = {};
       for (const u of users) map[u.uid] = u;
       setUsersById(map);
     });
     return () => {
+      window.clearTimeout(safety);
       unsubBets();
       unsubUsers();
     };

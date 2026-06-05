@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { GROUP_COLORS, STAGE_STYLES } from "@/features/matches/stage-styles";
+import { isTveMatch } from "@/features/matches/tve-matches";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -39,6 +40,15 @@ export function MatchCard({
     hour: "2-digit",
     minute: "2-digit",
   });
+  const tve = isTveMatch(match);
+  const tveBadge = (
+    <span
+      className="rounded-[3px] bg-blue-600 px-1 py-0 font-semibold text-white"
+      title="Emite TVE La 1"
+    >
+      TVE
+    </span>
+  );
 
   return (
     <div
@@ -82,15 +92,16 @@ export function MatchCard({
           {finished ? (
             <Badge variant="muted" className="text-[10px]">Final</Badge>
           ) : (
-            <span className="text-muted-foreground">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
               {kickoffDate} · {kickoffTime}
+              {tve && tveBadge}
             </span>
           )}
         </div>
       )}
 
       {compact && (
-        <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
           {finished ? (
             <>
               <Badge variant="muted" className="text-[9px]">Final</Badge>
@@ -101,7 +112,10 @@ export function MatchCard({
               <span className="font-semibold text-foreground/80">
                 {kickoffDate}
               </span>
-              <span>{kickoffTime}</span>
+              <span className="flex items-center gap-1">
+                {kickoffTime}
+                {tve && tveBadge}
+              </span>
             </>
           )}
         </div>

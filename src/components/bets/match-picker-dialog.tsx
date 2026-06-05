@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Check } from "lucide-react";
+import { Search, Check, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { subscribeToMatches, STAGE_LABELS } from "@/features/matches/matches.service";
+import { isSpainMatch, isTveMatch } from "@/features/matches/tve-matches";
 import { formatDateTime } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -170,8 +171,18 @@ export function MatchPickerDialog({
                           {isSelected && <Check className="h-3.5 w-3.5" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">
-                            {m.homeLabel} <span className="text-muted-foreground">vs</span> {m.awayLabel}
+                          <p className="flex items-center gap-1.5 truncate font-medium">
+                            {isSpainMatch(m) && (
+                              <Star
+                                className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500"
+                                aria-label="Partido de España"
+                              />
+                            )}
+                            <span className="truncate">
+                              {m.homeLabel}{" "}
+                              <span className="text-muted-foreground">vs</span>{" "}
+                              {m.awayLabel}
+                            </span>
                           </p>
                           <p className="truncate text-xs text-muted-foreground">
                             {STAGE_LABELS[m.stage]}
@@ -180,7 +191,12 @@ export function MatchPickerDialog({
                             {m.city && ` · ${m.city}`}
                           </p>
                         </div>
-                        <div className="text-right text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 text-right text-xs text-muted-foreground">
+                          {isTveMatch(m) && (
+                            <span className="rounded-[3px] bg-blue-600 px-1 py-0 text-[10px] font-semibold uppercase text-white">
+                              TVE
+                            </span>
+                          )}
                           {kickoff.toLocaleTimeString("es-ES", {
                             hour: "2-digit",
                             minute: "2-digit",

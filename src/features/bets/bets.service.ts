@@ -72,7 +72,8 @@ export function subscribeToBets(
  * Suscripción a todas las apuestas que incluyan un partido concreto. Usa
  * `array-contains` sobre `matchIds`, que en todas las apuestas creadas
  * desde la app contiene el id del partido (incluso para apuestas no
- * combinadas).
+ * combinadas). Ordena en cliente para evitar el requisito de un índice
+ * compuesto en Firestore (`array-contains` + `orderBy` exige índice).
  */
 export function subscribeToBetsByMatch(
   matchId: string,
@@ -80,12 +81,12 @@ export function subscribeToBetsByMatch(
   onError?: (err: Error) => void
 ): Unsubscribe {
   return onSnapshot(
-    query(
-      betsCol(),
-      where("matchIds", "array-contains", matchId),
-      orderBy("createdAt", "desc")
-    ),
-    (snap) => cb(snap.docs.map((d) => d.data())),
+    query(betsCol(), where("matchIds", "array-contains", matchId)),
+    (snap) => {
+      const bets = snap.docs.map((d) => d.data());
+      bets.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      cb(bets);
+    },
     (err) => onError?.(err)
   );
 }
