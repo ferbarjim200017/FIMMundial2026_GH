@@ -80,12 +80,11 @@ export default function RankingPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <BarChart3 className="h-4 w-4 text-primary" />
-              Apuestas por día
+              Apuestas por jugador
             </CardTitle>
             <CardDescription>
-              Número de apuestas registradas cada día desde hoy, apiladas
-              por usuario. El número encima de cada barra es el total del
-              día.
+              Una barra por jugador. Elige un día concreto o &quot;Total&quot;
+              para ver cuántas apuestas ha registrado cada uno.
             </CardDescription>
           </CardHeader>
           <CardContent>

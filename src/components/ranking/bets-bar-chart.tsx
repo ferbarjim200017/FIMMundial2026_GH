@@ -2,25 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DAY_MS,
   pickChartColor,
   todayStartMs,
 } from "@/components/ranking/chart-palette";
-import { cn } from "@/lib/utils";
 import type { AppUser, Bet } from "@/types/domain";
 
 interface Props {
   users: AppUser[];
   bets: Bet[];
-  /** Días que se muestran (a partir de hoy). Por defecto 7. */
-  daysWindow?: number;
 }
 
-interface DayBucket {
-  dayMs: number;
-  byUser: Map<string, number>;
-  total: number;
-}
+const TOTAL = "total";
 
 function startOfDay(ms: number): number {
   const d = new Date(ms);
@@ -28,14 +28,15 @@ function startOfDay(ms: number): number {
   return d.getTime();
 }
 
-function formatDayShort(ms: number): string {
+function formatDayLong(ms: number): string {
   return new Date(ms).toLocaleDateString("es-ES", {
+    weekday: "short",
     day: "2-digit",
     month: "short",
   });
 }
 
-/** Tick values enteros para el eje Y (apuestas/día). */
+/** Tick values enteros para el eje Y. */
 function integerYTicks(max: number): number[] {
   const top = Math.max(1, max);
   const step = top <= 4 ? 1 : top <= 10 ? 2 : top <= 25 ? 5 : 10;
@@ -45,11 +46,12 @@ function integerYTicks(max: number): number[] {
   return out;
 }
 
-export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
+export function BetsBarChart({ users, bets }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(500);
+  const [selected, setSelected] = useState<string>(TOTAL);
   const [hover, setHover] = useState<
-    | { dayMs: number; uid: string; count: number; x: number; y: number }
+    | { uid: string; count: number; x: number; y: number }
     | null
   >(null);
 
@@ -69,60 +71,74 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
     return map;
   }, [users]);
 
-  const usernameByUid = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const u of users) map[u.uid] = u.username;
-    return map;
-  }, [users]);
+  // Días con actividad + hoy. Más reciente primero.
+  const dayOptions = useMemo(() => {
+    const set = new Set<number>();
+    set.add(todayStartMs());
+    for (const b of bets) set.add(startOfDay(b.createdAt.toMillis()));
+    return [...set].sort((a, b) => b - a);
+  }, [bets]);
 
-  const startMs = useMemo(() => todayStartMs(), []);
+  // Reset selección si el día seleccionado ya no existe
+  useEffect(() => {
+    if (selected === TOTAL) return;
+    const t = Number(selected);
+    if (!dayOptions.includes(t)) setSelected(TOTAL);
+  }, [dayOptions, selected]);
 
-  // Determina el rango de días a mostrar: desde hoy hasta el último día
-  // con apuestas, o como mínimo `daysWindow` días.
-  const days: DayBucket[] = useMemo(() => {
-    const latestBetMs = bets.reduce(
-      (acc, b) => Math.max(acc, b.createdAt.toMillis()),
-      startMs
-    );
-    const endDay = Math.max(startOfDay(latestBetMs), startMs + (daysWindow - 1) * DAY_MS);
-    const buckets: DayBucket[] = [];
-    for (let d = startMs; d <= endDay; d += DAY_MS) {
-      buckets.push({ dayMs: d, byUser: new Map(), total: 0 });
+  const data = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const u of users) counts[u.uid] = 0;
+
+    if (selected === TOTAL) {
+      for (const b of bets) {
+        if (counts[b.userId] !== undefined) counts[b.userId] += 1;
+      }
+    } else {
+      const dayStart = Number(selected);
+      const dayEnd = dayStart + DAY_MS;
+      for (const b of bets) {
+        const t = b.createdAt.toMillis();
+        if (t >= dayStart && t < dayEnd && counts[b.userId] !== undefined) {
+          counts[b.userId] += 1;
+        }
+      }
     }
-    for (const b of bets) {
-      const t = b.createdAt.toMillis();
-      if (t < startMs) continue;
-      const idx = Math.floor((t - startMs) / DAY_MS);
-      if (idx < 0 || idx >= buckets.length) continue;
-      const bucket = buckets[idx];
-      bucket.byUser.set(b.userId, (bucket.byUser.get(b.userId) ?? 0) + 1);
-      bucket.total += 1;
-    }
-    return buckets;
-  }, [bets, startMs, daysWindow]);
 
-  const yMax = Math.max(4, ...days.map((d) => d.total));
+    // Una barra por jugador, ordenadas de más a menos apuestas
+    return users
+      .map((u, i) => ({
+        uid: u.uid,
+        username: u.username,
+        color: pickChartColor(i),
+        count: counts[u.uid] ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [users, bets, selected]);
+
+  const totalForLabel =
+    selected === TOTAL
+      ? "Total"
+      : formatDayLong(Number(selected));
+
+  const yMax = Math.max(4, ...data.map((d) => d.count));
   const yTicks = useMemo(() => integerYTicks(yMax), [yMax]);
   const yTop = yTicks[yTicks.length - 1] ?? yMax;
 
   const W = width;
   const H = 360;
-  const PAD_LEFT = 48;
+  const PAD_LEFT = 44;
   const PAD_RIGHT = 18;
   const PAD_TOP = 20;
-  const PAD_BOT = 40;
+  const PAD_BOT = 68; // espacio extra para usernames rotados
   const PLOT_W = W - PAD_LEFT - PAD_RIGHT;
   const PLOT_H = H - PAD_TOP - PAD_BOT;
 
-  const cellW = days.length > 0 ? PLOT_W / days.length : PLOT_W;
-  const barW = Math.max(8, Math.min(48, cellW * 0.62));
+  const cellW = data.length > 0 ? PLOT_W / data.length : PLOT_W;
+  const barW = Math.max(10, Math.min(50, cellW * 0.62));
 
   const yFor = (v: number) =>
     PAD_TOP + PLOT_H - (v / Math.max(1, yTop)) * PLOT_H;
-
-  // Solo etiquetamos un subconjunto de días en el eje X cuando hay muchos
-  // (cada 1, 2 o 3 días) para que no se solapen.
-  const xLabelEvery = days.length <= 7 ? 1 : days.length <= 14 ? 2 : 3;
 
   if (users.length === 0) {
     return (
@@ -134,6 +150,24 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* Selector de día */}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Mostrar:</span>
+        <Select value={selected} onValueChange={setSelected}>
+          <SelectTrigger className="h-8 w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TOTAL}>Total (todas las apuestas)</SelectItem>
+            {dayOptions.map((t) => (
+              <SelectItem key={t} value={String(t)}>
+                {formatDayLong(t)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div ref={containerRef} className="relative w-full">
         <svg
           width={W}
@@ -215,92 +249,85 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
             );
           })}
 
-          {/* Barras apiladas por día */}
-          {days.map((day, idx) => {
+          {/* Barras por jugador */}
+          {data.map((d, idx) => {
             const cx = PAD_LEFT + (idx + 0.5) * cellW;
             const bx = cx - barW / 2;
-            let yCursor = PAD_TOP + PLOT_H;
-            const segments = users
-              .map((u) => ({
-                uid: u.uid,
-                count: day.byUser.get(u.uid) ?? 0,
-              }))
-              .filter((s) => s.count > 0);
-
+            const h = (d.count / Math.max(1, yTop)) * PLOT_H;
+            const by = PAD_TOP + PLOT_H - h;
+            const labelY = PAD_TOP + PLOT_H + 14;
             return (
-              <g key={`day-${day.dayMs}`}>
-                {segments.map((seg) => {
-                  const h = (seg.count / Math.max(1, yTop)) * PLOT_H;
-                  yCursor -= h;
-                  return (
-                    <rect
-                      key={`seg-${day.dayMs}-${seg.uid}`}
-                      x={bx}
-                      y={yCursor}
-                      width={barW}
-                      height={Math.max(2, h)}
-                      fill={colorByUid[seg.uid]}
-                      rx={3}
-                      style={{ cursor: "pointer" }}
-                      onMouseEnter={() =>
-                        setHover({
-                          dayMs: day.dayMs,
-                          uid: seg.uid,
-                          count: seg.count,
-                          x: cx,
-                          y: yCursor + h / 2,
-                        })
-                      }
-                      onMouseLeave={() => setHover(null)}
-                    />
-                  );
-                })}
-                {/* Total encima de la barra */}
-                {day.total > 0 && (
+              <g key={`bar-${d.uid}`}>
+                {d.count > 0 && (
+                  <rect
+                    x={bx}
+                    y={by}
+                    width={barW}
+                    height={Math.max(2, h)}
+                    fill={d.color}
+                    rx={4}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() =>
+                      setHover({
+                        uid: d.uid,
+                        count: d.count,
+                        x: cx,
+                        y: by + h / 2,
+                      })
+                    }
+                    onMouseLeave={() => setHover(null)}
+                  />
+                )}
+                {d.count === 0 && (
+                  <rect
+                    x={bx}
+                    y={PAD_TOP + PLOT_H - 3}
+                    width={barW}
+                    height={3}
+                    fill={d.color}
+                    fillOpacity={0.25}
+                    rx={1.5}
+                  />
+                )}
+                {d.count > 0 && (
                   <text
                     x={cx}
-                    y={yCursor - 6}
+                    y={by - 6}
                     textAnchor="middle"
-                    fontSize={10}
+                    fontSize={11}
                     fontWeight={600}
                     className="fill-foreground"
                   >
-                    {day.total}
+                    {d.count}
                   </text>
                 )}
+                {/* Username rotado -30º para que quepa */}
+                <text
+                  x={cx}
+                  y={labelY}
+                  textAnchor="end"
+                  fontSize={11}
+                  className="fill-muted-foreground"
+                  transform={`rotate(-30 ${cx} ${labelY})`}
+                  style={{ fill: colorByUid[d.uid] }}
+                >
+                  {d.username}
+                </text>
               </g>
-            );
-          })}
-
-          {/* Labels X (días) */}
-          {days.map((day, idx) => {
-            if (idx % xLabelEvery !== 0 && idx !== days.length - 1) return null;
-            const cx = PAD_LEFT + (idx + 0.5) * cellW;
-            return (
-              <text
-                key={`xl-${day.dayMs}`}
-                x={cx}
-                y={PAD_TOP + PLOT_H + 18}
-                textAnchor="middle"
-                fontSize={11}
-                className="fill-muted-foreground"
-              >
-                {formatDayShort(day.dayMs)}
-              </text>
             );
           })}
 
           {/* Tooltip */}
           {hover &&
             (() => {
-              const tooltipW = 180;
+              const d = data.find((x) => x.uid === hover.uid);
+              if (!d) return null;
+              const tooltipW = 190;
               const tooltipH = 48;
               let tx = hover.x - tooltipW / 2;
               let ty = hover.y - tooltipH - 12;
               tx = Math.max(4, Math.min(W - tooltipW - 4, tx));
               if (ty < 4) ty = hover.y + 14;
-              const color = colorByUid[hover.uid];
-              const name = usernameByUid[hover.uid] ?? "—";
               return (
                 <g pointerEvents="none">
                   <rect
@@ -315,7 +342,7 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
                       filter: "drop-shadow(0 4px 6px rgb(0 0 0 / 0.08))",
                     }}
                   />
-                  <circle cx={tx + 12} cy={ty + 18} r={4} fill={color} />
+                  <circle cx={tx + 12} cy={ty + 18} r={4} fill={d.color} />
                   <text
                     x={tx + 22}
                     y={ty + 22}
@@ -323,7 +350,7 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
                     fontWeight={600}
                     className="fill-popover-foreground"
                   >
-                    {name}
+                    {d.username}
                   </text>
                   <text
                     x={tx + 12}
@@ -331,31 +358,12 @@ export function BetsBarChart({ users, bets, daysWindow = 7 }: Props) {
                     fontSize={11}
                     className="fill-muted-foreground"
                   >
-                    {hover.count} apuesta{hover.count === 1 ? "" : "s"} ·{" "}
-                    {formatDayShort(hover.dayMs)}
+                    {d.count} apuesta{d.count === 1 ? "" : "s"} · {totalForLabel}
                   </text>
                 </g>
               );
             })()}
         </svg>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {users.map((u, i) => (
-          <span
-            key={u.uid}
-            className={cn(
-              "flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs"
-            )}
-            style={{ borderColor: `${pickChartColor(i)}55` }}
-          >
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: pickChartColor(i) }}
-            />
-            <span className="font-medium">{u.username}</span>
-          </span>
-        ))}
       </div>
     </div>
   );

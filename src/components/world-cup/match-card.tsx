@@ -23,6 +23,15 @@ export function MatchCard({ match, highlightTeam, className, compact }: Props) {
       ? GROUP_COLORS[match.groupId]
       : null;
 
+  const kickoffDate = kickoff.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+  });
+  const kickoffTime = kickoff.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
   return (
     <div
       className={cn(
@@ -52,16 +61,26 @@ export function MatchCard({ match, highlightTeam, className, compact }: Props) {
             <Badge variant="muted" className="text-[10px]">Final</Badge>
           ) : (
             <span className="text-muted-foreground">
-              {kickoff.toLocaleDateString("es-ES", {
-                day: "2-digit",
-                month: "short",
-              })}{" "}
-              ·{" "}
-              {kickoff.toLocaleTimeString("es-ES", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {kickoffDate} · {kickoffTime}
             </span>
+          )}
+        </div>
+      )}
+
+      {compact && (
+        <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+          {finished ? (
+            <>
+              <Badge variant="muted" className="text-[9px]">Final</Badge>
+              <span>{kickoffDate}</span>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-foreground/80">
+                {kickoffDate}
+              </span>
+              <span>{kickoffTime}</span>
+            </>
           )}
         </div>
       )}
