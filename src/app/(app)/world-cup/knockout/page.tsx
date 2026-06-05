@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MatchCard } from "@/components/world-cup/match-card";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ const BRACKET_STAGES: MatchStage[] = ["r32", "r16", "qf", "sf", "final"];
 export default function KnockoutPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToMatches(
@@ -109,7 +111,12 @@ export default function KnockoutPage() {
                         style.gradient
                       )}
                     >
-                      <MatchCard match={m} compact className="bg-card" />
+                      <MatchCard
+                        match={m}
+                        compact
+                        className="bg-card"
+                        onClick={setBetsFor}
+                      />
                     </div>
                   ))}
                 </div>
@@ -133,12 +140,18 @@ export default function KnockoutPage() {
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-2">
               {byStage.third.map((m) => (
-                <MatchCard key={m.id} match={m} />
+                <MatchCard key={m.id} match={m} onClick={setBetsFor} />
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      <MatchBetsDialog
+        match={betsFor}
+        open={!!betsFor}
+        onOpenChange={(o) => !o && setBetsFor(null)}
+      />
     </div>
   );
 }

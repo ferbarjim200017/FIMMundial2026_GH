@@ -68,6 +68,28 @@ export function subscribeToBets(
   );
 }
 
+/**
+ * Suscripción a todas las apuestas que incluyan un partido concreto. Usa
+ * `array-contains` sobre `matchIds`, que en todas las apuestas creadas
+ * desde la app contiene el id del partido (incluso para apuestas no
+ * combinadas).
+ */
+export function subscribeToBetsByMatch(
+  matchId: string,
+  cb: (bets: Bet[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      betsCol(),
+      where("matchIds", "array-contains", matchId),
+      orderBy("createdAt", "desc")
+    ),
+    (snap) => cb(snap.docs.map((d) => d.data())),
+    (err) => onError?.(err)
+  );
+}
+
 export async function getBet(betId: string): Promise<Bet | null> {
   const snap = await getDoc(betDoc(betId));
   return snap.exists() ? snap.data() : null;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { GroupTable } from "@/components/world-cup/group-table";
 import { ThirdPlaceTable } from "@/components/world-cup/third-place-table";
 import { MatchCard } from "@/components/world-cup/match-card";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import {
   Card,
   CardContent,
@@ -20,6 +21,7 @@ import type { GroupId, Match } from "@/types/domain";
 export default function GroupsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToMatches(
@@ -47,7 +49,12 @@ export default function GroupsPage() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {GROUP_IDS.map((g) => (
-          <GroupSection key={g} groupId={g} matches={matches} />
+          <GroupSection
+            key={g}
+            groupId={g}
+            matches={matches}
+            onMatchClick={setBetsFor}
+          />
         ))}
       </div>
 
@@ -77,11 +84,25 @@ export default function GroupsPage() {
           </p>
         </CardContent>
       </Card>
+
+      <MatchBetsDialog
+        match={betsFor}
+        open={!!betsFor}
+        onOpenChange={(o) => !o && setBetsFor(null)}
+      />
     </div>
   );
 }
 
-function GroupSection({ groupId, matches }: { groupId: GroupId; matches: Match[] }) {
+function GroupSection({
+  groupId,
+  matches,
+  onMatchClick,
+}: {
+  groupId: GroupId;
+  matches: Match[];
+  onMatchClick: (m: Match) => void;
+}) {
   const groupMatches = matches
     .filter((m) => m.stage === "group" && m.groupId === groupId)
     .sort((a, b) => a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis());
@@ -91,7 +112,7 @@ function GroupSection({ groupId, matches }: { groupId: GroupId; matches: Match[]
       <GroupTable groupId={groupId} matches={matches} compact />
       <div className="space-y-1.5">
         {groupMatches.map((m) => (
-          <MatchCard key={m.id} match={m} className="p-2" />
+          <MatchCard key={m.id} match={m} className="p-2" onClick={onMatchClick} />
         ))}
       </div>
     </div>

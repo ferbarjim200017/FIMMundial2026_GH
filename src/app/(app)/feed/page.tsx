@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { TrendingUp, TrendingDown, Clock, Trophy } from "lucide-react";
+import {
+  ArrowUpRight,
+  ArrowDownRight,
+  Clock,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -104,6 +111,33 @@ export default function FeedPage() {
     return { won: won.length, lost: lost.length, netProfit };
   }, [sortedBets]);
 
+  // Ganador y perdedor "absolutos" del grupo (totalProfit acumulado).
+  // Estos cuadros son globales: todos los usuarios ven el mismo valor.
+  const groupExtremes = useMemo(() => {
+    const usersArr = Object.values(usersById);
+    if (usersArr.length === 0) return null;
+    let topProfit = usersArr[0];
+    let topLoss = usersArr[0];
+    for (const u of usersArr) {
+      if ((u.stats?.totalProfit ?? 0) > (topProfit.stats?.totalProfit ?? 0)) {
+        topProfit = u;
+      }
+      if ((u.stats?.totalProfit ?? 0) < (topLoss.stats?.totalProfit ?? 0)) {
+        topLoss = u;
+      }
+    }
+    return {
+      topProfit:
+        (topProfit.stats?.totalProfit ?? 0) > 0
+          ? { user: topProfit, value: topProfit.stats?.totalProfit ?? 0 }
+          : null,
+      topLoss:
+        (topLoss.stats?.totalProfit ?? 0) < 0
+          ? { user: topLoss, value: topLoss.stats?.totalProfit ?? 0 }
+          : null,
+    };
+  }, [usersById]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -135,6 +169,27 @@ export default function FeedPage() {
             )}`}
             icon={<Trophy className="h-5 w-5 text-gold" />}
             accent={profitClass(todaySummary.netProfit)}
+          />
+        </div>
+      )}
+
+      {groupExtremes && (groupExtremes.topProfit || groupExtremes.topLoss) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ExtremeCard
+            label="Máximo ganador"
+            user={groupExtremes.topProfit?.user ?? null}
+            value={groupExtremes.topProfit?.value ?? 0}
+            icon={<ArrowUpRight className="h-5 w-5 text-profit" />}
+            accent="text-profit"
+            emptyLabel="Aún nadie está en positivo"
+          />
+          <ExtremeCard
+            label="Máximo perdedor"
+            user={groupExtremes.topLoss?.user ?? null}
+            value={groupExtremes.topLoss?.value ?? 0}
+            icon={<ArrowDownRight className="h-5 w-5 text-loss" />}
+            accent="text-loss"
+            emptyLabel="Aún nadie está en negativo"
           />
         </div>
       )}
@@ -199,6 +254,49 @@ function SummaryCard({
             {label}
           </p>
           <p className={cn("text-xl font-bold", accent)}>{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExtremeCard({
+  label,
+  user,
+  value,
+  icon,
+  accent,
+  emptyLabel,
+}: {
+  label: string;
+  user: AppUser | null;
+  value: number;
+  icon: React.ReactNode;
+  accent?: string;
+  emptyLabel: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className="rounded-md bg-muted/50 p-2">{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          {user ? (
+            <Link
+              href={ROUTES.profile(user.uid)}
+              className="block hover:underline"
+            >
+              <p className="truncate text-sm font-medium">{user.username}</p>
+              <p className={cn("font-mono text-lg font-bold", accent)}>
+                {value > 0 ? "+" : ""}
+                {formatCurrency(value)}
+              </p>
+            </Link>
+          ) : (
+            <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -104,8 +104,8 @@ export default function RankingPage() {
         <CardHeader>
           <CardTitle>Clasificación</CardTitle>
           <CardDescription>
-            Posiciones por saldo actual. Se actualiza en tiempo real con cada
-            apuesta liquidada.
+            Ordenado por <strong>ROI</strong> (% de beneficio/pérdida sobre lo
+            apostado). Se actualiza en tiempo real.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -124,12 +124,12 @@ export default function RankingPage() {
                   <tr>
                     <th className="px-4 py-3 w-16">#</th>
                     <th className="px-2 py-3">Usuario</th>
-                    <th className="px-2 py-3 text-right">Saldo</th>
+                    <th className="px-2 py-3 text-right">ROI</th>
                     <th className="px-2 py-3 text-right hidden sm:table-cell">
                       Beneficio
                     </th>
                     <th className="px-2 py-3 text-right hidden md:table-cell">
-                      ROI
+                      Saldo
                     </th>
                     <th className="px-2 py-3 text-right hidden md:table-cell">
                       % Acierto
@@ -162,8 +162,13 @@ export default function RankingPage() {
                             </div>
                           </Link>
                         </td>
-                        <td className="px-2 py-3 text-right font-mono font-medium">
-                          {formatCurrency(u.currentBalance)}
+                        <td
+                          className={`px-2 py-3 text-right font-mono font-bold ${profitClass(
+                            u.stats.roi
+                          )}`}
+                        >
+                          {u.stats.roi > 0 ? "+" : ""}
+                          {formatPercent(u.stats.roi)}
                         </td>
                         <td
                           className={`px-2 py-3 text-right font-mono hidden sm:table-cell ${profitClass(
@@ -173,13 +178,8 @@ export default function RankingPage() {
                           {u.stats.totalProfit > 0 ? "+" : ""}
                           {formatCurrency(u.stats.totalProfit)}
                         </td>
-                        <td
-                          className={`px-2 py-3 text-right font-mono hidden md:table-cell ${profitClass(
-                            u.stats.roi
-                          )}`}
-                        >
-                          {u.stats.roi > 0 ? "+" : ""}
-                          {formatPercent(u.stats.roi)}
+                        <td className="px-2 py-3 text-right font-mono hidden md:table-cell">
+                          {formatCurrency(u.currentBalance)}
                         </td>
                         <td className="px-2 py-3 text-right font-mono text-muted-foreground hidden md:table-cell">
                           {formatPercent(u.stats.hitRate)}

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MatchCard } from "@/components/world-cup/match-card";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import {
   STAGE_LABELS,
   subscribeToMatches,
@@ -27,6 +28,7 @@ export default function CalendarPage() {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<StageFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToMatches(
@@ -139,12 +141,18 @@ export default function CalendarPage() {
             </h2>
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {items.map((m) => (
-                <MatchCard key={m.id} match={m} />
+                <MatchCard key={m.id} match={m} onClick={setBetsFor} />
               ))}
             </div>
           </div>
         ))
       )}
+
+      <MatchBetsDialog
+        match={betsFor}
+        open={!!betsFor}
+        onOpenChange={(o) => !o && setBetsFor(null)}
+      />
     </div>
   );
 }

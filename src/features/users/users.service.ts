@@ -6,7 +6,6 @@ import {
   collection,
   getDocs,
   onSnapshot,
-  orderBy,
   query,
   limit as limitTo,
   serverTimestamp,
@@ -42,15 +41,33 @@ export async function listUsers(): Promise<AppUser[]> {
   return snap.docs.map((d) => d.data());
 }
 
+/**
+ * Comparador del ranking. Ordena por ROI (% beneficio/pérdida sobre lo
+ * apostado) descendente. Usa el saldo actual como desempate.
+ *
+ *  - Mayor ROI primero.
+ *  - Si dos usuarios tienen el mismo ROI, gana el de mayor `currentBalance`.
+ *  - Usuarios sin apuestas (totalStaked = 0 → ROI = 0) van al medio.
+ */
+export function compareUsersForRanking(a: AppUser, b: AppUser): number {
+  const ra = a.stats?.roi ?? 0;
+  const rb = b.stats?.roi ?? 0;
+  if (rb !== ra) return rb - ra;
+  return (b.currentBalance ?? 0) - (a.currentBalance ?? 0);
+}
+
 export function subscribeToRanking(
   callback: (users: AppUser[]) => void,
   max?: number
 ) {
-  const constraints = [orderBy("currentBalance", "desc")];
-  const q = max
-    ? query(usersCol(), ...constraints, limitTo(max))
-    : query(usersCol(), ...constraints);
-  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => d.data())));
+  // Ordenamos cliente-side por ROI (campo anidado en stats). Evita pedir
+  // un índice compuesto en Firestore y nos da control sobre el desempate.
+  const q = max ? query(usersCol(), limitTo(max)) : usersCol();
+  return onSnapshot(q, (snap) => {
+    const users = snap.docs.map((d) => d.data());
+    users.sort(compareUsersForRanking);
+    callback(users);
+  });
 }
 
 export interface CreateUserInput {

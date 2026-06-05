@@ -41,12 +41,14 @@ export function RankingCarousel() {
               <div key={`${u.uid}-${i}`} className="flex items-center gap-2">
                 <span className="font-semibold">{medal(rank)}</span>
                 <span className="text-muted-foreground">@{u.username}</span>
-                <span className="font-mono font-medium">
-                  {formatCurrency(u.currentBalance)}
-                </span>
-                <span className={profitClass(u.stats.roi)}>
+                <span
+                  className={`font-mono font-semibold ${profitClass(u.stats.roi)}`}
+                >
                   {u.stats.roi > 0 ? "+" : ""}
                   {formatPercent(u.stats.roi)}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {formatCurrency(u.currentBalance)}
                 </span>
                 <span className="text-border">•</span>
               </div>

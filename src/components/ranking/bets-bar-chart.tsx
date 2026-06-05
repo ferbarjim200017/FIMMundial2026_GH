@@ -130,7 +130,7 @@ export function BetsBarChart({ users, bets }: Props) {
   const PAD_LEFT = 44;
   const PAD_RIGHT = 18;
   const PAD_TOP = 20;
-  const PAD_BOT = 68; // espacio extra para usernames rotados
+  const PAD_BOT = 38;
   const PLOT_W = W - PAD_LEFT - PAD_RIGHT;
   const PLOT_H = H - PAD_TOP - PAD_BOT;
 
@@ -255,7 +255,6 @@ export function BetsBarChart({ users, bets }: Props) {
             const bx = cx - barW / 2;
             const h = (d.count / Math.max(1, yTop)) * PLOT_H;
             const by = PAD_TOP + PLOT_H - h;
-            const labelY = PAD_TOP + PLOT_H + 14;
             return (
               <g key={`bar-${d.uid}`}>
                 {d.count > 0 && (
@@ -301,18 +300,6 @@ export function BetsBarChart({ users, bets }: Props) {
                     {d.count}
                   </text>
                 )}
-                {/* Username rotado -30º para que quepa */}
-                <text
-                  x={cx}
-                  y={labelY}
-                  textAnchor="end"
-                  fontSize={11}
-                  className="fill-muted-foreground"
-                  transform={`rotate(-30 ${cx} ${labelY})`}
-                  style={{ fill: colorByUid[d.uid] }}
-                >
-                  {d.username}
-                </text>
               </g>
             );
           })}
@@ -364,6 +351,26 @@ export function BetsBarChart({ users, bets }: Props) {
               );
             })()}
         </svg>
+      </div>
+
+      {/* Leyenda — mismos chips que en la gráfica de líneas */}
+      <div className="flex flex-wrap gap-2">
+        {data.map((d) => (
+          <span
+            key={d.uid}
+            className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs"
+            style={{ borderColor: `${d.color}55` }}
+          >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: d.color }}
+            />
+            <span className="font-medium">{d.username}</span>
+            <span className="font-mono text-muted-foreground">
+              {d.count}
+            </span>
+          </span>
+        ))}
       </div>
     </div>
   );

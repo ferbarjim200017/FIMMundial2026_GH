@@ -39,25 +39,38 @@ const CHOICES: { value: Choice; label: string; tone: string }[] = [
 
 export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
   const [choice, setChoice] = useState<Choice>("won");
-  const [cashoutProfit, setCashoutProfit] = useState<string>("0");
+  // El usuario introduce el IMPORTE recibido al cerrar la apuesta. El
+  // beneficio se calcula automáticamente como cashoutAmount - stake.
+  const [cashoutAmount, setCashoutAmount] = useState<string>(
+    bet.stake.toFixed(2)
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const cashoutAmountNum = Number(cashoutAmount.replace(",", "."));
+  const cashoutProfit = Number.isFinite(cashoutAmountNum)
+    ? cashoutAmountNum - bet.stake
+    : 0;
 
   const previewProfit = calcProfit(
     bet.stake,
     bet.odds,
     choice,
-    choice === "cashout" ? Number(cashoutProfit) : undefined
+    choice === "cashout" ? cashoutProfit : undefined
   );
 
   async function handleConfirm() {
+    if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
+      setError("Introduce un importe de cashout válido");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       await settleBet(
         bet.id,
         choice,
-        choice === "cashout" ? Number(cashoutProfit) : undefined
+        choice === "cashout" ? cashoutProfit : undefined
       );
       onOpenChange(false);
       onSettled?.();
@@ -97,22 +110,29 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
 
           {choice === "cashout" && (
             <div className="space-y-1.5">
-              <Label htmlFor="cashout">Beneficio del cashout (€)</Label>
+              <Label htmlFor="cashout">Importe del cashout (€)</Label>
               <Input
                 id="cashout"
                 type="number"
                 step="0.01"
-                value={cashoutProfit}
-                onChange={(e) => setCashoutProfit(e.target.value)}
-                placeholder="Ej: 5.50 (positivo) o -3 (negativo)"
+                min="0"
+                value={cashoutAmount}
+                onChange={(e) => setCashoutAmount(e.target.value)}
+                placeholder={`Stake original: ${formatCurrency(bet.stake)}`}
               />
               <p className="text-xs text-muted-foreground">
-                Introduce el beneficio neto recibido (puede ser negativo).
+                Indica por cuánto cerraste la apuesta. El beneficio se calcula
+                automáticamente (importe − stake).
               </p>
             </div>
           )}
 
-          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
+            {choice === "cashout" && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{formatCurrency(cashoutAmountNum || 0)} − {formatCurrency(bet.stake)} (stake)</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Beneficio resultante:</span>
               <span className={`font-mono font-bold ${profitClass(previewProfit)}`}>

@@ -11,9 +11,17 @@ interface Props {
   className?: string;
   /** Si true, oculta la cabecera de fase/fecha (útil dentro del bracket). */
   compact?: boolean;
+  /** Si se pasa, la tarjeta es clicable y dispara este callback. */
+  onClick?: (match: Match) => void;
 }
 
-export function MatchCard({ match, highlightTeam, className, compact }: Props) {
+export function MatchCard({
+  match,
+  highlightTeam,
+  className,
+  compact,
+  onClick,
+}: Props) {
   const kickoff = new Date(match.kickoffUtc.toMillis());
   const finished = match.status === "finished" && match.result;
   const r = match.result;
@@ -34,8 +42,22 @@ export function MatchCard({ match, highlightTeam, className, compact }: Props) {
 
   return (
     <div
+      onClick={onClick ? () => onClick(match) : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick(match);
+              }
+            }
+          : undefined
+      }
       className={cn(
         "relative rounded-lg border-l-4 bg-card p-3 shadow-sm transition-all hover:border-primary/40 hover:shadow",
+        onClick && "cursor-pointer hover:bg-accent/30",
         groupStyle?.ring ?? stage.ring,
         className
       )}
