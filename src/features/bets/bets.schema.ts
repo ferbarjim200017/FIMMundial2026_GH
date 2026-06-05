@@ -14,6 +14,7 @@ export const MARKET_OPTIONS = [
   { value: "shots", label: "Tiros" },
   { value: "shots_on_target", label: "Tiros a puerta" },
   { value: "fouls", label: "Faltas" },
+  { value: "outright", label: "Apuesta a futuro / outright" },
   { value: "combo", label: "Combinada" },
   { value: "custom", label: "Mercado personalizado" },
 ] as const;
@@ -55,6 +56,7 @@ export const betFormSchema = z
       "shots",
       "shots_on_target",
       "fouls",
+      "outright",
       "combo",
       "custom",
     ]),

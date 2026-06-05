@@ -85,6 +85,7 @@ export type BetMarket =
   | "shots"
   | "shots_on_target"
   | "fouls"
+  | "outright"   // apuestas a futuro: ganador grupo, mejor equipo de un continente, top scorer…
   | "combo"
   | "custom";
 

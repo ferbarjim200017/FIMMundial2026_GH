@@ -73,8 +73,21 @@ export function BetForm({ userId, initial, onDone }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedMatches, setSelectedMatches] = useState<Match[]>([]);
   const [manualLabel, setManualLabel] = useState<boolean>(
-    !!initial && (initial.matchIds?.length ?? 0) === 0 && !initial.matchId
+    !!initial &&
+      ((initial.matchIds?.length ?? 0) === 0 && !initial.matchId)
   );
+
+  // Las apuestas a futuro (outright) no van ligadas a un partido concreto;
+  // forzamos el modo manual para que el usuario escriba el evento (p.ej.
+  // "Ganador Grupo A", "Mejor equipo africano", "Top scorer del Mundial").
+  const isOutright = values.market === "outright";
+  useEffect(() => {
+    if (isOutright && !manualLabel) {
+      setManualLabel(true);
+      setSelectedMatches([]);
+      setValues((v) => ({ ...v, matchIds: [] }));
+    }
+  }, [isOutright, manualLabel]);
 
   // Cargar matches iniciales (modo edición) para mostrar chips
   useEffect(() => {
@@ -212,9 +225,15 @@ export function BetForm({ userId, initial, onDone }: Props) {
           {/* ---------- Selector de partidos ---------- */}
           <div className="space-y-2 sm:col-span-2">
             <div className="flex items-center justify-between gap-2">
-              <Label>Partido(s) del Mundial</Label>
+              <Label>
+                {isOutright ? "Evento / mercado a futuro" : "Partido(s) del Mundial"}
+              </Label>
               <div className="flex items-center gap-1 text-xs">
-                {manualLabel ? (
+                {isOutright ? (
+                  <span className="text-muted-foreground">
+                    Apuesta a futuro — escribe el evento
+                  </span>
+                ) : manualLabel ? (
                   <button
                     type="button"
                     onClick={switchToPicker}
@@ -237,12 +256,18 @@ export function BetForm({ userId, initial, onDone }: Props) {
             {manualLabel ? (
               <>
                 <Input
-                  placeholder="España vs Cabo Verde"
+                  placeholder={
+                    isOutright
+                      ? "Ej: Ganador Grupo A · Mejor equipo africano · Top scorer"
+                      : "España vs Cabo Verde"
+                  }
                   value={values.matchLabel}
                   onChange={(e) => update("matchLabel", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Modo libre: úsalo solo para partidos fuera del Mundial.
+                  {isOutright
+                    ? "Apuestas a futuro / outright: ganador de grupo, qué selección se clasifica, mejor equipo de cada continente, máximo goleador…"
+                    : "Modo libre: úsalo solo para partidos fuera del Mundial."}
                 </p>
               </>
             ) : (
@@ -299,22 +324,14 @@ export function BetForm({ userId, initial, onDone }: Props) {
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="marketDetail">Detalle del mercado (opcional)</Label>
-            <Input
-              id="marketDetail"
-              placeholder="Over 2.5, Hándicap +1…"
-              value={values.marketDetail ?? ""}
-              onChange={(e) => update("marketDetail", e.target.value)}
-            />
-          </div>
-
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="selection">Selección</Label>
             <Input
               id="selection"
               placeholder={
-                selectedMatches.length > 1
+                isOutright
+                  ? "Ej: España · Marruecos · Mbappé"
+                  : selectedMatches.length > 1
                   ? "Ej: España gana + Brasil gana + Over 2.5 Alemania"
                   : "Gana España, Sí, Más de 2.5…"
               }

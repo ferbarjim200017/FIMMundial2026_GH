@@ -118,16 +118,17 @@ export interface UpdateBetInput extends BetFormValues {
 }
 
 /**
- * Edita una apuesta pendiente. Si ya está liquidada, hay que reabrirla
- * primero (settleBet con status=pending no está soportado: usa el panel
- * admin para deshacer un cierre).
+ * Edita una apuesta existente. Si la apuesta ya está liquidada (won/lost/
+ * cashout/void), recalcula su profit con la nueva combinación stake/odds
+ * y aplica el delta al saldo del usuario, todo en una transacción. Para
+ * cashout mantiene el profit que el usuario introdujo (es manual).
  */
 export async function updateBet(input: UpdateBetInput): Promise<void> {
   const stake = round2(input.stake);
   const odds = round2(input.odds);
   const matchIds = input.matchIds ?? [];
 
-  await updateDoc(doc(db, BETS, input.betId), {
+  const patch: Record<string, unknown> = {
     bookmaker: input.bookmaker,
     bookmakerLabel:
       input.bookmaker === "other" ? input.bookmakerLabel?.trim() ?? "" : "",
@@ -143,7 +144,47 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
     createdAt: Timestamp.fromDate(new Date(input.placedAt)),
     notes: input.notes?.trim() ?? "",
     isCombo: input.market === "combo" || matchIds.length > 1,
+  };
+
+  let userIdToRecompute: string | null = null;
+
+  await runTransaction(db, async (tx) => {
+    const betRef = doc(db, BETS, input.betId);
+    const betSnap = await tx.get(betRef);
+    if (!betSnap.exists()) throw new Error("Apuesta no encontrada");
+    const bet = { id: betSnap.id, ...(betSnap.data() as Omit<Bet, "id">) };
+
+    const oldProfit = bet.profit ?? 0;
+    // Para cashout mantenemos el profit que metió el usuario en settleBet;
+    // para won/lost recalculamos con la nueva stake/odds.
+    const newProfit =
+      bet.status === "pending"
+        ? 0
+        : bet.status === "cashout"
+        ? oldProfit
+        : calcProfit(stake, odds, bet.status);
+
+    patch.profit = round2(newProfit);
+    tx.update(betRef, patch);
+
+    const deltaProfit = newProfit - oldProfit;
+    if (deltaProfit !== 0) {
+      const userRef = doc(db, USERS, bet.userId).withConverter(userConverter);
+      const userSnap = await tx.get(userRef);
+      if (userSnap.exists()) {
+        const user = userSnap.data();
+        tx.update(doc(db, USERS, bet.userId), {
+          currentBalance: round2(user.currentBalance + deltaProfit),
+        });
+      }
+    }
+
+    userIdToRecompute = bet.userId;
   });
+
+  if (userIdToRecompute) {
+    await recomputeAndPersistStats(userIdToRecompute);
+  }
 }
 
 /**
