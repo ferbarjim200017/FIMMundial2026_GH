@@ -373,21 +373,13 @@ export function BetForm({ userId, initial, onDone }: Props) {
               onChange={(e) => update("stake", e.target.value as unknown as number)}
             />
             {errors.stake && <p className="text-xs text-destructive">{errors.stake}</p>}
-            <label className="mt-1.5 flex cursor-pointer items-start gap-2 rounded-md border bg-muted/20 px-2.5 py-2 text-xs">
+            <label className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-2 text-xs">
               <input
                 type="checkbox"
-                className="mt-0.5"
                 checked={!!values.isFreebet}
                 onChange={(e) => update("isFreebet", e.target.checked)}
               />
-              <span>
-                <span className="font-medium text-foreground">Freebet</span>{" "}
-                <span className="text-muted-foreground">
-                  — el stake es un token de la casa, no tu dinero. Si ganas
-                  solo sumas el beneficio (stake × (cuota − 1)); si pierdes,
-                  no se descuenta nada de tu saldo.
-                </span>
-              </span>
+              <span className="font-medium text-foreground">Freebet</span>
             </label>
           </div>
 
