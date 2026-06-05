@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GROUP_COLORS } from "@/features/matches/stage-styles";
 import { cn } from "@/lib/utils";
 import type { GroupId, Match } from "@/types/domain";
 import { computeGroupStandings, type TeamStanding } from "@/features/standings/standings.utils";
@@ -14,13 +15,19 @@ interface Props {
 export function GroupTable({ groupId, matches, compact }: Props) {
   const standings = computeGroupStandings(groupId, matches);
   const hasAny = standings.some((s) => s.played > 0);
+  const groupStyle = GROUP_COLORS[groupId];
 
   return (
-    <Card>
+    <Card className={cn("border-l-4", groupStyle?.ring)}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <span className="rounded bg-primary/15 px-2 py-0.5 text-sm font-bold text-primary">
-            Grupo {groupId}
+          <span
+            className={cn(
+              "rounded px-2 py-0.5 text-sm font-bold",
+              groupStyle?.chip ?? "bg-primary/15 text-primary"
+            )}
+          >
+            {groupStyle?.emoji} Grupo {groupId}
           </span>
           {!hasAny && (
             <span className="text-xs font-normal text-muted-foreground">

@@ -9,20 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  STAGE_LABELS,
-  subscribeToMatches,
-} from "@/features/matches/matches.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
+import { STAGE_STYLES } from "@/features/matches/stage-styles";
+import { cn } from "@/lib/utils";
 import type { Match, MatchStage } from "@/types/domain";
 
-const KNOCKOUT_STAGES: { key: MatchStage; label: string }[] = [
-  { key: "r32", label: STAGE_LABELS.r32 },
-  { key: "r16", label: STAGE_LABELS.r16 },
-  { key: "qf", label: STAGE_LABELS.qf },
-  { key: "sf", label: STAGE_LABELS.sf },
-  { key: "third", label: STAGE_LABELS.third },
-  { key: "final", label: STAGE_LABELS.final },
-];
+const BRACKET_STAGES: MatchStage[] = ["r32", "r16", "qf", "sf", "final"];
 
 export default function KnockoutPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -50,34 +42,75 @@ export default function KnockoutPage() {
     );
   }
 
+  const byStage: Record<MatchStage, Match[]> = {
+    group: [],
+    r32: [],
+    r16: [],
+    qf: [],
+    sf: [],
+    third: [],
+    final: [],
+  };
+  for (const m of knockout) {
+    byStage[m.stage].push(m);
+  }
+  for (const s of BRACKET_STAGES) {
+    byStage[s].sort((a, b) => a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis());
+  }
+  byStage.third.sort((a, b) => a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis());
+
+  const presentStages = BRACKET_STAGES.filter((s) => byStage[s].length > 0);
+
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Bracket eliminatorio</CardTitle>
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-yellow-500/40 bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-transparent">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            🏆 Cuadro eliminatorio
+          </CardTitle>
           <CardDescription>
-            Los cuadros se irán llenando a medida que el admin actualice los
-            partidos y los resultados.
+            Cada columna es una ronda. Las cards se alinean verticalmente con
+            el cruce de la siguiente fase.
           </CardDescription>
         </CardHeader>
       </Card>
 
-      <div className="overflow-x-auto pb-4">
-        <div className="flex min-w-max gap-3">
-          {KNOCKOUT_STAGES.map(({ key, label }) => {
-            const items = knockout
-              .filter((m) => m.stage === key)
-              .sort((a, b) => a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis());
-            if (items.length === 0) return null;
+      {/* ──────────── Bracket ──────────── */}
+      <div className="overflow-x-auto rounded-xl border bg-card/40 p-4">
+        <div
+          className="grid min-w-[1100px] gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${presentStages.length}, minmax(220px, 1fr))`,
+            minHeight: "640px",
+          }}
+        >
+          {presentStages.map((stage) => {
+            const style = STAGE_STYLES[stage];
+            const items = byStage[stage];
             return (
-              <div key={key} className="w-72 shrink-0 space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {label}{" "}
-                  <span className="ml-1 text-foreground/70">({items.length})</span>
-                </h3>
-                <div className="space-y-2">
+              <div key={stage} className="flex flex-col">
+                <div
+                  className={cn(
+                    "mb-3 flex items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wider",
+                    style.chip
+                  )}
+                >
+                  <span>
+                    {style.emoji} {style.label}
+                  </span>
+                  <span className="opacity-70">({items.length})</span>
+                </div>
+                <div className="relative flex flex-1 flex-col justify-around gap-2">
                   {items.map((m) => (
-                    <MatchCard key={m.id} match={m} />
+                    <div
+                      key={m.id}
+                      className={cn(
+                        "relative rounded-lg bg-gradient-to-br p-[1px]",
+                        style.gradient
+                      )}
+                    >
+                      <MatchCard match={m} compact className="bg-card" />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -85,6 +118,27 @@ export default function KnockoutPage() {
           })}
         </div>
       </div>
+
+      {/* ──────────── 3.er puesto, mostrado aparte ──────────── */}
+      {byStage.third.length > 0 && (
+        <Card className="border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              🥉 3.er puesto
+            </CardTitle>
+            <CardDescription>
+              Partido por la medalla de bronce.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {byStage.third.map((m) => (
+                <MatchCard key={m.id} match={m} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
