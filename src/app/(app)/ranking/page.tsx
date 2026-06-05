@@ -57,12 +57,13 @@ export default function RankingPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <LineChart className="h-4 w-4 text-primary" />
-              Evolución del saldo
+              Evolución del beneficio
             </CardTitle>
             <CardDescription>
-              Todos los usuarios arrancan hoy con su saldo actual. La línea
-              sube o baja con cada apuesta liquidada. Click en un nombre
-              para ocultar/mostrar su línea.
+              Todos arrancan hoy en 0 €. La línea sube o baja con cada
+              apuesta liquidada — solo refleja ganancias y pérdidas, no
+              el saldo de la banca. Click en un nombre para ocultar/mostrar
+              su línea.
             </CardDescription>
           </CardHeader>
           <CardContent>

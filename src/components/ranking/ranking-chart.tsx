@@ -38,10 +38,11 @@ function niceTicks(min: number, max: number, count: number): number[] {
 }
 
 /**
- * Serie temporal de saldo de un usuario partiendo de hoy.
+ * Serie temporal de beneficio/pérdida acumulado de un usuario partiendo
+ * de hoy. NO incluye el saldo de la banca: solo el delta acumulado por
+ * apuestas liquidadas desde hoy.
  *
- * - Punto inicial: (hoy 00:00, currentBalance) — el saldo del usuario a
- *   día de hoy es el ancla de todas las líneas.
+ * - Punto inicial: (hoy 00:00, 0) — todos los usuarios arrancan en 0.
  * - Puntos siguientes: cada apuesta liquidada (won/lost/cashout) desde
  *   hoy en adelante, acumulando profit.
  * - Si no hay apuestas desde hoy, añadimos un punto en "ahora" para que
@@ -63,9 +64,8 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
     .filter((b) => b.ms >= startMs)
     .sort((a, b) => a.ms - b.ms);
 
-  const initial = user.currentBalance ?? user.initialBalance ?? 0;
-  const points: Series["points"] = [{ t: startMs, balance: initial }];
-  let acc = initial;
+  const points: Series["points"] = [{ t: startMs, balance: 0 }];
+  let acc = 0;
   for (const s of settled) {
     acc += s.profit;
     points.push({ t: s.ms, balance: acc });
@@ -77,11 +77,12 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
 }
 
 function formatTickCurrency(v: number): string {
+  const sign = v > 0 ? "+" : "";
   if (Math.abs(v) >= 1000) {
     const k = v / 1000;
-    return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k €`;
+    return `${sign}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k €`;
   }
-  return `${Math.round(v)} €`;
+  return `${sign}${Math.round(v)} €`;
 }
 
 function formatDateShort(ms: number): string {
@@ -420,6 +421,7 @@ export function RankingChart({ users, bets }: Props) {
                     fontSize={11}
                     className="fill-muted-foreground"
                   >
+                    {hover.balance > 0 ? "+" : ""}
                     {formatCurrency(hover.balance)} ·{" "}
                     {formatDateShort(hover.t)}
                   </text>
