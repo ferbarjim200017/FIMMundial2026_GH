@@ -185,5 +185,10 @@ export interface Match {
   awayLabel: string;
   status: MatchStatus;
   result?: MatchResult | null;
-  enteredBy?: string | null;    // uid del admin que metió el resultado
+  enteredBy?: string | null;    // uid del admin que metió el resultado (null si lo metió el bot)
+  /** True si el resultado lo importó automáticamente el cron desde una
+   *  fuente externa (openfootball). El admin puede editar después y
+   *  `enteredBy` pasará a ser su uid, pero `autoImported` se mantiene
+   *  para saber que el origen fue automático. */
+  autoImported?: boolean;
 }
