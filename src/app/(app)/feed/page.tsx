@@ -9,6 +9,7 @@ import {
   ArrowDownRight,
   Clock,
   Copy,
+  Receipt,
   Search,
   SlidersHorizontal,
   TrendingDown,
@@ -230,28 +231,38 @@ export default function FeedPage() {
         </p>
       </div>
 
-      {todaySummary && (
-        <div className="grid gap-3 sm:grid-cols-3">
+      {sortedBets && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
-            label="Ganadas hoy"
-            value={String(todaySummary.won)}
-            icon={<TrendingUp className="h-5 w-5 text-profit" />}
-            accent="text-profit"
+            label="Apuestas totales"
+            value={String(sortedBets.length)}
+            icon={<Receipt className="h-5 w-5 text-primary" />}
+            accent="text-primary"
           />
-          <SummaryCard
-            label="Perdidas hoy"
-            value={String(todaySummary.lost)}
-            icon={<TrendingDown className="h-5 w-5 text-loss" />}
-            accent="text-loss"
-          />
-          <SummaryCard
-            label="Resultado del grupo"
-            value={`${todaySummary.netProfit > 0 ? "+" : ""}${formatCurrency(
-              todaySummary.netProfit
-            )}`}
-            icon={<Trophy className="h-5 w-5 text-gold" />}
-            accent={profitClass(todaySummary.netProfit)}
-          />
+          {todaySummary && (
+            <>
+              <SummaryCard
+                label="Ganadas hoy"
+                value={String(todaySummary.won)}
+                icon={<TrendingUp className="h-5 w-5 text-profit" />}
+                accent="text-profit"
+              />
+              <SummaryCard
+                label="Perdidas hoy"
+                value={String(todaySummary.lost)}
+                icon={<TrendingDown className="h-5 w-5 text-loss" />}
+                accent="text-loss"
+              />
+              <SummaryCard
+                label="Resultado del grupo"
+                value={`${todaySummary.netProfit > 0 ? "+" : ""}${formatCurrency(
+                  todaySummary.netProfit
+                )}`}
+                icon={<Trophy className="h-5 w-5 text-gold" />}
+                accent={profitClass(todaySummary.netProfit)}
+              />
+            </>
+          )}
         </div>
       )}
 
