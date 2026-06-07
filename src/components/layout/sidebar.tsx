@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarClock,
   LayoutDashboard,
   Receipt,
   Trophy,
@@ -17,6 +18,7 @@ import { useAuth } from "@/features/auth/auth.context";
 const NAV = [
   { href: ROUTES.dashboard, label: "Dashboard", icon: LayoutDashboard },
   { href: ROUTES.bets, label: "Apuestas", icon: Receipt },
+  { href: ROUTES.upcoming, label: "Próximos", icon: CalendarClock },
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },

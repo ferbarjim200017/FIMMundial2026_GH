@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarClock,
   LayoutDashboard,
   Receipt,
   Trophy,
@@ -15,6 +16,7 @@ import { ROUTES } from "@/lib/constants";
 const NAV = [
   { href: ROUTES.dashboard, label: "Inicio", icon: LayoutDashboard },
   { href: ROUTES.bets, label: "Apuestas", icon: Receipt },
+  { href: ROUTES.upcoming, label: "Próximos", icon: CalendarClock },
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
@@ -35,7 +37,7 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Navegación principal"
     >
-      <ul className="grid h-14 grid-cols-5">
+      <ul className="grid h-14 grid-cols-6">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

@@ -19,4 +19,5 @@ export const ROUTES = {
   feed: "/feed",
   admin: "/admin",
   compare: (a: string, b: string) => `/compare?a=${a}&b=${b}`,
+  upcoming: "/upcoming",
 } as const;
