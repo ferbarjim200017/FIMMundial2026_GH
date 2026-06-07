@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
   pickChartColor,
   todayStartMs,
 } from "@/components/ranking/chart-palette";
+import { ROUTES } from "@/lib/constants";
 import type { AppUser, Bet } from "@/types/domain";
 
 interface Props {
@@ -47,6 +49,7 @@ function integerYTicks(max: number): number[] {
 }
 
 export function BetsBarChart({ users, bets }: Props) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(500);
   const [selected, setSelected] = useState<string>(TOTAL);
@@ -54,6 +57,10 @@ export function BetsBarChart({ users, bets }: Props) {
     | { uid: string; count: number; x: number; y: number }
     | null
   >(null);
+
+  function navigateToFeedFor(uid: string) {
+    router.push(`${ROUTES.feed}?user=${encodeURIComponent(uid)}`);
+  }
 
   useEffect(() => {
     const el = containerRef.current;
@@ -275,7 +282,10 @@ export function BetsBarChart({ users, bets }: Props) {
                       })
                     }
                     onMouseLeave={() => setHover(null)}
-                  />
+                    onClick={() => navigateToFeedFor(d.uid)}
+                  >
+                    <title>{`Ver apuestas de ${d.username} en el feed`}</title>
+                  </rect>
                 )}
                 {d.count === 0 && (
                   <rect
@@ -286,7 +296,11 @@ export function BetsBarChart({ users, bets }: Props) {
                     fill={d.color}
                     fillOpacity={0.25}
                     rx={1.5}
-                  />
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigateToFeedFor(d.uid)}
+                  >
+                    <title>{`Ver apuestas de ${d.username} en el feed`}</title>
+                  </rect>
                 )}
                 {d.count > 0 && (
                   <text
@@ -356,10 +370,13 @@ export function BetsBarChart({ users, bets }: Props) {
       {/* Leyenda — mismos chips que en la gráfica de líneas */}
       <div className="flex flex-wrap gap-2">
         {data.map((d) => (
-          <span
+          <button
             key={d.uid}
-            className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs"
+            type="button"
+            onClick={() => navigateToFeedFor(d.uid)}
+            className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-accent/40"
             style={{ borderColor: `${d.color}55` }}
+            title={`Ver apuestas de ${d.username} en el feed`}
           >
             <span
               className="inline-block h-2.5 w-2.5 rounded-full"
@@ -369,7 +386,7 @@ export function BetsBarChart({ users, bets }: Props) {
             <span className="font-mono text-muted-foreground">
               {d.count}
             </span>
-          </span>
+          </button>
         ))}
       </div>
     </div>

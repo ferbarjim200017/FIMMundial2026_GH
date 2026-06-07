@@ -88,6 +88,22 @@ export default function FeedPage() {
   const [maxStake, setMaxStake] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Deep-link: si la URL trae `?user=UID` (p.ej. desde la gráfica de
+  // ranking) aplicamos directamente el filtro por usuario y abrimos el
+  // panel de filtros para que la selección sea visible. Leemos
+  // `window.location.search` para no requerir `<Suspense>` alrededor.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const uid = new URLSearchParams(window.location.search).get("user");
+    if (uid) {
+      setUserFilter(uid);
+      setFiltersOpen(true);
+      // Cambia a "Todo" para no esconder apuestas pending del filtro por
+      // defecto "Resultados".
+      setFilter("all");
+    }
+  }, []);
+
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setBets([]);
