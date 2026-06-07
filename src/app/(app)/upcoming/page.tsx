@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
@@ -119,6 +120,9 @@ export default function UpcomingPage() {
   const [selectedDayMs, setSelectedDayMs] = useState<number>(() =>
     startOfDayMs(Date.now())
   );
+  // Partido sobre el que abrimos el popup de "Apuestas sobre este partido"
+  // (mismo `MatchBetsDialog` que usa el apartado Mundial).
+  const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   // Solo apuestas del usuario actual.
   useEffect(() => {
@@ -267,7 +271,14 @@ export default function UpcomingPage() {
         >
           <div className="space-y-2">
             {liveMatches.map((m) => (
-              <MatchRow key={m.id} match={m} now={now} live />
+              <MatchRow
+                key={m.id}
+                match={m}
+                now={now}
+                live
+                onSelect={setBetsFor}
+                isSelectedDay={isOnDay(m, selectedDayMs)}
+              />
             ))}
           </div>
         </SectionCard>
@@ -297,17 +308,37 @@ export default function UpcomingPage() {
         <SectionCard
           title="Próximos partidos"
           icon={<Tv className="h-4 w-4 text-primary" />}
-          description={`${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en el rango.`}
+          description={`${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en el rango. Los marcados con borde verde son del día seleccionado.`}
         >
           <div className="space-y-2">
             {upcomingMatches.map((m) => (
-              <MatchRow key={m.id} match={m} now={now} />
+              <MatchRow
+                key={m.id}
+                match={m}
+                now={now}
+                onSelect={setBetsFor}
+                isSelectedDay={isOnDay(m, selectedDayMs)}
+              />
             ))}
           </div>
         </SectionCard>
       )}
+
+      <MatchBetsDialog
+        match={betsFor}
+        open={!!betsFor}
+        onOpenChange={(o) => !o && setBetsFor(null)}
+      />
     </div>
   );
+}
+
+/** True si el kickoff del partido cae dentro del día (24h) que comienza en
+ *  `dayStartMs`. Usado para resaltar con borde verde los partidos del día
+ *  que ha seleccionado el usuario en la tira de chips. */
+function isOnDay(match: Match, dayStartMs: number): boolean {
+  const t = matchKickoffMs(match);
+  return t >= dayStartMs && t < dayStartMs + DAY_MS;
 }
 
 function DayChip({
@@ -380,19 +411,29 @@ function MatchRow({
   match,
   now,
   live = false,
+  onSelect,
+  isSelectedDay = false,
 }: {
   match: Match;
   now: number;
   live?: boolean;
+  /** Abre el popup `MatchBetsDialog` con este partido (mismo flujo que en
+   *  el apartado Mundial). */
+  onSelect?: (m: Match) => void;
+  /** True cuando el kickoff cae en el día seleccionado por el usuario:
+   *  resaltamos con borde verde para diferenciarlo del resto del rango. */
+  isSelectedDay?: boolean;
 }) {
   const tve = isTveMatch(match);
   const kickoffMs = matchKickoffMs(match);
   return (
-    <Link
-      href={ROUTES.worldCup}
+    <button
+      type="button"
+      onClick={() => onSelect?.(match)}
       className={cn(
-        "block rounded-md border bg-card p-3 transition-colors hover:bg-accent/40",
-        live && "border-red-500/40 bg-red-500/5"
+        "block w-full rounded-md border bg-card p-3 text-left transition-colors hover:bg-accent/40",
+        live && "border-red-500/40 bg-red-500/5",
+        isSelectedDay && "border-2 border-emerald-500/70"
       )}
     >
       <div className="flex items-center gap-3">
@@ -435,7 +476,7 @@ function MatchRow({
           </div>
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
