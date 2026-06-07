@@ -9,8 +9,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <div className="flex min-h-screen flex-col">
-        <RankingCarousel />
-        <TopBar />
+        {/* Wrapper sticky para que el carrusel y la barra superior se queden
+         *  fijos al hacer scroll. z-30 los pone por encima del contenido y
+         *  del sidebar (que vive a z por defecto y empieza justo debajo). */}
+        <div className="sticky top-0 z-30 bg-background">
+          <RankingCarousel />
+          <TopBar />
+        </div>
         <div className="flex flex-1">
           <Sidebar />
           {/* En móvil dejamos espacio inferior para la BottomNav (h-14 + safe-area). */}

@@ -36,12 +36,14 @@ export function Sidebar() {
   return (
     <aside
       className={
-        // En desktop fijamos el sidebar a la parte superior del viewport y le
-        // damos altura completa para que las pestañas sean siempre accesibles
-        // sin tener que volver arriba al scrollear. `self-start` evita que el
-        // flexbox lo estire en altura natural y rompa el `sticky`.
+        // En desktop fijamos el sidebar a la parte superior del viewport, justo
+        // por debajo del wrapper sticky de carrusel + topbar (~h-24 = 6rem).
+        // `self-start` evita que el flexbox lo estire en altura y rompa el
+        // `sticky`. La altura se calcula sobre 100vh restando lo que ocupa
+        // el wrapper de arriba para que el contenido del sidebar tenga su
+        // propio scroll si crece más de la cuenta.
         "hidden w-56 shrink-0 border-r border-border bg-card/30 " +
-        "md:sticky md:top-0 md:block md:h-screen md:self-start md:overflow-y-auto"
+        "md:sticky md:top-24 md:block md:h-[calc(100vh-6rem)] md:self-start md:overflow-y-auto"
       }
     >
       <nav className="flex flex-col gap-1 p-3">

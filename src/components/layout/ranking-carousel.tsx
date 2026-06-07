@@ -23,7 +23,17 @@ export function RankingCarousel() {
     return unsub;
   }, []);
 
-  if (users.length === 0) return null;
+  // Si no hay usuarios todavía (cargando o estado vacío) reservamos el
+  // mismo espacio que ocuparía el carrusel para que los offsets sticky
+  // del sidebar no salten al hidratar.
+  if (users.length === 0) {
+    return (
+      <div
+        aria-hidden
+        className="h-9 border-b border-border bg-card/50"
+      />
+    );
+  }
 
   // Duplicamos suficientes copias para que el marquee llene cualquier ancho
   // (evita el "salto" cuando hay pocos usuarios).
