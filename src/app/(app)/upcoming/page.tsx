@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
-import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isTveMatch } from "@/features/matches/tve-matches";
 import { ROUTES } from "@/lib/constants";
@@ -34,16 +34,23 @@ import {
 } from "@/lib/utils";
 import type { AppUser, Bet, Match } from "@/types/domain";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 130 * 60 * 1000;
-const UPCOMING_WINDOW_MS = 72 * 60 * 60 * 1000;
+/** Ventana fija desde el día seleccionado: 3 días (el propio + 2 más). */
+const WINDOW_DAYS = 3;
 
 function matchKickoffMs(m: Match): number {
   return m.kickoffUtc.toMillis();
 }
 
+function startOfDayMs(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 /** Devuelve la fecha de kickoff más temprana entre los partidos vinculados a
- *  una apuesta. Si no hay ninguno mapeado, retorna `null` y la apuesta se
- *  trata como "sin fecha conocida" (irá al final de la lista). */
+ *  una apuesta. Si no hay ninguno mapeado, retorna `null`. */
 function earliestKickoff(
   bet: Bet,
   matchById: Map<string, Match>
@@ -74,33 +81,76 @@ function formatKickoffLabel(ms: number, now: number): string {
   return format(new Date(ms), "EEE d MMM HH:mm", { locale: es });
 }
 
+interface DayChipInfo {
+  ms: number;
+  day: number;
+  weekday: string;
+  disabled: boolean;
+  isToday: boolean;
+}
+
+/** Genera la tira de chips para todos los días del mes actual. Los días
+ *  anteriores a hoy quedan deshabilitados ("lo antiguo ya nunca"). */
+function buildDayStrip(nowMs: number): DayChipInfo[] {
+  const todayStart = startOfDayMs(nowMs);
+  const d = new Date(todayStart);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const out: DayChipInfo[] = [];
+  for (let day = 1; day <= lastDay; day++) {
+    const dayMs = new Date(year, month, day).getTime();
+    out.push({
+      ms: dayMs,
+      day,
+      weekday: format(new Date(dayMs), "EEE", { locale: es }),
+      disabled: dayMs < todayStart,
+      isToday: dayMs === todayStart,
+    });
+  }
+  return out;
+}
+
 export default function UpcomingPage() {
+  const { appUser } = useAuth();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [matches, setMatches] = useState<Match[] | null>(null);
-  const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   const [now, setNow] = useState(() => Date.now());
+  const [selectedDayMs, setSelectedDayMs] = useState<number>(() =>
+    startOfDayMs(Date.now())
+  );
+
+  // Solo apuestas del usuario actual.
+  useEffect(() => {
+    if (!appUser) return;
+    const unsub = subscribeToBets({ userId: appUser.uid }, setBets);
+    return unsub;
+  }, [appUser]);
 
   useEffect(() => {
-    const unsubBets = subscribeToBets({}, setBets);
-    const unsubMatches = subscribeToMatches(setMatches);
-    const unsubUsers = subscribeToRanking((users) => {
-      const map: Record<string, AppUser> = {};
-      for (const u of users) map[u.uid] = u;
-      setUsersById(map);
-    });
-    return () => {
-      unsubBets();
-      unsubMatches();
-      unsubUsers();
-    };
+    const unsub = subscribeToMatches(setMatches);
+    return unsub;
   }, []);
 
-  // Tic-tac cada 60s para que los filtros "ahora ± X" se refresquen sin que
-  // dependa de cargar la página de nuevo.
+  // Tic cada 60s para reevaluar las ventanas temporales (en vivo, próximos…).
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Si pasa la medianoche y el día seleccionado era el de ayer, lo subimos
+  // automáticamente a "hoy" para no dejar al usuario en un día deshabilitado.
+  useEffect(() => {
+    const todayStart = startOfDayMs(now);
+    if (selectedDayMs < todayStart) setSelectedDayMs(todayStart);
+  }, [now, selectedDayMs]);
+
+  const todayStart = startOfDayMs(now);
+  const windowStart = selectedDayMs;
+  const windowEnd = selectedDayMs + WINDOW_DAYS * DAY_MS;
+  const isViewingToday = selectedDayMs === todayStart;
+
+  const dayStrip = useMemo(() => buildDayStrip(now), [now]);
 
   const matchById = useMemo(() => {
     const map = new Map<string, Match>();
@@ -108,24 +158,22 @@ export default function UpcomingPage() {
     return map;
   }, [matches]);
 
-  // ── Sección 1: apuestas en curso, ordenadas por kickoff más próximo ──
-  const pendingBets = useMemo(() => {
-    if (!bets) return null;
+  // ── Mis apuestas pendientes dentro de la ventana ──
+  const myPendingBets = useMemo(() => {
+    if (!bets || !appUser) return null;
     return bets
       .filter((b) => b.status === "pending")
       .map((b) => ({ bet: b, kickoff: earliestKickoff(b, matchById) }))
-      .sort((a, b) => {
-        // Las que tienen fecha van primero, ordenadas asc; las sin fecha al final.
-        if (a.kickoff === null && b.kickoff === null) return 0;
-        if (a.kickoff === null) return 1;
-        if (b.kickoff === null) return -1;
-        return a.kickoff - b.kickoff;
-      });
-  }, [bets, matchById]);
+      .filter(({ kickoff }) => {
+        if (kickoff === null) return false; // sin fecha conocida → fuera del filtro por día
+        return kickoff >= windowStart && kickoff < windowEnd;
+      })
+      .sort((a, b) => (a.kickoff! - b.kickoff!));
+  }, [bets, appUser, matchById, windowStart, windowEnd]);
 
-  // ── Sección 2: partidos en directo ahora ──
+  // ── En vivo: solo cuando estás viendo el día de hoy ──
   const liveMatches = useMemo(() => {
-    if (!matches) return null;
+    if (!matches || !isViewingToday) return null;
     return matches
       .filter((m) => {
         if (m.status === "finished") return false;
@@ -133,26 +181,31 @@ export default function UpcomingPage() {
         return t <= now && now <= t + LIVE_WINDOW_MS;
       })
       .sort((a, b) => matchKickoffMs(a) - matchKickoffMs(b));
-  }, [matches, now]);
+  }, [matches, now, isViewingToday]);
 
-  // ── Sección 3: próximos partidos (siguientes 72h) ──
+  // ── Próximos partidos dentro de la ventana ──
   const upcomingMatches = useMemo(() => {
     if (!matches) return null;
     return matches
       .filter((m) => {
         if (m.status === "finished") return false;
         const t = matchKickoffMs(m);
-        return t > now && t - now <= UPCOMING_WINDOW_MS;
+        // Excluye lo "en vivo" del bloque de "próximos" cuando estás en hoy,
+        // para que no se duplique entre ambas secciones.
+        if (isViewingToday && t <= now && now <= t + LIVE_WINDOW_MS) return false;
+        return t >= windowStart && t < windowEnd;
       })
       .sort((a, b) => matchKickoffMs(a) - matchKickoffMs(b));
-  }, [matches, now]);
+  }, [matches, isViewingToday, now, windowStart, windowEnd]);
 
   const loading = bets === null || matches === null;
   const isEmpty =
     !loading &&
-    (pendingBets?.length ?? 0) === 0 &&
+    (myPendingBets?.length ?? 0) === 0 &&
     (liveMatches?.length ?? 0) === 0 &&
     (upcomingMatches?.length ?? 0) === 0;
+
+  const windowLabel = `${format(new Date(windowStart), "EEE d MMM", { locale: es })} → ${format(new Date(windowEnd - DAY_MS), "EEE d MMM", { locale: es })}`;
 
   return (
     <div className="space-y-6">
@@ -162,10 +215,33 @@ export default function UpcomingPage() {
           Próximos eventos
         </h1>
         <p className="text-sm text-muted-foreground">
-          Apuestas en curso del grupo, partidos en directo y todo lo que se
-          juega en las próximas 72 horas. Se actualiza solo.
+          Tus apuestas pendientes, partidos en directo y los siguientes 3 días
+          desde el día que elijas.
         </p>
       </div>
+
+      {/* ─── Tira de días del mes ─── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Elige día</CardTitle>
+          <CardDescription>
+            Cargando ventana: <span className="font-medium">{windowLabel}</span>{" "}
+            ({WINDOW_DAYS} días)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-1.5">
+            {dayStrip.map((d) => (
+              <DayChip
+                key={d.ms}
+                info={d}
+                selected={d.ms === selectedDayMs}
+                onSelect={() => setSelectedDayMs(d.ms)}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {loading && (
         <Card>
@@ -178,7 +254,7 @@ export default function UpcomingPage() {
       {isEmpty && (
         <Card>
           <CardContent className="px-6 py-8 text-center text-sm text-muted-foreground">
-            No hay apuestas en curso ni partidos en los próximos 3 días.
+            No hay eventos en este rango.
           </CardContent>
         </Card>
       )}
@@ -197,18 +273,18 @@ export default function UpcomingPage() {
         </SectionCard>
       )}
 
-      {pendingBets && pendingBets.length > 0 && (
+      {myPendingBets && myPendingBets.length > 0 && (
         <SectionCard
-          title="Apuestas en curso"
+          title="Mis apuestas pendientes"
           icon={<Receipt className="h-4 w-4 text-primary" />}
-          description={`${pendingBets.length} apuesta${pendingBets.length === 1 ? "" : "s"} pendiente${pendingBets.length === 1 ? "" : "s"} de liquidar.`}
+          description={`${myPendingBets.length} apuesta${myPendingBets.length === 1 ? "" : "s"} tuya${myPendingBets.length === 1 ? "" : "s"} en este rango.`}
         >
           <div className="space-y-2">
-            {pendingBets.map(({ bet, kickoff }) => (
+            {myPendingBets.map(({ bet, kickoff }) => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                user={usersById[bet.userId] ?? null}
+                user={appUser ?? null}
                 kickoffMs={kickoff}
                 now={now}
               />
@@ -219,9 +295,9 @@ export default function UpcomingPage() {
 
       {upcomingMatches && upcomingMatches.length > 0 && (
         <SectionCard
-          title="Próximos partidos (72 h)"
+          title="Próximos partidos"
           icon={<Tv className="h-4 w-4 text-primary" />}
-          description={`${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en las próximas 72 horas.`}
+          description={`${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en el rango.`}
         >
           <div className="space-y-2">
             {upcomingMatches.map((m) => (
@@ -231,6 +307,47 @@ export default function UpcomingPage() {
         </SectionCard>
       )}
     </div>
+  );
+}
+
+function DayChip({
+  info,
+  selected,
+  onSelect,
+}: {
+  info: DayChipInfo;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { day, weekday, disabled, isToday } = info;
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onSelect}
+      disabled={disabled}
+      aria-pressed={selected}
+      title={disabled ? "Día pasado" : isToday ? "Hoy" : `Día ${day}`}
+      className={cn(
+        "flex w-12 flex-col items-center rounded-md border px-1.5 py-1 transition-colors",
+        disabled && "cursor-not-allowed opacity-40",
+        !disabled && !selected && "hover:bg-accent/40",
+        selected
+          ? "border-primary bg-primary text-primary-foreground"
+          : isToday
+          ? "border-primary/60 bg-card ring-2 ring-primary/20"
+          : "border-border bg-card"
+      )}
+    >
+      <span
+        className={cn(
+          "text-[10px] font-semibold uppercase tracking-wider",
+          selected ? "text-primary-foreground/80" : "text-muted-foreground"
+        )}
+      >
+        {weekday}
+      </span>
+      <span className="font-mono text-base font-bold leading-none">{day}</span>
+    </button>
   );
 }
 
@@ -333,7 +450,7 @@ function BetRow({
   kickoffMs: number | null;
   now: number;
 }) {
-  const displayName = user?.username ?? "Usuario";
+  const displayName = user?.username ?? "Tú";
   return (
     <div className="flex items-start gap-3 rounded-md border bg-card p-3">
       <Link href={user ? ROUTES.profile(user.uid) : "#"} className="shrink-0">
