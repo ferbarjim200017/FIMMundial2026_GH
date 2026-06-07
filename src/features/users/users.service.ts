@@ -1,4 +1,5 @@
 import {
+  deleteDoc,
   doc,
   getDoc,
   setDoc,
@@ -118,6 +119,17 @@ export async function updateUserProfile(
 
 export async function setUserRole(uid: string, role: UserRole): Promise<void> {
   await updateDoc(doc(db, USERS, uid), { role });
+}
+
+/**
+ * Elimina el documento del usuario en Firestore. NO elimina la cuenta de
+ * Firebase Auth (eso requiere el Admin SDK desde un entorno servidor); si
+ * el usuario vuelve a iniciar sesión podría regenerarse su documento. Las
+ * apuestas asociadas se mantienen en Firestore para preservar el historial
+ * del grupo.
+ */
+export async function deleteUserDoc(uid: string): Promise<void> {
+  await deleteDoc(doc(db, USERS, uid));
 }
 
 function round2(n: number): number {

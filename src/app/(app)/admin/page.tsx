@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, ShieldOff } from "lucide-react";
+import { ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth.context";
-import { setUserRole, subscribeToRanking } from "@/features/users/users.service";
+import {
+  deleteUserDoc,
+  setUserRole,
+  subscribeToRanking,
+} from "@/features/users/users.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -46,6 +50,31 @@ export default function AdminPage() {
         err instanceof Error
           ? `No se pudo cambiar el rol: ${err.message}`
           : "No se pudo cambiar el rol"
+      );
+    } finally {
+      setPendingUid(null);
+    }
+  }
+
+  async function handleDeleteUser(target: AppUser) {
+    const ok = window.confirm(
+      `¿Eliminar a ${target.username}?\n\n` +
+        "Esto borra su PERFIL (ranking, saldos, estadísticas). Sus APUESTAS " +
+        "se conservan en el historial del grupo y aparecerán sin nombre.\n\n" +
+        "La cuenta de autenticación NO se elimina automáticamente — si quieres " +
+        "que el usuario no pueda volver a entrar, bórrala manualmente desde " +
+        "Firebase Console → Authentication."
+    );
+    if (!ok) return;
+    setPendingUid(target.uid);
+    try {
+      await deleteUserDoc(target.uid);
+    } catch (err) {
+      console.error("[admin delete user]", err);
+      window.alert(
+        err instanceof Error
+          ? `No se pudo eliminar: ${err.message}`
+          : "No se pudo eliminar el usuario"
       );
     } finally {
       setPendingUid(null);
@@ -142,25 +171,39 @@ export default function AdminPage() {
                       <td className="px-4 py-2 text-right">
                         {isSelf ? (
                           <span className="text-xs text-muted-foreground">—</span>
-                        ) : isUserAdmin ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => handleToggleRole(u)}
-                          >
-                            <ShieldOff className="mr-1 h-3.5 w-3.5" />
-                            {busy ? "…" : "Quitar admin"}
-                          </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => handleToggleRole(u)}
-                          >
-                            <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                            {busy ? "…" : "Hacer admin"}
-                          </Button>
+                          <div className="inline-flex items-center justify-end gap-2">
+                            {isUserAdmin ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => handleToggleRole(u)}
+                              >
+                                <ShieldOff className="mr-1 h-3.5 w-3.5" />
+                                {busy ? "…" : "Quitar admin"}
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => handleToggleRole(u)}
+                              >
+                                <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                                {busy ? "…" : "Hacer admin"}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => handleDeleteUser(u)}
+                              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              {busy ? "…" : "Eliminar"}
+                            </Button>
+                          </div>
                         )}
                       </td>
                     </tr>
