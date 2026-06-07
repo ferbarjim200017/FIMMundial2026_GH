@@ -317,9 +317,13 @@ function BookmakerCard({
   }
 
   const label = bookmaker === "bet365" ? "Bet365" : "Winamax";
+  const borderClass =
+    bookmaker === "bet365"
+      ? "border-2 border-emerald-500/70"
+      : "border-2 border-red-500/70";
 
   return (
-    <Card>
+    <Card className={borderClass}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{label}</CardTitle>
         <CardDescription>
