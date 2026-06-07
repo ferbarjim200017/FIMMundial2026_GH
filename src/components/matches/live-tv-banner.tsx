@@ -21,6 +21,57 @@ interface BannerItem {
   kind: "live" | "soon";
   /** Minutos hasta el inicio (sólo para `soon`) o transcurridos (sólo para `live`). */
   minutes: number;
+  /** Cuando es true, se muestra un sello "Demo" para distinguirlo de los reales. */
+  demo?: boolean;
+}
+
+/** Mocks de muestra para `?demo=tv`. Construyo objetos `Match`-like al vuelo
+ *  con sólo los campos que renderiza el banner — el resto los ignoramos. */
+function demoItems(): BannerItem[] {
+  const mockMatch = (overrides: Partial<Match>): Match =>
+    ({
+      id: "demo",
+      stage: "group",
+      kickoffUtc: { toMillis: () => Date.now() } as Match["kickoffUtc"],
+      homeLabel: "",
+      awayLabel: "",
+      homeTeamId: null,
+      awayTeamId: null,
+      status: "scheduled",
+      ...overrides,
+    } as Match);
+
+  return [
+    {
+      kind: "live",
+      minutes: 47,
+      demo: true,
+      match: mockMatch({
+        id: "demo-live",
+        homeLabel: "España",
+        awayLabel: "Cabo Verde",
+        status: "scheduled",
+        result: {
+          homeGoals: 1,
+          awayGoals: 0,
+          homeYellow: 0,
+          awayYellow: 0,
+          homeRed: 0,
+          awayRed: 0,
+        },
+      }),
+    },
+    {
+      kind: "soon",
+      minutes: 23,
+      demo: true,
+      match: mockMatch({
+        id: "demo-soon",
+        homeLabel: "Brasil",
+        awayLabel: "Marruecos",
+      }),
+    },
+  ];
 }
 
 function classify(match: Match, now: number): BannerItem | null {
@@ -39,6 +90,7 @@ function classify(match: Match, now: number): BannerItem | null {
 export function LiveTvBanner() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToMatches(setMatches);
@@ -51,15 +103,27 @@ export function LiveTvBanner() {
     return () => clearInterval(id);
   }, []);
 
-  const items = matches
+  // Activación del modo demo vía `?demo=tv`. Leemos `window.location` después
+  // del montaje para no usar `useSearchParams` (que obligaría a envolver en
+  // un `<Suspense>` desde fuera).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    setDemoMode(p.get("demo") === "tv");
+  }, []);
+
+  const realItems = matches
     .filter(isTveMatch)
     .map((m) => classify(m, now))
-    .filter((x): x is BannerItem => x !== null)
-    .sort((a, b) => {
+    .filter((x): x is BannerItem => x !== null);
+
+  const items = (demoMode ? [...demoItems(), ...realItems] : realItems).sort(
+    (a, b) => {
       // Live primero, luego los que empiezan antes.
       if (a.kind !== b.kind) return a.kind === "live" ? -1 : 1;
       return a.match.kickoffUtc.toMillis() - b.match.kickoffUtc.toMillis();
-    });
+    }
+  );
 
   if (items.length === 0) return null;
 
@@ -73,11 +137,16 @@ export function LiveTvBanner() {
 }
 
 function BannerRow({ item }: { item: BannerItem }) {
-  const { match, kind, minutes } = item;
+  const { match, kind, minutes, demo } = item;
   const isLive = kind === "live";
 
   return (
-    <Link href={ROUTES.worldCup} className="block">
+    <Link
+      href={demo ? "#" : ROUTES.worldCup}
+      className="block"
+      aria-disabled={demo}
+      onClick={demo ? (e) => e.preventDefault() : undefined}
+    >
       <Card
         className={cn(
           "overflow-hidden border-l-4 transition-colors hover:bg-accent/40",
@@ -111,6 +180,11 @@ function BannerRow({ item }: { item: BannerItem }) {
               ) : (
                 <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-600 dark:text-amber-400">
                   Empieza pronto
+                </span>
+              )}
+              {demo && (
+                <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-sky-600 dark:text-sky-400">
+                  🧪 Demo
                 </span>
               )}
               <span className="text-muted-foreground">·</span>
