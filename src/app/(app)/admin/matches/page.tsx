@@ -449,36 +449,26 @@ export default function AdminMatchesPage() {
                     </td>
                     <td className="px-4 py-2 text-center">
                       {m.result ? (
-                        <div className="inline-flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setResultFor(m)}
-                            className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-0.5 font-mono text-sm hover:border-primary/60"
-                            title="Editar resultado"
-                          >
-                            <span className="font-bold">{m.result.homeGoals}</span>
-                            <span className="text-muted-foreground">-</span>
-                            <span className="font-bold">{m.result.awayGoals}</span>
-                            {(m.result.homeYellow + m.result.awayYellow) > 0 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                🟨{m.result.homeYellow + m.result.awayYellow}
-                              </span>
-                            )}
-                            {(m.result.homeRed + m.result.awayRed) > 0 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                🟥{m.result.homeRed + m.result.awayRed}
-                              </span>
-                            )}
-                          </button>
-                          {m.autoImported && !m.enteredBy && (
-                            <span
-                              title="Resultado auto-importado. Tarjetas pendientes de revisar."
-                              className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400"
-                            >
-                              🤖 Auto
+                        <button
+                          type="button"
+                          onClick={() => setResultFor(m)}
+                          className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-0.5 font-mono text-sm hover:border-primary/60"
+                          title="Editar resultado"
+                        >
+                          <span className="font-bold">{m.result.homeGoals}</span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="font-bold">{m.result.awayGoals}</span>
+                          {(m.result.homeYellow + m.result.awayYellow) > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              🟨{m.result.homeYellow + m.result.awayYellow}
                             </span>
                           )}
-                        </div>
+                          {(m.result.homeRed + m.result.awayRed) > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              🟥{m.result.homeRed + m.result.awayRed}
+                            </span>
+                          )}
+                        </button>
                       ) : (
                         <Button
                           variant="outline"

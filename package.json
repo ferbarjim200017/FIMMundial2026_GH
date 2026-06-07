@@ -7,9 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "import-results": "tsx scripts/import-results.ts",
-    "import-results:dry": "tsx scripts/import-results.ts --dry-run --verbose"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -48,7 +46,6 @@
     "eslint-config-next": "^15.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.14",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
 }
