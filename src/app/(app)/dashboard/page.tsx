@@ -11,6 +11,7 @@ import {
   getInitialBalances,
 } from "@/features/bets/bets.utils";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { LiveTvBanner } from "@/components/matches/live-tv-banner";
 import { updateInitialBalances } from "@/features/users/users.service";
 import {
   Card,
@@ -53,6 +54,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <LiveTvBanner />
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
           Hola, {appUser.username} 👋
