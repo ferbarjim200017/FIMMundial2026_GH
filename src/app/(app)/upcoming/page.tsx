@@ -6,6 +6,8 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   CalendarClock,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Copy,
   Radio,
@@ -50,6 +52,16 @@ function startOfDayMs(ms: number): number {
   return d.getTime();
 }
 
+function startOfMonthMs(ms: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+}
+
+function shiftMonth(monthStartMs: number, delta: number): number {
+  const d = new Date(monthStartMs);
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1).getTime();
+}
+
 /** Devuelve la fecha de kickoff más temprana entre los partidos vinculados a
  *  una apuesta. Si no hay ninguno mapeado, retorna `null`. */
 function earliestKickoff(
@@ -90,11 +102,10 @@ interface DayChipInfo {
   isToday: boolean;
 }
 
-/** Genera la tira de chips para todos los días del mes actual. Los días
- *  anteriores a hoy quedan deshabilitados ("lo antiguo ya nunca"). */
-function buildDayStrip(nowMs: number): DayChipInfo[] {
-  const todayStart = startOfDayMs(nowMs);
-  const d = new Date(todayStart);
+/** Genera la tira de chips para todos los días del mes especificado. Los
+ *  días anteriores a hoy quedan deshabilitados ("lo antiguo ya nunca"). */
+function buildDayStrip(monthStartMs: number, todayStart: number): DayChipInfo[] {
+  const d = new Date(monthStartMs);
   const year = d.getFullYear();
   const month = d.getMonth();
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -119,6 +130,11 @@ export default function UpcomingPage() {
   const [now, setNow] = useState(() => Date.now());
   const [selectedDayMs, setSelectedDayMs] = useState<number>(() =>
     startOfDayMs(Date.now())
+  );
+  // Mes que se muestra en la tira de chips. Por defecto, el mes en curso.
+  // Permitimos navegar hacia adelante (julio, agosto…) pero no al pasado.
+  const [displayMonthMs, setDisplayMonthMs] = useState<number>(() =>
+    startOfMonthMs(Date.now())
   );
   // Partido sobre el que abrimos el popup de "Apuestas sobre este partido"
   // (mismo `MatchBetsDialog` que usa el apartado Mundial).
@@ -154,7 +170,12 @@ export default function UpcomingPage() {
   const windowEnd = selectedDayMs + WINDOW_DAYS * DAY_MS;
   const isViewingToday = selectedDayMs === todayStart;
 
-  const dayStrip = useMemo(() => buildDayStrip(now), [now]);
+  const dayStrip = useMemo(
+    () => buildDayStrip(displayMonthMs, todayStart),
+    [displayMonthMs, todayStart]
+  );
+  const currentMonthStart = startOfMonthMs(now);
+  const canGoPrev = displayMonthMs > currentMonthStart;
 
   const matchById = useMemo(() => {
     const map = new Map<string, Match>();
@@ -227,7 +248,36 @@ export default function UpcomingPage() {
       {/* ─── Tira de días del mes ─── */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Elige día</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm">Elige día</CardTitle>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDisplayMonthMs((m) => shiftMonth(m, -1))}
+                disabled={!canGoPrev}
+                aria-label="Mes anterior"
+                className={cn(
+                  "rounded-md border p-1 transition-colors",
+                  canGoPrev
+                    ? "hover:bg-accent/40"
+                    : "cursor-not-allowed opacity-40"
+                )}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[110px] text-center text-sm font-semibold capitalize">
+                {format(new Date(displayMonthMs), "LLLL yyyy", { locale: es })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDisplayMonthMs((m) => shiftMonth(m, 1))}
+                aria-label="Mes siguiente"
+                className="rounded-md border p-1 transition-colors hover:bg-accent/40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <CardDescription>
             Cargando ventana: <span className="font-medium">{windowLabel}</span>{" "}
             ({WINDOW_DAYS} días)
