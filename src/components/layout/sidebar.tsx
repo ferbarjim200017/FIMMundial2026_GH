@@ -34,7 +34,16 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="hidden w-56 shrink-0 border-r border-border bg-card/30 md:block">
+    <aside
+      className={
+        // En desktop fijamos el sidebar a la parte superior del viewport y le
+        // damos altura completa para que las pestañas sean siempre accesibles
+        // sin tener que volver arriba al scrollear. `self-start` evita que el
+        // flexbox lo estire en altura natural y rompa el `sticky`.
+        "hidden w-56 shrink-0 border-r border-border bg-card/30 " +
+        "md:sticky md:top-0 md:block md:h-screen md:self-start md:overflow-y-auto"
+      }
+    >
       <nav className="flex flex-col gap-1 p-3">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
