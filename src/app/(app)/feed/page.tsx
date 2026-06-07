@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
+  Copy,
   Search,
   SlidersHorizontal,
   TrendingDown,
@@ -566,9 +567,20 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
             {formatCurrency(bet.stake)} · {bookmakerLabel(bet.bookmaker, bet.bookmakerLabel)}
           </p>
 
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{timestamp}</span>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {timestamp}
+            </span>
+            <span aria-hidden>·</span>
+            <Link
+              href={`${ROUTES.bets}/new?from=${bet.id}`}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-primary hover:bg-primary/10"
+              title="Copiar esta apuesta a una nueva"
+            >
+              <Copy className="h-3 w-3" />
+              Copiar
+            </Link>
           </div>
         </div>
 

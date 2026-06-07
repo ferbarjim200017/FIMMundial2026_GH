@@ -34,7 +34,12 @@ import type { Bet, Match } from "@/types/domain";
 
 interface Props {
   userId: string;
+  /** Modo edición: la apuesta cuyos datos se editan y guardan sobre la misma. */
   initial?: Bet;
+  /** Modo "copiar de": pre-rellena el formulario con los datos de esta apuesta
+   *  pero al guardar SIEMPRE crea una apuesta nueva del usuario actual. La
+   *  fecha por defecto será "ahora" (no la fecha de la apuesta original). */
+  prefill?: Bet;
   onDone?: () => void;
 }
 
@@ -49,23 +54,29 @@ function composeLabel(matches: Match[]): string {
   return matches.map((m) => `${m.homeLabel} vs ${m.awayLabel}`).join(" + ");
 }
 
-export function BetForm({ userId, initial, onDone }: Props) {
+export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
+  // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
+  // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
+  // valores por defecto en blanco.
+  const seed = initial ?? prefill;
   const [values, setValues] = useState<BetFormValues>(() => ({
-    bookmaker: initial?.bookmaker ?? "bet365",
-    bookmakerLabel: initial?.bookmakerLabel ?? "",
-    matchIds: initial?.matchIds ?? (initial?.matchId ? [initial.matchId] : []),
-    matchLabel: initial?.matchLabel ?? "",
-    market: initial?.market ?? "winner",
-    marketDetail: initial?.marketDetail ?? "",
-    selection: initial?.selection ?? "",
-    odds: initial?.odds ?? 1.5,
-    stake: initial?.stake ?? 10,
+    bookmaker: seed?.bookmaker ?? "bet365",
+    bookmakerLabel: seed?.bookmakerLabel ?? "",
+    matchIds: seed?.matchIds ?? (seed?.matchId ? [seed.matchId] : []),
+    matchLabel: seed?.matchLabel ?? "",
+    market: seed?.market ?? "winner",
+    marketDetail: seed?.marketDetail ?? "",
+    selection: seed?.selection ?? "",
+    odds: seed?.odds ?? 1.5,
+    stake: seed?.stake ?? 10,
+    // En modo edición, la fecha se preserva. Al copiar, queremos "ahora" como
+    // fecha de la apuesta nueva (no la del autor original).
     placedAt: initial
       ? toLocalDatetimeValue(initial.createdAt.toDate())
       : toLocalDatetimeValue(new Date()),
-    isFreebet: initial?.isFreebet ?? false,
-    notes: initial?.notes ?? "",
+    isFreebet: seed?.isFreebet ?? false,
+    notes: seed?.notes ?? "",
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -74,8 +85,8 @@ export function BetForm({ userId, initial, onDone }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedMatches, setSelectedMatches] = useState<Match[]>([]);
   const [manualLabel, setManualLabel] = useState<boolean>(
-    !!initial &&
-      ((initial.matchIds?.length ?? 0) === 0 && !initial.matchId)
+    !!seed &&
+      ((seed.matchIds?.length ?? 0) === 0 && !seed.matchId)
   );
 
   // Las apuestas a futuro (outright) no van ligadas a un partido concreto;
