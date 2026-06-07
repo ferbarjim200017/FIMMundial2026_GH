@@ -8,9 +8,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
+  Search,
+  SlidersHorizontal,
   TrendingDown,
   TrendingUp,
   Trophy,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -21,6 +24,15 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
@@ -33,7 +45,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet, BetStatus } from "@/types/domain";
+import type { AppUser, Bet, BetStatus, Bookmaker } from "@/types/domain";
 
 type FeedFilter = "results" | "won" | "lost" | "pending" | "all";
 
@@ -61,10 +73,18 @@ function matchesFilter(bet: Bet, filter: FeedFilter): boolean {
   return bet.status !== "pending";
 }
 
+type BookmakerFilter = Bookmaker | "all";
+
 export default function FeedPage() {
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   const [filter, setFilter] = useState<FeedFilter>("results");
+  const [query, setQuery] = useState("");
+  const [userFilter, setUserFilter] = useState<string>("all");
+  const [bookmakerFilter, setBookmakerFilter] = useState<BookmakerFilter>("all");
+  const [minStake, setMinStake] = useState("");
+  const [maxStake, setMaxStake] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -92,10 +112,71 @@ export default function FeedPage() {
     );
   }, [bets]);
 
+  const userOptions = useMemo(() => {
+    return Object.values(usersById)
+      .slice()
+      .sort((a, b) =>
+        a.username.localeCompare(b.username, "es", { sensitivity: "base" })
+      );
+  }, [usersById]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const minStakeNum = minStake === "" ? null : Number(minStake);
+  const maxStakeNum = maxStake === "" ? null : Number(maxStake);
+  const hasAdvancedFilters =
+    userFilter !== "all" ||
+    bookmakerFilter !== "all" ||
+    minStake !== "" ||
+    maxStake !== "" ||
+    normalizedQuery !== "";
+
   const filteredBets = useMemo(() => {
     if (!sortedBets) return null;
-    return sortedBets.filter((b) => matchesFilter(b, filter)).slice(0, MAX_ITEMS);
-  }, [sortedBets, filter]);
+    return sortedBets
+      .filter((b) => matchesFilter(b, filter))
+      .filter((b) => {
+        if (userFilter !== "all" && b.userId !== userFilter) return false;
+        if (bookmakerFilter !== "all" && b.bookmaker !== bookmakerFilter)
+          return false;
+        if (minStakeNum !== null && !Number.isNaN(minStakeNum) && b.stake < minStakeNum)
+          return false;
+        if (maxStakeNum !== null && !Number.isNaN(maxStakeNum) && b.stake > maxStakeNum)
+          return false;
+        if (normalizedQuery !== "") {
+          const username = usersById[b.userId]?.username?.toLowerCase() ?? "";
+          const haystack = [
+            username,
+            b.matchLabel,
+            b.selection,
+            b.marketDetail,
+            b.bookmakerLabel ?? "",
+            bookmakerLabel(b.bookmaker, b.bookmakerLabel),
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(normalizedQuery)) return false;
+        }
+        return true;
+      })
+      .slice(0, MAX_ITEMS);
+  }, [
+    sortedBets,
+    filter,
+    userFilter,
+    bookmakerFilter,
+    minStakeNum,
+    maxStakeNum,
+    normalizedQuery,
+    usersById,
+  ]);
+
+  const resetFilters = () => {
+    setQuery("");
+    setUserFilter("all");
+    setBookmakerFilter("all");
+    setMinStake("");
+    setMaxStake("");
+  };
 
   const todaySummary = useMemo(() => {
     if (!sortedBets) return null;
@@ -194,17 +275,139 @@ export default function FeedPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por usuario, partido, selección…"
+              className="pl-9 pr-9"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <Button
-            key={f.value}
-            variant={filter === f.value ? "default" : "outline"}
+            type="button"
+            variant={filtersOpen ? "default" : "outline"}
             size="sm"
-            onClick={() => setFilter(f.value)}
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="gap-1.5"
           >
-            {f.label}
+            <SlidersHorizontal className="h-4 w-4" />
+            Filtros
           </Button>
-        ))}
+          {hasAdvancedFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+            >
+              Limpiar
+            </Button>
+          )}
+        </div>
+
+        {filtersOpen && (
+          <Card>
+            <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Usuario
+                </Label>
+                <Select
+                  value={userFilter}
+                  onValueChange={(v) => setUserFilter(v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {userOptions.map((u) => (
+                      <SelectItem key={u.uid} value={u.uid}>
+                        {u.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Casa de apuestas
+                </Label>
+                <Select
+                  value={bookmakerFilter}
+                  onValueChange={(v) => setBookmakerFilter(v as BookmakerFilter)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="bet365">Bet365</SelectItem>
+                    <SelectItem value="winamax">Winamax</SelectItem>
+                    <SelectItem value="other">Otra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Stake mínimo (€)
+                </Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={minStake}
+                  onChange={(e) => setMinStake(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Stake máximo (€)
+                </Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={maxStake}
+                  onChange={(e) => setMaxStake(e.target.value)}
+                  placeholder="Sin límite"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              variant={filter === f.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter(f.value)}
+            >
+              {f.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {filteredBets === null ? (
