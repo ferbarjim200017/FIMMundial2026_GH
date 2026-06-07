@@ -1,0 +1,375 @@
+"use client";
+
+import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, LineChart, Minus, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { RankingChart } from "@/components/ranking/ranking-chart";
+import { getUser } from "@/features/users/users.service";
+import { subscribeToBets } from "@/features/bets/bets.service";
+import {
+  cn,
+  formatCurrency,
+  formatPercent,
+  initials,
+} from "@/lib/utils";
+import { ROUTES } from "@/lib/constants";
+import type { AppUser, Bet, UserStats } from "@/types/domain";
+
+type Metric = {
+  label: string;
+  /** Cómo extraer el valor numérico para comparar. */
+  pick: (s: UserStats, u: AppUser) => number;
+  /** Cómo renderizar el valor en la celda. */
+  render: (n: number) => string;
+  /** Si true, "más es mejor". Si false, "menos es mejor". null = no compite. */
+  higherWins: boolean | null;
+};
+
+const METRICS: Metric[] = [
+  {
+    label: "ROI",
+    pick: (s) => s.roi,
+    render: (n) => `${n > 0 ? "+" : ""}${formatPercent(n)}`,
+    higherWins: true,
+  },
+  {
+    label: "Beneficio total",
+    pick: (s) => s.totalProfit,
+    render: (n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`,
+    higherWins: true,
+  },
+  {
+    label: "% Acierto",
+    pick: (s) => s.hitRate,
+    render: (n) => formatPercent(n),
+    higherWins: true,
+  },
+  {
+    label: "Racha actual",
+    pick: (s) => s.currentStreak,
+    render: (n) => (n > 0 ? `+${n}` : String(n)),
+    higherWins: true,
+  },
+  {
+    label: "Mejor racha",
+    pick: (s) => s.bestStreak,
+    render: (n) => String(n),
+    higherWins: true,
+  },
+  {
+    label: "Cuota media",
+    pick: (s) => s.avgOdds,
+    render: (n) => n.toFixed(2),
+    higherWins: null,
+  },
+  {
+    label: "Stake medio",
+    pick: (s) => s.avgStake,
+    render: (n) => formatCurrency(n),
+    higherWins: null,
+  },
+  {
+    label: "Apuestas",
+    pick: (s) => s.betsCount,
+    render: (n) => String(n),
+    higherWins: null,
+  },
+  {
+    label: "Ganadas",
+    pick: (s) => s.betsWon,
+    render: (n) => String(n),
+    higherWins: true,
+  },
+  {
+    label: "Perdidas",
+    pick: (s) => s.betsLost,
+    render: (n) => String(n),
+    higherWins: false,
+  },
+  {
+    label: "Saldo actual",
+    pick: (_, u) => u.currentBalance,
+    render: (n) => formatCurrency(n),
+    higherWins: null,
+  },
+];
+
+function evaluateWinner(a: number, b: number, higherWins: boolean | null): "a" | "b" | "tie" | null {
+  if (higherWins === null) return null;
+  if (a === b) return "tie";
+  const aWins = higherWins ? a > b : a < b;
+  return aWins ? "a" : "b";
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense
+      fallback={
+        <p className="text-sm text-muted-foreground">Cargando comparativa…</p>
+      }
+    >
+      <CompareContent />
+    </Suspense>
+  );
+}
+
+function CompareContent() {
+  const search = useSearchParams();
+  const aUid = search.get("a") ?? "";
+  const bUid = search.get("b") ?? "";
+
+  const [userA, setUserA] = useState<AppUser | null>(null);
+  const [userB, setUserB] = useState<AppUser | null>(null);
+  const [bets, setBets] = useState<Bet[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!aUid || !bUid) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    Promise.all([getUser(aUid), getUser(bUid)])
+      .then(([a, b]) => {
+        setUserA(a);
+        setUserB(b);
+      })
+      .finally(() => setLoading(false));
+  }, [aUid, bUid]);
+
+  useEffect(() => {
+    if (!aUid || !bUid) return;
+    const unsub = subscribeToBets({}, (all) => {
+      setBets(all.filter((bet) => bet.userId === aUid || bet.userId === bUid));
+    });
+    return unsub;
+  }, [aUid, bUid]);
+
+  const tally = useMemo(() => {
+    if (!userA || !userB) return { a: 0, b: 0 };
+    let a = 0;
+    let b = 0;
+    for (const m of METRICS) {
+      const w = evaluateWinner(
+        m.pick(userA.stats, userA),
+        m.pick(userB.stats, userB),
+        m.higherWins
+      );
+      if (w === "a") a++;
+      else if (w === "b") b++;
+    }
+    return { a, b };
+  }, [userA, userB]);
+
+  if (loading) {
+    return (
+      <p className="text-sm text-muted-foreground">Cargando comparativa…</p>
+    );
+  }
+
+  if (!aUid || !bUid || !userA || !userB) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Faltan usuarios para comparar, o uno de ellos no existe.
+          </p>
+          <Button asChild variant="outline">
+            <Link href={ROUTES.ranking}>Ir al ranking</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const leader =
+    tally.a > tally.b ? "a" : tally.b > tally.a ? "b" : "tie";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button asChild variant="ghost" size="icon">
+          <Link href={ROUTES.profile(userB.uid)} aria-label="Volver">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Swords className="h-5 w-5 text-primary" />
+            Cara a cara
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {userA.username} vs {userB.username}
+          </p>
+        </div>
+      </div>
+
+      <Card className="border-primary/40">
+        <CardContent className="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:gap-6">
+          <UserHeader user={userA} alignment="left" winning={leader === "a"} />
+          <div className="flex shrink-0 flex-col items-center gap-1 px-2">
+            <div className="font-mono text-3xl font-extrabold tracking-tight">
+              <span className={leader === "a" ? "text-profit" : leader === "b" ? "text-muted-foreground" : ""}>
+                {tally.a}
+              </span>
+              <span className="mx-2 text-muted-foreground">–</span>
+              <span className={leader === "b" ? "text-profit" : leader === "a" ? "text-muted-foreground" : ""}>
+                {tally.b}
+              </span>
+            </div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {leader === "tie"
+                ? "Empate"
+                : `${(leader === "a" ? userA : userB).username} lidera`}
+            </p>
+          </div>
+          <UserHeader user={userB} alignment="right" winning={leader === "b"} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Métrica a métrica</CardTitle>
+          <CardDescription>
+            La flecha verde marca al ganador de cada fila. Algunas estadísticas
+            (cuota media, stake medio, número de apuestas) son informativas y
+            no cuentan al marcador.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-right w-2/5">{userA.username}</th>
+                  <th className="px-2 py-3 text-center">Métrica</th>
+                  <th className="px-4 py-3 text-left w-2/5">{userB.username}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {METRICS.map((m) => {
+                  const va = m.pick(userA.stats, userA);
+                  const vb = m.pick(userB.stats, userB);
+                  const w = evaluateWinner(va, vb, m.higherWins);
+                  return (
+                    <tr key={m.label}>
+                      <td
+                        className={cn(
+                          "px-4 py-2.5 text-right font-mono",
+                          w === "a" && "font-bold text-profit",
+                          w === "b" && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {w === "a" && (
+                            <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                          {m.render(va)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5 text-center text-xs uppercase tracking-wider text-muted-foreground">
+                        {m.label}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-2.5 text-left font-mono",
+                          w === "b" && "font-bold text-profit",
+                          w === "a" && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {m.render(vb)}
+                          {w === "b" && (
+                            <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                          {w === "tie" && (
+                            <Minus className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <LineChart className="h-4 w-4 text-primary" />
+            Evolución del beneficio
+          </CardTitle>
+          <CardDescription>
+            Beneficio acumulado de cada uno desde el inicio del seguimiento. La
+            línea solo refleja apuestas liquidadas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RankingChart users={[userA, userB]} bets={bets} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function UserHeader({
+  user,
+  alignment,
+  winning,
+}: {
+  user: AppUser;
+  alignment: "left" | "right";
+  winning: boolean;
+}) {
+  return (
+    <Link
+      href={ROUTES.profile(user.uid)}
+      className={cn(
+        "flex flex-1 items-center gap-3 rounded-md p-2 transition-colors hover:bg-accent/50",
+        alignment === "right" && "flex-row-reverse text-right"
+      )}
+    >
+      <Avatar
+        className={cn(
+          "h-14 w-14 ring-2 transition-all",
+          winning ? "ring-profit" : "ring-transparent"
+        )}
+      >
+        {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.username} />}
+        <AvatarFallback>{initials(user.username)}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0">
+        <p className="truncate font-semibold">{user.username}</p>
+        <p
+          className={cn(
+            "font-mono text-sm",
+            user.stats.totalProfit > 0
+              ? "text-profit"
+              : user.stats.totalProfit < 0
+              ? "text-loss"
+              : "text-muted-foreground"
+          )}
+        >
+          {user.stats.totalProfit > 0 ? "+" : ""}
+          {formatCurrency(user.stats.totalProfit)}
+          {user.stats.totalProfit < 0 && (
+            <TrendingDown className="ml-1 inline h-3 w-3" aria-hidden />
+          )}
+        </p>
+      </div>
+    </Link>
+  );
+}

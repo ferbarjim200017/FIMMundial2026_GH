@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Swords } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
+import { ROUTES } from "@/lib/constants";
 import {
   formatCurrency,
   formatDate,
@@ -82,6 +85,14 @@ export default function ProfilePage() {
           {isOwner && !editing && (
             <Button variant="outline" onClick={() => setEditing(true)}>
               Editar perfil
+            </Button>
+          )}
+          {!isOwner && me && (
+            <Button asChild variant="outline" className="gap-1.5">
+              <Link href={ROUTES.compare(me.uid, user.uid)}>
+                <Swords className="h-4 w-4" />
+                Comparar conmigo
+              </Link>
             </Button>
           )}
         </CardContent>
