@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BarChart3, LineChart } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +15,7 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
+import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -33,21 +34,36 @@ function medal(rank: number) {
 }
 
 export default function RankingPage() {
-  const [users, setUsers] = useState<AppUser[] | null>(null);
-  const [bets, setBets] = useState<Bet[]>([]);
+  const [allUsers, setAllUsers] = useState<AppUser[] | null>(null);
+  const [allBets, setAllBets] = useState<Bet[]>([]);
+  const { memberUids, activeGroup } = useGroup();
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setUsers([]);
+      setAllUsers([]);
       return;
     }
-    const unsubUsers = subscribeToRanking(setUsers);
-    const unsubBets = subscribeToBets({}, setBets);
+    const unsubUsers = subscribeToRanking(setAllUsers);
+    const unsubBets = subscribeToBets({}, setAllBets);
     return () => {
       unsubUsers();
       unsubBets();
     };
   }, []);
+
+  // Filtra a los miembros del grupo activo. Si activeGroup aún no está
+  // resuelto (carga inicial) devolvemos null para que la tabla se quede
+  // en "Cargando…".
+  const users = useMemo(() => {
+    if (allUsers === null) return null;
+    if (!activeGroup || memberUids.size === 0) return null;
+    return allUsers.filter((u) => memberUids.has(u.uid));
+  }, [allUsers, memberUids, activeGroup]);
+
+  const bets = useMemo(
+    () => allBets.filter((b) => memberUids.has(b.userId)),
+    [allBets, memberUids]
+  );
 
   return (
     <div className="space-y-6">

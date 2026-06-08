@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
@@ -42,6 +43,7 @@ interface Props {
 
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { appUser } = useAuth();
+  const { memberUids } = useGroup();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   // "all"  → comportamiento por defecto (todas las apuestas).
@@ -91,18 +93,25 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     };
   }, [open, match]);
 
-  const visibleBets = useMemo(() => {
+  // Filtrado base por grupo activo: solo apuestas de miembros del grupo.
+  const groupBets = useMemo(() => {
     if (!bets) return null;
+    if (memberUids.size === 0) return [];
+    return bets.filter((b) => memberUids.has(b.userId));
+  }, [bets, memberUids]);
+
+  const visibleBets = useMemo(() => {
+    if (!groupBets) return null;
     if (scope === "mine" && appUser) {
-      return bets.filter((b) => b.userId === appUser.uid);
+      return groupBets.filter((b) => b.userId === appUser.uid);
     }
-    return bets;
-  }, [bets, scope, appUser]);
+    return groupBets;
+  }, [groupBets, scope, appUser]);
 
   const myBetsCount = useMemo(() => {
-    if (!bets || !appUser) return 0;
-    return bets.filter((b) => b.userId === appUser.uid).length;
-  }, [bets, appUser]);
+    if (!groupBets || !appUser) return 0;
+    return groupBets.filter((b) => b.userId === appUser.uid).length;
+  }, [groupBets, appUser]);
 
   const summary = useMemo(() => {
     if (!visibleBets) return null;
@@ -143,7 +152,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
               size="sm"
               onClick={() => setScope("all")}
             >
-              Todas{bets ? ` · ${bets.length}` : ""}
+              Todas{groupBets ? ` · ${groupBets.length}` : ""}
             </Button>
             <Button
               type="button"
@@ -151,7 +160,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
               size="sm"
               onClick={() => setScope("mine")}
             >
-              Mis apuestas{bets ? ` · ${myBetsCount}` : ""}
+              Mis apuestas{groupBets ? ` · ${myBetsCount}` : ""}
             </Button>
           </div>
         )}

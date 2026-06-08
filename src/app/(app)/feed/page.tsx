@@ -39,6 +39,7 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
+import { useGroup } from "@/features/groups/groups.context";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -79,8 +80,9 @@ function matchesFilter(bet: Bet, filter: FeedFilter): boolean {
 type BookmakerFilter = Bookmaker | "all";
 
 export default function FeedPage() {
-  const [bets, setBets] = useState<Bet[] | null>(null);
+  const [allBets, setAllBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
+  const { memberUids } = useGroup();
   const [filter, setFilter] = useState<FeedFilter>("results");
   const [query, setQuery] = useState("");
   const [userFilter, setUserFilter] = useState<string>("all");
@@ -107,10 +109,10 @@ export default function FeedPage() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setBets([]);
+      setAllBets([]);
       return;
     }
-    const unsubBets = subscribeToBets({}, setBets);
+    const unsubBets = subscribeToBets({}, setAllBets);
     const unsubUsers = subscribeToRanking((users) => {
       const map: Record<string, AppUser> = {};
       for (const u of users) map[u.uid] = u;
@@ -121,6 +123,13 @@ export default function FeedPage() {
       unsubUsers();
     };
   }, []);
+
+  // Filtra a las apuestas de miembros del grupo activo.
+  const bets = useMemo(() => {
+    if (allBets === null) return null;
+    if (memberUids.size === 0) return null;
+    return allBets.filter((b) => memberUids.has(b.userId));
+  }, [allBets, memberUids]);
 
   // Resort por timestamp efectivo (settledAt si existe, si no createdAt)
   // para que las apuestas recién liquidadas suban arriba aunque sean antiguas.
@@ -134,10 +143,11 @@ export default function FeedPage() {
   const userOptions = useMemo(() => {
     return Object.values(usersById)
       .slice()
+      .filter((u) => memberUids.has(u.uid))
       .sort((a, b) =>
         a.username.localeCompare(b.username, "es", { sensitivity: "base" })
       );
-  }, [usersById]);
+  }, [usersById, memberUids]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const minStakeNum = minStake === "" ? null : Number(minStake);
@@ -212,9 +222,11 @@ export default function FeedPage() {
   }, [sortedBets]);
 
   // Ganador y perdedor "absolutos" del grupo (totalProfit acumulado).
-  // Estos cuadros son globales: todos los usuarios ven el mismo valor.
+  // Filtrados a miembros del grupo activo.
   const groupExtremes = useMemo(() => {
-    const usersArr = Object.values(usersById);
+    const usersArr = Object.values(usersById).filter((u) =>
+      memberUids.has(u.uid)
+    );
     if (usersArr.length === 0) return null;
     let topProfit = usersArr[0];
     let topLoss = usersArr[0];
@@ -236,7 +248,7 @@ export default function FeedPage() {
           ? { user: topLoss, value: topLoss.stats?.totalProfit ?? 0 }
           : null,
     };
-  }, [usersById]);
+  }, [usersById, memberUids]);
 
   return (
     <div className="space-y-6">

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { getUser } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
+import { useGroup } from "@/features/groups/groups.context";
 import {
   cn,
   formatCurrency,
@@ -127,6 +128,7 @@ function CompareContent() {
   const search = useSearchParams();
   const aUid = search.get("a") ?? "";
   const bUid = search.get("b") ?? "";
+  const { activeGroup, memberUids } = useGroup();
 
   const [userA, setUserA] = useState<AppUser | null>(null);
   const [userB, setUserB] = useState<AppUser | null>(null);
@@ -183,6 +185,29 @@ function CompareContent() {
         <CardContent className="space-y-3 p-6 text-center">
           <p className="text-sm text-muted-foreground">
             Faltan usuarios para comparar, o uno de ellos no existe.
+          </p>
+          <Button asChild variant="outline">
+            <Link href={ROUTES.ranking}>Ir al ranking</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Cross-group block: si alguno de los dos no está en tu grupo activo,
+  // no se permite la comparativa.
+  if (
+    activeGroup &&
+    memberUids.size > 0 &&
+    (!memberUids.has(aUid) || !memberUids.has(bUid))
+  ) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Uno o los dos usuarios no están en tu grupo{" "}
+            <strong>{activeGroup.name}</strong>. Solo puedes comparar
+            jugadores del mismo grupo.
           </p>
           <Button asChild variant="outline">
             <Link href={ROUTES.ranking}>Ir al ranking</Link>
