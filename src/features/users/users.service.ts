@@ -160,29 +160,50 @@ function round2(n: number): number {
 }
 
 /**
- * Actualiza los saldos iniciales por casa de apuestas. Recalcula también
- * `initialBalance` (suma) y `currentBalance` (= initial + totalProfit) para
- * que el ranking global se mantenga consistente.
+ * Actualiza los saldos iniciales por casa de apuestas. Si se pasa `groupId`,
+ * el cambio se guarda en `balancesPerGroup[groupId]`. Sin groupId, conserva
+ * el comportamiento legacy (saldos globales). Recomputa los totales agregados
+ * para que el ranking global "antiguo" se mantenga consistente.
  */
 export async function updateInitialBalances(
   uid: string,
-  patch: Partial<BookmakerBalances>
+  patch: Partial<BookmakerBalances>,
+  groupId?: string
 ): Promise<void> {
   const user = await getUser(uid);
   if (!user) throw new Error("Usuario no encontrado");
-  const current = user.initialBalances ?? EMPTY_BOOKMAKER_BALANCES;
+
+  // Saldo base sobre el que se aplica el patch
+  let base: BookmakerBalances;
+  if (groupId) {
+    base =
+      user.balancesPerGroup?.[groupId] ??
+      // En FIM caemos al saldo legacy si todavía no se ha migrado
+      (groupId === "FIM" ? user.initialBalances : null) ??
+      EMPTY_BOOKMAKER_BALANCES;
+  } else {
+    base = user.initialBalances ?? EMPTY_BOOKMAKER_BALANCES;
+  }
+
   const merged: BookmakerBalances = {
-    bet365: round2(patch.bet365 ?? current.bet365),
-    winamax: round2(patch.winamax ?? current.winamax),
-    other: round2(patch.other ?? current.other),
+    bet365: round2(patch.bet365 ?? base.bet365),
+    winamax: round2(patch.winamax ?? base.winamax),
+    other: round2(patch.other ?? base.other),
   };
   const initialBalance = round2(merged.bet365 + merged.winamax + merged.other);
   const totalProfit = user.stats?.totalProfit ?? 0;
-  await updateDoc(doc(db, USERS, uid), {
-    initialBalances: merged,
-    initialBalance,
-    currentBalance: round2(initialBalance + totalProfit),
-  });
+
+  if (groupId) {
+    await updateDoc(doc(db, USERS, uid), {
+      [`balancesPerGroup.${groupId}`]: merged,
+    });
+  } else {
+    await updateDoc(doc(db, USERS, uid), {
+      initialBalances: merged,
+      initialBalance,
+      currentBalance: round2(initialBalance + totalProfit),
+    });
+  }
 }
 
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {

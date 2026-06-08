@@ -147,7 +147,26 @@ export type BookmakerKey = keyof BookmakerBalances;
 
 const KEYS: BookmakerKey[] = ["bet365", "winamax", "other"];
 
-export function getInitialBalances(user: AppUser): BookmakerBalances {
+/**
+ * Devuelve los saldos iniciales del usuario para un grupo concreto. Si el
+ * grupo no tiene saldo asignado, intenta usar el `initialBalances` global
+ * (legacy) cuando el `groupId` es "FIM" (compatibilidad), y si no, ceros.
+ *
+ * Llama sin `groupId` para el comportamiento legacy (saldo global del
+ * usuario, atravesando grupos).
+ */
+export function getInitialBalances(
+  user: AppUser,
+  groupId?: string
+): BookmakerBalances {
+  if (groupId) {
+    const fromGroup = user.balancesPerGroup?.[groupId];
+    if (fromGroup) return fromGroup;
+    // Compat: si el grupo es FIM y aún no se ha movido a balancesPerGroup,
+    // devolvemos los saldos legacy. Para otros grupos, ceros.
+    if (groupId === "FIM" && user.initialBalances) return user.initialBalances;
+    return EMPTY_BOOKMAKER_BALANCES;
+  }
   return user.initialBalances ?? EMPTY_BOOKMAKER_BALANCES;
 }
 
@@ -158,9 +177,10 @@ export function getInitialBalances(user: AppUser): BookmakerBalances {
  */
 export function computeBookmakerSummary(
   user: AppUser,
-  bets: Bet[]
+  bets: Bet[],
+  groupId?: string
 ): Record<BookmakerKey, BookmakerSummary> & { total: BookmakerSummary } {
-  const initials = getInitialBalances(user);
+  const initials = getInitialBalances(user, groupId);
   const result = {} as Record<BookmakerKey, BookmakerSummary>;
 
   for (const key of KEYS) {

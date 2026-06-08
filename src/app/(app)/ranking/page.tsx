@@ -15,6 +15,7 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
+import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -66,6 +67,46 @@ export default function RankingPage() {
       (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
     );
   }, [allBets, memberUids, activeGroup]);
+
+  // Stats por usuario calculadas a partir de las apuestas DEL GRUPO ACTIVO.
+  // Sustituyen al `user.stats` global para que el ranking refleje solo lo
+  // ocurrido en este grupo.
+  const groupStatsByUid = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeUserStats>>();
+    for (const u of users ?? []) {
+      const userBets = bets.filter((b) => b.userId === u.uid);
+      map.set(u.uid, computeUserStats(userBets));
+    }
+    return map;
+  }, [users, bets]);
+
+  // Saldo actual del usuario en el grupo = saldo inicial del grupo + profit.
+  const balanceByUid = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const u of users ?? []) {
+      const initial = getInitialBalances(u, activeGroup?.id);
+      const initialSum =
+        initial.bet365 + initial.winamax + initial.other;
+      const profit = groupStatsByUid.get(u.uid)?.totalProfit ?? 0;
+      map.set(u.uid, initialSum + profit);
+    }
+    return map;
+  }, [users, groupStatsByUid, activeGroup]);
+
+  // Lista ordenada por ROI del grupo (con beneficio como desempate).
+  const rankedUsers = useMemo(() => {
+    if (!users) return null;
+    return [...users].sort((a, b) => {
+      const sa = groupStatsByUid.get(a.uid);
+      const sb = groupStatsByUid.get(b.uid);
+      const roiA = sa?.roi ?? 0;
+      const roiB = sb?.roi ?? 0;
+      if (roiA !== roiB) return roiB - roiA;
+      const profitA = sa?.totalProfit ?? 0;
+      const profitB = sb?.totalProfit ?? 0;
+      return profitB - profitA;
+    });
+  }, [users, groupStatsByUid]);
 
   return (
     <div className="space-y-6">
@@ -159,8 +200,13 @@ export default function RankingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {users.map((u, idx) => {
+                  {(rankedUsers ?? users).map((u, idx) => {
                     const rank = idx + 1;
+                    const s = groupStatsByUid.get(u.uid);
+                    const roi = s?.roi ?? 0;
+                    const profit = s?.totalProfit ?? 0;
+                    const hitRate = s?.hitRate ?? 0;
+                    const balance = balanceByUid.get(u.uid) ?? 0;
                     return (
                       <tr key={u.uid} className="hover:bg-accent/30">
                         <td className="px-4 py-3 font-semibold">{medal(rank)}</td>
@@ -183,28 +229,28 @@ export default function RankingPage() {
                         </td>
                         <td
                           className={`px-2 py-3 text-right font-mono font-bold ${profitClass(
-                            u.stats.roi
+                            roi
                           )}`}
                         >
-                          {u.stats.roi > 0 ? "+" : ""}
-                          {formatPercent(u.stats.roi)}
+                          {roi > 0 ? "+" : ""}
+                          {formatPercent(roi)}
                         </td>
                         <td
                           className={`px-2 py-3 text-right font-mono hidden sm:table-cell ${profitClass(
-                            u.stats.totalProfit
+                            profit
                           )}`}
                         >
-                          {u.stats.totalProfit > 0 ? "+" : ""}
-                          {formatCurrency(u.stats.totalProfit)}
+                          {profit > 0 ? "+" : ""}
+                          {formatCurrency(profit)}
                         </td>
                         <td className="px-2 py-3 text-right font-mono hidden md:table-cell">
-                          {formatCurrency(u.currentBalance)}
+                          {formatCurrency(balance)}
                         </td>
                         <td className="px-2 py-3 text-right font-mono text-muted-foreground hidden md:table-cell">
-                          {formatPercent(u.stats.hitRate)}
+                          {formatPercent(hitRate)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-muted-foreground hidden lg:table-cell">
-                          {u.stats.betsCount}
+                          {s?.betsCount ?? 0}
                         </td>
                       </tr>
                     );

@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import {
   bookmakerLabel,
   computeBookmakerSummary,
+  computeUserStats,
   getInitialBalances,
 } from "@/features/bets/bets.utils";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
@@ -35,23 +37,38 @@ import type { Bet } from "@/types/domain";
 
 export default function DashboardPage() {
   const { appUser } = useAuth();
-  const [bets, setBets] = useState<Bet[]>([]);
+  const { activeGroup } = useGroup();
+  const [allBets, setAllBets] = useState<Bet[]>([]);
 
   useEffect(() => {
     if (!appUser) return;
-    const unsub = subscribeToBets({ userId: appUser.uid }, setBets);
+    const unsub = subscribeToBets({ userId: appUser.uid }, setAllBets);
     return unsub;
   }, [appUser]);
 
+  // Filtramos a las apuestas del grupo activo. Cada grupo es contabilidad
+  // independiente: saldos, stats y "últimas apuestas" solo reflejan el
+  // grupo seleccionado en el topbar.
+  const bets = useMemo(() => {
+    if (!activeGroup) return [];
+    return allBets.filter((b) => b.groupId === activeGroup.id);
+  }, [allBets, activeGroup]);
+
   const summary = useMemo(
-    () => (appUser ? computeBookmakerSummary(appUser, bets) : null),
-    [appUser, bets]
+    () =>
+      appUser && activeGroup
+        ? computeBookmakerSummary(appUser, bets, activeGroup.id)
+        : null,
+    [appUser, bets, activeGroup]
   );
+
+  // Stats por grupo: se calculan en cliente desde las apuestas filtradas,
+  // no desde el `appUser.stats` global (que es agregado de todos los grupos).
+  const stats = useMemo(() => computeUserStats(bets), [bets]);
 
   if (!appUser || !summary) return null;
 
   const recent = bets.slice(0, 5);
-  const stats = appUser.stats;
 
   return (
     <div className="space-y-6">
@@ -107,6 +124,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <BookmakerCard
             uid={appUser.uid}
+            groupId={activeGroup?.id ?? null}
             bookmaker="bet365"
             initial={summary.bet365.initial}
             profit={summary.bet365.profit}
@@ -116,6 +134,7 @@ export default function DashboardPage() {
           />
           <BookmakerCard
             uid={appUser.uid}
+            groupId={activeGroup?.id ?? null}
             bookmaker="winamax"
             initial={summary.winamax.initial}
             profit={summary.winamax.profit}
@@ -129,7 +148,9 @@ export default function DashboardPage() {
             current={summary.total.current}
             pendingStake={summary.total.pendingStake}
             other={summary.other.current}
-            otherInitial={getInitialBalances(appUser).other}
+            otherInitial={
+              getInitialBalances(appUser, activeGroup?.id).other
+            }
           />
         </div>
       </section>
@@ -277,6 +298,7 @@ function MiniStat({
 
 function BookmakerCard({
   uid,
+  groupId,
   bookmaker,
   initial,
   profit,
@@ -285,6 +307,7 @@ function BookmakerCard({
   betsCount,
 }: {
   uid: string;
+  groupId: string | null;
   bookmaker: "bet365" | "winamax";
   initial: number;
   profit: number;
@@ -306,9 +329,15 @@ function BookmakerCard({
       window.alert("Introduce un saldo inicial válido (>= 0)");
       return;
     }
+    if (!groupId) {
+      window.alert(
+        "No tienes un grupo activo. Selecciona uno desde el icono de grupos antes de editar saldos."
+      );
+      return;
+    }
     setSaving(true);
     try {
-      await updateInitialBalances(uid, { [bookmaker]: parsed });
+      await updateInitialBalances(uid, { [bookmaker]: parsed }, groupId);
       setEditing(false);
     } catch (err) {
       console.error("[updateInitialBalances]", err);

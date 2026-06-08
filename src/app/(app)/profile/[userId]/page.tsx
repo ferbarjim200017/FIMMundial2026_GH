@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Swords } from "lucide-react";
@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
+import { subscribeToBets } from "@/features/bets/bets.service";
+import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { ROUTES } from "@/lib/constants";
 import {
   formatCurrency,
@@ -20,7 +22,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser } from "@/types/domain";
+import type { AppUser, Bet } from "@/types/domain";
 
 export default function ProfilePage() {
   const params = useParams<{ userId: string }>();
@@ -32,6 +34,7 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [bets, setBets] = useState<Bet[]>([]);
 
   useEffect(() => {
     if (!params.userId) return;
@@ -42,6 +45,33 @@ export default function ProfilePage() {
       setLoading(false);
     });
   }, [params.userId]);
+
+  // Apuestas del usuario en el grupo activo — base para stats y saldos
+  // contextualizados.
+  useEffect(() => {
+    if (!params.userId) return;
+    const unsub = subscribeToBets({ userId: params.userId }, setBets);
+    return unsub;
+  }, [params.userId]);
+
+  const groupBets = useMemo(() => {
+    if (!activeGroup) return [];
+    return bets.filter((b) => b.groupId === activeGroup.id);
+  }, [bets, activeGroup]);
+
+  const groupStats = useMemo(() => computeUserStats(groupBets), [groupBets]);
+
+  const groupBalances = useMemo(() => {
+    if (!user || !activeGroup) {
+      return { initial: 0, current: 0 };
+    }
+    const initials = getInitialBalances(user, activeGroup.id);
+    const initial = initials.bet365 + initials.winamax + initials.other;
+    return {
+      initial,
+      current: initial + groupStats.totalProfit,
+    };
+  }, [user, activeGroup, groupStats.totalProfit]);
 
   if (loading) return <p className="text-sm text-muted-foreground">Cargando perfil…</p>;
   if (!user) return <p className="text-sm text-muted-foreground">Usuario no encontrado.</p>;
@@ -159,26 +189,26 @@ export default function ProfilePage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatBox label="Saldo inicial" value={formatCurrency(user.initialBalance)} />
-        <StatBox label="Saldo actual" value={formatCurrency(user.currentBalance)} />
+        <StatBox label="Saldo inicial" value={formatCurrency(groupBalances.initial)} />
+        <StatBox label="Saldo actual" value={formatCurrency(groupBalances.current)} />
         <StatBox
           label="Beneficio total"
-          value={formatCurrency(user.stats.totalProfit)}
-          valueClass={profitClass(user.stats.totalProfit)}
+          value={formatCurrency(groupStats.totalProfit)}
+          valueClass={profitClass(groupStats.totalProfit)}
         />
         <StatBox
           label="ROI"
-          value={formatPercent(user.stats.roi)}
-          valueClass={profitClass(user.stats.roi)}
+          value={formatPercent(groupStats.roi)}
+          valueClass={profitClass(groupStats.roi)}
         />
-        <StatBox label="Yield" value={formatPercent(user.stats.yield)} />
-        <StatBox label="Apuestas" value={String(user.stats.betsCount)} />
-        <StatBox label="Ganadas" value={String(user.stats.betsWon)} />
-        <StatBox label="Perdidas" value={String(user.stats.betsLost)} />
-        <StatBox label="Racha actual" value={String(user.stats.currentStreak)} />
-        <StatBox label="Mejor racha" value={String(user.stats.bestStreak)} />
-        <StatBox label="Cuota media" value={user.stats.avgOdds.toFixed(2)} />
-        <StatBox label="Stake medio" value={formatCurrency(user.stats.avgStake)} />
+        <StatBox label="Yield" value={formatPercent(groupStats.yield)} />
+        <StatBox label="Apuestas" value={String(groupStats.betsCount)} />
+        <StatBox label="Ganadas" value={String(groupStats.betsWon)} />
+        <StatBox label="Perdidas" value={String(groupStats.betsLost)} />
+        <StatBox label="Racha actual" value={String(groupStats.currentStreak)} />
+        <StatBox label="Mejor racha" value={String(groupStats.bestStreak)} />
+        <StatBox label="Cuota media" value={groupStats.avgOdds.toFixed(2)} />
+        <StatBox label="Stake medio" value={formatCurrency(groupStats.avgStake)} />
       </div>
     </div>
   );

@@ -40,6 +40,7 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
+import { computeUserStats } from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -226,34 +227,35 @@ export default function FeedPage() {
     return { won: won.length, lost: lost.length, netProfit };
   }, [sortedBets]);
 
-  // Ganador y perdedor "absolutos" del grupo (totalProfit acumulado).
-  // Filtrados a miembros del grupo activo.
+  // Ganador y perdedor "absolutos" del grupo activo, calculados a partir
+  // de las apuestas etiquetadas con este grupo (no del stats global).
   const groupExtremes = useMemo(() => {
     const usersArr = Object.values(usersById).filter((u) =>
       memberUids.has(u.uid)
     );
-    if (usersArr.length === 0) return null;
+    if (usersArr.length === 0 || !bets) return null;
+    const profitByUid = new Map<string, number>();
+    for (const u of usersArr) {
+      const userBets = bets.filter((b) => b.userId === u.uid);
+      profitByUid.set(u.uid, computeUserStats(userBets).totalProfit);
+    }
     let topProfit = usersArr[0];
     let topLoss = usersArr[0];
     for (const u of usersArr) {
-      if ((u.stats?.totalProfit ?? 0) > (topProfit.stats?.totalProfit ?? 0)) {
+      if ((profitByUid.get(u.uid) ?? 0) > (profitByUid.get(topProfit.uid) ?? 0)) {
         topProfit = u;
       }
-      if ((u.stats?.totalProfit ?? 0) < (topLoss.stats?.totalProfit ?? 0)) {
+      if ((profitByUid.get(u.uid) ?? 0) < (profitByUid.get(topLoss.uid) ?? 0)) {
         topLoss = u;
       }
     }
+    const topProfitValue = profitByUid.get(topProfit.uid) ?? 0;
+    const topLossValue = profitByUid.get(topLoss.uid) ?? 0;
     return {
-      topProfit:
-        (topProfit.stats?.totalProfit ?? 0) > 0
-          ? { user: topProfit, value: topProfit.stats?.totalProfit ?? 0 }
-          : null,
-      topLoss:
-        (topLoss.stats?.totalProfit ?? 0) < 0
-          ? { user: topLoss, value: topLoss.stats?.totalProfit ?? 0 }
-          : null,
+      topProfit: topProfitValue > 0 ? { user: topProfit, value: topProfitValue } : null,
+      topLoss: topLossValue < 0 ? { user: topLoss, value: topLossValue } : null,
     };
-  }, [usersById, memberUids]);
+  }, [usersById, memberUids, bets]);
 
   return (
     <div className="space-y-6">

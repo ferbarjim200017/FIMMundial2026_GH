@@ -17,6 +17,7 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { getUser } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
+import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import {
   cn,
   formatCurrency,
@@ -26,10 +27,16 @@ import {
 import { ROUTES } from "@/lib/constants";
 import type { AppUser, Bet, UserStats } from "@/types/domain";
 
+interface CompareData {
+  stats: UserStats;
+  balance: number;
+}
+
 type Metric = {
   label: string;
-  /** Cómo extraer el valor numérico para comparar. */
-  pick: (s: UserStats, u: AppUser) => number;
+  /** Cómo extraer el valor numérico para comparar a partir de las stats
+   *  del grupo activo + balance del grupo. */
+  pick: (d: CompareData) => number;
   /** Cómo renderizar el valor en la celda. */
   render: (n: number) => string;
   /** Si true, "más es mejor". Si false, "menos es mejor". null = no compite. */
@@ -39,67 +46,67 @@ type Metric = {
 const METRICS: Metric[] = [
   {
     label: "ROI",
-    pick: (s) => s.roi,
+    pick: (d) => d.stats.roi,
     render: (n) => `${n > 0 ? "+" : ""}${formatPercent(n)}`,
     higherWins: true,
   },
   {
     label: "Beneficio total",
-    pick: (s) => s.totalProfit,
+    pick: (d) => d.stats.totalProfit,
     render: (n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`,
     higherWins: true,
   },
   {
     label: "% Acierto",
-    pick: (s) => s.hitRate,
+    pick: (d) => d.stats.hitRate,
     render: (n) => formatPercent(n),
     higherWins: true,
   },
   {
     label: "Racha actual",
-    pick: (s) => s.currentStreak,
+    pick: (d) => d.stats.currentStreak,
     render: (n) => (n > 0 ? `+${n}` : String(n)),
     higherWins: true,
   },
   {
     label: "Mejor racha",
-    pick: (s) => s.bestStreak,
+    pick: (d) => d.stats.bestStreak,
     render: (n) => String(n),
     higherWins: true,
   },
   {
     label: "Cuota media",
-    pick: (s) => s.avgOdds,
+    pick: (d) => d.stats.avgOdds,
     render: (n) => n.toFixed(2),
     higherWins: null,
   },
   {
     label: "Stake medio",
-    pick: (s) => s.avgStake,
+    pick: (d) => d.stats.avgStake,
     render: (n) => formatCurrency(n),
     higherWins: null,
   },
   {
     label: "Apuestas",
-    pick: (s) => s.betsCount,
+    pick: (d) => d.stats.betsCount,
     render: (n) => String(n),
     higherWins: null,
   },
   {
     label: "Ganadas",
-    pick: (s) => s.betsWon,
+    pick: (d) => d.stats.betsWon,
     render: (n) => String(n),
     higherWins: true,
   },
   {
     label: "Perdidas",
-    pick: (s) => s.betsLost,
+    pick: (d) => d.stats.betsLost,
     render: (n) => String(n),
     higherWins: false,
   },
   {
     label: "Saldo actual",
-    pick: (_, u) => u.currentBalance,
+    pick: (d) => d.balance,
     render: (n) => formatCurrency(n),
     higherWins: null,
   },
@@ -157,21 +164,46 @@ function CompareContent() {
     return unsub;
   }, [aUid, bUid]);
 
+  // Stats y balances de cada usuario contextualizados al grupo activo.
+  const dataA = useMemo<CompareData | null>(() => {
+    if (!userA || !activeGroup) return null;
+    const userBets = bets.filter(
+      (b) => b.userId === userA.uid && b.groupId === activeGroup.id
+    );
+    const stats = computeUserStats(userBets);
+    const initials = getInitialBalances(userA, activeGroup.id);
+    const balance =
+      initials.bet365 + initials.winamax + initials.other + stats.totalProfit;
+    return { stats, balance };
+  }, [userA, bets, activeGroup]);
+
+  const dataB = useMemo<CompareData | null>(() => {
+    if (!userB || !activeGroup) return null;
+    const userBets = bets.filter(
+      (b) => b.userId === userB.uid && b.groupId === activeGroup.id
+    );
+    const stats = computeUserStats(userBets);
+    const initials = getInitialBalances(userB, activeGroup.id);
+    const balance =
+      initials.bet365 + initials.winamax + initials.other + stats.totalProfit;
+    return { stats, balance };
+  }, [userB, bets, activeGroup]);
+
   const tally = useMemo(() => {
-    if (!userA || !userB) return { a: 0, b: 0 };
+    if (!dataA || !dataB) return { a: 0, b: 0 };
     let a = 0;
     let b = 0;
     for (const m of METRICS) {
       const w = evaluateWinner(
-        m.pick(userA.stats, userA),
-        m.pick(userB.stats, userB),
+        m.pick(dataA),
+        m.pick(dataB),
         m.higherWins
       );
       if (w === "a") a++;
       else if (w === "b") b++;
     }
     return { a, b };
-  }, [userA, userB]);
+  }, [dataA, dataB]);
 
   if (loading) {
     return (
@@ -241,7 +273,12 @@ function CompareContent() {
 
       <Card className="border-primary/40">
         <CardContent className="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:gap-6">
-          <UserHeader user={userA} alignment="left" winning={leader === "a"} />
+          <UserHeader
+            user={userA}
+            alignment="left"
+            winning={leader === "a"}
+            profit={dataA?.stats.totalProfit ?? 0}
+          />
           <div className="flex shrink-0 flex-col items-center gap-1 px-2">
             <div className="font-mono text-3xl font-extrabold tracking-tight">
               <span className={leader === "a" ? "text-profit" : leader === "b" ? "text-muted-foreground" : ""}>
@@ -258,7 +295,12 @@ function CompareContent() {
                 : `${(leader === "a" ? userA : userB).username} lidera`}
             </p>
           </div>
-          <UserHeader user={userB} alignment="right" winning={leader === "b"} />
+          <UserHeader
+            user={userB}
+            alignment="right"
+            winning={leader === "b"}
+            profit={dataB?.stats.totalProfit ?? 0}
+          />
         </CardContent>
       </Card>
 
@@ -283,8 +325,8 @@ function CompareContent() {
               </thead>
               <tbody className="divide-y">
                 {METRICS.map((m) => {
-                  const va = m.pick(userA.stats, userA);
-                  const vb = m.pick(userB.stats, userB);
+                  const va = dataA ? m.pick(dataA) : 0;
+                  const vb = dataB ? m.pick(dataB) : 0;
                   const w = evaluateWinner(va, vb, m.higherWins);
                   return (
                     <tr key={m.label}>
@@ -354,10 +396,12 @@ function UserHeader({
   user,
   alignment,
   winning,
+  profit,
 }: {
   user: AppUser;
   alignment: "left" | "right";
   winning: boolean;
+  profit: number;
 }) {
   return (
     <Link
@@ -381,16 +425,16 @@ function UserHeader({
         <p
           className={cn(
             "font-mono text-sm",
-            user.stats.totalProfit > 0
+            profit > 0
               ? "text-profit"
-              : user.stats.totalProfit < 0
+              : profit < 0
               ? "text-loss"
               : "text-muted-foreground"
           )}
         >
-          {user.stats.totalProfit > 0 ? "+" : ""}
-          {formatCurrency(user.stats.totalProfit)}
-          {user.stats.totalProfit < 0 && (
+          {profit > 0 ? "+" : ""}
+          {formatCurrency(profit)}
+          {profit < 0 && (
             <TrendingDown className="ml-1 inline h-3 w-3" aria-hidden />
           )}
         </p>

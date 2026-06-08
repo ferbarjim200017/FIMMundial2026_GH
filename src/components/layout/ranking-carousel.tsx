@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 import { subscribeToRanking } from "@/features/users/users.service";
+import { subscribeToBets } from "@/features/bets/bets.service";
+import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { formatCurrency, formatPercent, profitClass } from "@/lib/utils";
-import type { AppUser } from "@/types/domain";
+import type { AppUser, Bet } from "@/types/domain";
 
 function medal(rank: number) {
   if (rank === 1) return "🥇";
@@ -17,25 +19,44 @@ function medal(rank: number) {
 
 export function RankingCarousel() {
   const [users, setUsers] = useState<AppUser[]>([]);
-  const { memberUids } = useGroup();
+  const [allBets, setAllBets] = useState<Bet[]>([]);
+  const { memberUids, activeGroup } = useGroup();
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    const unsub = subscribeToRanking(setUsers);
-    return unsub;
+    const unsubUsers = subscribeToRanking(setUsers);
+    const unsubBets = subscribeToBets({}, setAllBets);
+    return () => {
+      unsubUsers();
+      unsubBets();
+    };
   }, []);
 
   // Filtra a los miembros del grupo activo. Hasta que el listener de
   // miembros responde, memberUids está vacío y el carrusel queda en su
   // placeholder — preferimos eso a enseñar un instante datos de todo el
   // sistema antes del filtrado.
-  const filtered = useMemo(
-    () =>
-      memberUids.size === 0
-        ? []
-        : users.filter((u) => memberUids.has(u.uid)),
-    [users, memberUids]
-  );
+  const filtered = useMemo(() => {
+    if (memberUids.size === 0 || !activeGroup) return [] as AppUser[];
+    const groupBets = allBets.filter(
+      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+    );
+    return users
+      .filter((u) => memberUids.has(u.uid))
+      .map((u) => {
+        const userBets = groupBets.filter((b) => b.userId === u.uid);
+        const stats = computeUserStats(userBets);
+        const initial = getInitialBalances(u, activeGroup.id);
+        const balance =
+          initial.bet365 + initial.winamax + initial.other + stats.totalProfit;
+        return {
+          ...u,
+          stats,
+          currentBalance: balance,
+        };
+      })
+      .sort((a, b) => b.stats.roi - a.stats.roi);
+  }, [users, allBets, memberUids, activeGroup]);
 
   // Si no hay usuarios todavía (cargando o estado vacío) reservamos el
   // mismo espacio que ocuparía el carrusel para que los offsets sticky

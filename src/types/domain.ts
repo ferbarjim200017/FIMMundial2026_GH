@@ -43,9 +43,13 @@ export interface AppUser {
   avatarUrl: string | null;
   role: UserRole;
   joinedAt: Timestamp;
-  initialBalance: number;             // suma de initialBalances (mantenido para el ranking)
-  currentBalance: number;             // initialBalance + totalProfit
-  initialBalances?: BookmakerBalances; // saldo inicial por casa (configurable por el usuario)
+  initialBalance: number;             // suma de initialBalances (legacy / fallback)
+  currentBalance: number;             // legacy / fallback (initialBalance + totalProfit global)
+  initialBalances?: BookmakerBalances; // legacy: saldo inicial global por casa
+  /** Saldos iniciales por grupo y casa. Reemplaza a `initialBalances`
+   *  cuando hay un grupo activo. Si un grupo no tiene entrada, se cae a
+   *  ceros (cada grupo empieza desde cero por defecto). */
+  balancesPerGroup?: Record<string, BookmakerBalances>;
   stats: UserStats;
   /** Grupos a los que pertenece el usuario (IDs de la colección `groups`).
    *  Toda la información visible en la app (ranking, feed, popups de apuestas,
