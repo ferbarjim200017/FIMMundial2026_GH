@@ -188,29 +188,31 @@ export default function DashboardPage() {
           ) : (
             <ul className="divide-y">
               {recent.map((b) => (
-                <li
-                  key={b.id}
-                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent/30"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{b.matchLabel}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {b.selection} @ {b.odds.toFixed(2)} ·{" "}
-                      {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono text-xs text-muted-foreground">
-                      {formatCurrency(b.stake)}
-                    </p>
-                    {b.status !== "pending" && (
-                      <p className={`font-mono text-xs ${profitClass(b.profit)}`}>
-                        {b.profit >= 0 ? "+" : ""}
-                        {formatCurrency(b.profit)}
+                <li key={b.id}>
+                  <Link
+                    href={`${ROUTES.bets}/${b.id}`}
+                    className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-accent/30 focus:outline-none focus-visible:bg-accent/30"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{b.matchLabel}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {b.selection} @ {b.odds.toFixed(2)} ·{" "}
+                        {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
                       </p>
-                    )}
-                  </div>
-                  <BetStatusBadge status={b.status} />
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {formatCurrency(b.stake)}
+                      </p>
+                      {b.status !== "pending" && (
+                        <p className={`font-mono text-xs ${profitClass(b.profit)}`}>
+                          {b.profit >= 0 ? "+" : ""}
+                          {formatCurrency(b.profit)}
+                        </p>
+                      )}
+                    </div>
+                    <BetStatusBadge status={b.status} />
+                  </Link>
                 </li>
               ))}
             </ul>

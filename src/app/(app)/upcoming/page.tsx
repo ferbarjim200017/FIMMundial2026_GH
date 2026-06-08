@@ -588,15 +588,25 @@ function BetRow({
 }) {
   const displayName = user?.username ?? "Tú";
   return (
-    <div className="flex items-start gap-3 rounded-md border bg-card p-3">
-      <Link href={user ? ROUTES.profile(user.uid) : "#"} className="shrink-0">
+    <div className="relative flex items-start gap-3 rounded-md border bg-card p-3 transition-colors hover:bg-accent/30">
+      {/* Link "cubre-tarjeta": al hacer click en cualquier zona no ocupada por
+       *  un sub-link, navegamos al detalle de la apuesta. */}
+      <Link
+        href={`${ROUTES.bets}/${bet.id}`}
+        className="absolute inset-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Abrir apuesta de ${displayName}`}
+      />
+      <Link
+        href={user ? ROUTES.profile(user.uid) : "#"}
+        className="relative z-10 shrink-0"
+      >
         <Avatar className="h-9 w-9">
           {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
           <AvatarFallback>{initials(displayName)}</AvatarFallback>
         </Avatar>
       </Link>
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="relative z-10 min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <Link
             href={user ? ROUTES.profile(user.uid) : "#"}

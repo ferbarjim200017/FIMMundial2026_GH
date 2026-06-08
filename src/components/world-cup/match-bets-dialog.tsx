@@ -186,11 +186,16 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                 return (
                   <li
                     key={bet.id}
-                    className="flex items-start gap-3 px-1 py-3 text-sm"
+                    className="relative flex items-start gap-3 px-1 py-3 text-sm transition-colors hover:bg-accent/30"
                   >
                     <Link
+                      href={`${ROUTES.bets}/${bet.id}`}
+                      className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Abrir apuesta de ${user?.username ?? "Usuario"}`}
+                    />
+                    <Link
                       href={user ? ROUTES.profile(user.uid) : "#"}
-                      className="shrink-0"
+                      className="relative z-10 shrink-0"
                     >
                       <Avatar className="h-9 w-9">
                         {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
@@ -199,7 +204,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                         </AvatarFallback>
                       </Avatar>
                     </Link>
-                    <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="relative z-10 min-w-0 flex-1 space-y-0.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={user ? ROUTES.profile(user.uid) : "#"}
@@ -234,7 +239,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                       </p>
                     </div>
                     {bet.status !== "pending" && (
-                      <div className="text-right">
+                      <div className="relative z-10 text-right">
                         <p
                           className={cn(
                             "font-mono text-sm font-bold",

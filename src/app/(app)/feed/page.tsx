@@ -551,11 +551,17 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
   });
 
   return (
-    <Card className={cn("overflow-hidden", accent)}>
-      <CardContent className="flex items-start gap-3 p-4">
+    <Card className={cn("relative overflow-hidden transition-colors hover:bg-accent/30", accent)}>
+      {/* Link cubre-tarjeta: click en cualquier zona sin sub-link → detalle */}
+      <Link
+        href={`${ROUTES.bets}/${bet.id}`}
+        className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Abrir apuesta de ${displayName}`}
+      />
+      <CardContent className="relative flex items-start gap-3 p-4">
         <Link
           href={user ? ROUTES.profile(user.uid) : "#"}
-          className="shrink-0"
+          className="relative z-10 shrink-0"
         >
           <Avatar className="h-10 w-10">
             {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
@@ -563,7 +569,7 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
           </Avatar>
         </Link>
 
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="relative z-10 min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <Link
               href={user ? ROUTES.profile(user.uid) : "#"}
@@ -582,12 +588,9 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
             )}
           </div>
 
-          <Link
-            href={`${ROUTES.bets}/${bet.id}`}
-            className="block truncate text-sm font-medium hover:underline"
-          >
+          <p className="block truncate text-sm font-medium">
             {bet.matchLabel}
-          </Link>
+          </p>
 
           <p className="truncate text-xs text-muted-foreground">
             {bet.selection} @ {bet.odds.toFixed(2)} ·{" "}
@@ -612,7 +615,7 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
         </div>
 
         {bet.status !== "pending" && (
-          <div className="shrink-0 text-right">
+          <div className="relative z-10 shrink-0 text-right">
             <p
               className={cn(
                 "font-mono text-lg font-bold",
