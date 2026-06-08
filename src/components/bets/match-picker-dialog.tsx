@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { subscribeToMatches, STAGE_LABELS } from "@/features/matches/matches.service";
 import { isSpainMatch, isTveMatch } from "@/features/matches/tve-matches";
+import { teamFlag } from "@/features/matches/teams-2026";
 import { formatDateTime } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -179,8 +180,18 @@ export function MatchPickerDialog({
                               />
                             )}
                             <span className="truncate">
+                              {teamFlag(m.homeLabel) && (
+                                <span className="mr-1" aria-hidden>
+                                  {teamFlag(m.homeLabel)}
+                                </span>
+                              )}
                               {m.homeLabel}{" "}
                               <span className="text-muted-foreground">vs</span>{" "}
+                              {teamFlag(m.awayLabel) && (
+                                <span className="mr-1" aria-hidden>
+                                  {teamFlag(m.awayLabel)}
+                                </span>
+                              )}
                               {m.awayLabel}
                             </span>
                           </p>

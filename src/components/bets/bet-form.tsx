@@ -28,7 +28,7 @@ import {
   getMatch,
   matchLabel,
 } from "@/features/matches/matches.service";
-import { TEAMS_2026 } from "@/features/matches/teams-2026";
+import { TEAMS_2026, teamFlag } from "@/features/matches/teams-2026";
 import { formatCurrency } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
@@ -583,7 +583,14 @@ function TeamPicker({
               key={t}
               className="inline-flex items-center gap-1 rounded-full border bg-background py-0.5 pl-2.5 pr-1 text-xs"
             >
-              <span className="font-medium">{t}</span>
+              <span className="font-medium">
+                {teamFlag(t) && (
+                  <span className="mr-1" aria-hidden>
+                    {teamFlag(t)}
+                  </span>
+                )}
+                {t}
+              </span>
               <button
                 type="button"
                 onClick={() => toggle(t)}
@@ -626,6 +633,11 @@ function TeamPicker({
                   }
                   aria-pressed={isSel}
                 >
+                  {teamFlag(t) && (
+                    <span className="mr-1" aria-hidden>
+                      {teamFlag(t)}
+                    </span>
+                  )}
                   {t}
                 </button>
               );
