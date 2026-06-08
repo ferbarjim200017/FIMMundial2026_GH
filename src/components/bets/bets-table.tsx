@@ -123,16 +123,18 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                 >
                   {canManage(b) && (
                     <div className="flex items-center justify-end gap-1">
-                      {b.status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setSettling(b)}
-                          title="Liquidar"
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSettling(b)}
+                        title={
+                          b.status === "pending"
+                            ? "Liquidar"
+                            : "Re-liquidar (corregir estado)"
+                        }
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button size="icon" variant="ghost" aria-label="Acciones">
@@ -145,11 +147,12 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                               <Pencil className="h-4 w-4" /> Abrir / editar
                             </Link>
                           </DropdownMenuItem>
-                          {b.status === "pending" && (
-                            <DropdownMenuItem onSelect={() => setSettling(b)}>
-                              <CheckCircle2 className="h-4 w-4" /> Liquidar
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem onSelect={() => setSettling(b)}>
+                            <CheckCircle2 className="h-4 w-4" />{" "}
+                            {b.status === "pending"
+                              ? "Liquidar"
+                              : "Cambiar estado"}
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => handleDelete(b)}
                             className="text-destructive focus:text-destructive"

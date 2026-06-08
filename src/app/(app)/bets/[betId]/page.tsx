@@ -127,14 +127,19 @@ export default function BetDetailPage() {
               Copiar
             </Link>
           </Button>
-          {canManage && bet.status === "pending" && (
+          {canManage && (
             <Button
               variant="outline"
               onClick={() => setSettleOpen(true)}
               className="gap-1.5"
+              title={
+                bet.status === "pending"
+                  ? "Liquidar"
+                  : "Cambiar el estado (corregir liquidación)"
+              }
             >
               <CheckCircle2 className="h-4 w-4" />
-              Liquidar
+              {bet.status === "pending" ? "Liquidar" : "Cambiar estado"}
             </Button>
           )}
           {canManage && (

@@ -38,14 +38,32 @@ const CHOICES: { value: Choice; label: string; tone: string }[] = [
 ];
 
 export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
-  const [choice, setChoice] = useState<Choice>("won");
+  const alreadySettled = bet.status !== "pending";
+  // Si la apuesta ya estaba liquidada (corrección), arrancamos con su estado
+  // actual seleccionado para que sea obvio que se está editando.
+  const initialChoice: Choice =
+    bet.status === "won" ||
+    bet.status === "lost" ||
+    bet.status === "void" ||
+    bet.status === "cashout"
+      ? bet.status
+      : "won";
+  const [choice, setChoice] = useState<Choice>(initialChoice);
   // El usuario introduce el IMPORTE recibido al cerrar la apuesta. El
   // beneficio se calcula automáticamente. En una freebet el importe
   // recibido ES el beneficio (no hay stake que recuperar porque no era
   // tuyo); en una apuesta normal es importe − stake.
-  const [cashoutAmount, setCashoutAmount] = useState<string>(
-    bet.isFreebet ? "0" : bet.stake.toFixed(2)
-  );
+  // Si ya estaba en cashout, pre-rellenamos con el importe que produce el
+  // profit actual (inversa de la fórmula) para que el admin lo vea.
+  const initialCashoutAmount = (() => {
+    if (bet.status !== "cashout") {
+      return bet.isFreebet ? "0" : bet.stake.toFixed(2);
+    }
+    const profit = bet.profit ?? 0;
+    const amount = bet.isFreebet ? profit : profit + bet.stake;
+    return Math.max(0, amount).toFixed(2);
+  })();
+  const [cashoutAmount, setCashoutAmount] = useState<string>(initialCashoutAmount);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,10 +108,21 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Liquidar apuesta</DialogTitle>
+          <DialogTitle>
+            {alreadySettled ? "Cambiar estado de la apuesta" : "Liquidar apuesta"}
+          </DialogTitle>
           <DialogDescription>
             {bet.matchLabel} · {bet.selection} @ {bet.odds.toFixed(2)} ·{" "}
             {formatCurrency(bet.stake)}
+            {alreadySettled && (
+              <>
+                <br />
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  La apuesta ya está liquidada. Si cambias el estado, el
+                  beneficio y el saldo se recalculan con la diferencia.
+                </span>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -168,7 +197,11 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
             Cancelar
           </Button>
           <Button onClick={handleConfirm} disabled={submitting}>
-            {submitting ? "Liquidando…" : "Confirmar"}
+            {submitting
+              ? "Guardando…"
+              : alreadySettled
+              ? "Aplicar cambio"
+              : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>
