@@ -10,7 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
@@ -31,8 +33,17 @@ interface Props {
 }
 
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
+  const { appUser } = useAuth();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
+  // "all"  → comportamiento por defecto (todas las apuestas).
+  // "mine" → solo las del usuario logueado.
+  const [scope, setScope] = useState<"all" | "mine">("all");
+  // Reseteamos a "all" cada vez que cambia el partido para que el usuario
+  // no se quede atrapado en el filtro al saltar entre popups.
+  useEffect(() => {
+    setScope("all");
+  }, [match?.id]);
 
   useEffect(() => {
     if (!open || !match || !isFirebaseConfigured) {
@@ -72,16 +83,29 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     };
   }, [open, match]);
 
-  const summary = useMemo(() => {
+  const visibleBets = useMemo(() => {
     if (!bets) return null;
-    const total = bets.length;
-    const totalStake = bets.reduce((a, b) => a + b.stake, 0);
-    const pending = bets.filter((b) => b.status === "pending").length;
-    const won = bets.filter((b) => b.status === "won").length;
-    const lost = bets.filter((b) => b.status === "lost").length;
-    const netProfit = bets.reduce((a, b) => a + (b.profit ?? 0), 0);
+    if (scope === "mine" && appUser) {
+      return bets.filter((b) => b.userId === appUser.uid);
+    }
+    return bets;
+  }, [bets, scope, appUser]);
+
+  const myBetsCount = useMemo(() => {
+    if (!bets || !appUser) return 0;
+    return bets.filter((b) => b.userId === appUser.uid).length;
+  }, [bets, appUser]);
+
+  const summary = useMemo(() => {
+    if (!visibleBets) return null;
+    const total = visibleBets.length;
+    const totalStake = visibleBets.reduce((a, b) => a + b.stake, 0);
+    const pending = visibleBets.filter((b) => b.status === "pending").length;
+    const won = visibleBets.filter((b) => b.status === "won").length;
+    const lost = visibleBets.filter((b) => b.status === "lost").length;
+    const netProfit = visibleBets.reduce((a, b) => a + (b.profit ?? 0), 0);
     return { total, totalStake, pending, won, lost, netProfit };
-  }, [bets]);
+  }, [visibleBets]);
 
   if (!match) return null;
 
@@ -99,6 +123,27 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
             {match.matchday && ` · J${match.matchday}`}
           </DialogDescription>
         </DialogHeader>
+
+        {appUser && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={scope === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setScope("all")}
+            >
+              Todas{bets ? ` · ${bets.length}` : ""}
+            </Button>
+            <Button
+              type="button"
+              variant={scope === "mine" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setScope("mine")}
+            >
+              Mis apuestas{bets ? ` · ${myBetsCount}` : ""}
+            </Button>
+          </div>
+        )}
 
         {summary && summary.total > 0 && (
           <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-4">
@@ -120,17 +165,19 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
         )}
 
         <div className="max-h-[60vh] overflow-y-auto">
-          {bets === null ? (
+          {visibleBets === null ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               Cargando apuestas…
             </p>
-          ) : bets.length === 0 ? (
+          ) : visibleBets.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-              Aún nadie ha registrado apuestas para este partido.
+              {scope === "mine"
+                ? "No tienes apuestas registradas para este partido."
+                : "Aún nadie ha registrado apuestas para este partido."}
             </p>
           ) : (
             <ul className="divide-y">
-              {bets.map((bet) => {
+              {visibleBets.map((bet) => {
                 const user = usersById[bet.userId] ?? null;
                 return (
                   <li
