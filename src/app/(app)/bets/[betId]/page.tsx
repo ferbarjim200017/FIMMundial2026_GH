@@ -26,7 +26,7 @@ import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
-import { getBet } from "@/features/bets/bets.service";
+import { getBet, unsettleBet } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { getUser } from "@/features/users/users.service";
 import { ROUTES } from "@/lib/constants";
@@ -130,16 +130,37 @@ export default function BetDetailPage() {
           {canManage && (
             <Button
               variant="outline"
-              onClick={() => setSettleOpen(true)}
+              onClick={async () => {
+                if (bet.status === "pending") {
+                  setSettleOpen(true);
+                  return;
+                }
+                const ok = window.confirm(
+                  `Volver a pendiente la apuesta "${bet.matchLabel}"?\n\n` +
+                    "Se anulará el beneficio actual y se restará del saldo del usuario. " +
+                    "Después podrás liquidarla de nuevo con el estado correcto."
+                );
+                if (!ok) return;
+                try {
+                  await unsettleBet(bet.id);
+                  router.refresh();
+                } catch (err) {
+                  window.alert(
+                    err instanceof Error
+                      ? `No se pudo cambiar: ${err.message}`
+                      : "No se pudo volver a pendiente"
+                  );
+                }
+              }}
               className="gap-1.5"
               title={
                 bet.status === "pending"
                   ? "Liquidar"
-                  : "Cambiar el estado (corregir liquidación)"
+                  : "Volver a pendiente para corregir"
               }
             >
               <CheckCircle2 className="h-4 w-4" />
-              {bet.status === "pending" ? "Liquidar" : "Cambiar estado"}
+              {bet.status === "pending" ? "Liquidar" : "Volver a pendiente"}
             </Button>
           )}
           {canManage && (

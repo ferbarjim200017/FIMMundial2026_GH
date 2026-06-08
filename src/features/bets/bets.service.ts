@@ -360,6 +360,44 @@ export async function deleteBet(betId: string): Promise<void> {
 }
 
 /**
+ * Devuelve una apuesta liquidada (won/lost/void/cashout) al estado
+ * pending. Se usa para corregir errores: si por equivocación se marcó
+ * como ganada en vez de perdida (o viceversa), primero la des-liquida y
+ * luego se vuelve a abrir el diálogo de liquidar para elegir el estado
+ * correcto. Es no-op si ya estaba pending.
+ */
+export async function unsettleBet(betId: string): Promise<void> {
+  let userIdToRecompute: string | null = null;
+  await runTransaction(db, async (tx) => {
+    const betRef = doc(db, BETS, betId);
+    const betSnap = await tx.get(betRef);
+    if (!betSnap.exists()) throw new Error("Apuesta no encontrada");
+    const bet = { id: betSnap.id, ...(betSnap.data() as Omit<Bet, "id">) };
+    if (bet.status === "pending") return; // ya estaba pending, nada que hacer
+
+    const userRef = doc(db, USERS, bet.userId).withConverter(userConverter);
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists()) throw new Error("Usuario no encontrado");
+    const user = userSnap.data();
+
+    const oldProfit = bet.profit ?? 0;
+
+    tx.update(betRef, {
+      status: "pending" as BetStatus,
+      profit: 0,
+      settledAt: null,
+    });
+    tx.update(doc(db, USERS, bet.userId), {
+      currentBalance: round2(user.currentBalance - oldProfit),
+    });
+    userIdToRecompute = bet.userId;
+  });
+  if (userIdToRecompute) {
+    await recomputeAndPersistStats(userIdToRecompute);
+  }
+}
+
+/**
  * Recalcula y persiste las estadísticas agregadas del usuario en su
  * documento. Se llama tras cualquier mutación de apuestas.
  */

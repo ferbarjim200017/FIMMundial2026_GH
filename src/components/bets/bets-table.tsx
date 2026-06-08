@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
-import { deleteBet } from "@/features/bets/bets.service";
+import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
 import type { Bet } from "@/types/domain";
@@ -43,6 +43,33 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
       await deleteBet(bet.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error al eliminar");
+    }
+  }
+
+  /** Click en el botón "Liquidar":
+   *  - Si la apuesta está pending → abre el diálogo de elegir estado.
+   *  - Si ya está liquidada → confirm para volver a pendiente (el beneficio
+   *    se anula y el saldo se ajusta). Tras esto el usuario puede volver
+   *    a darle a "Liquidar" para elegir el estado correcto. */
+  async function handleSettleClick(bet: Bet) {
+    if (bet.status === "pending") {
+      setSettling(bet);
+      return;
+    }
+    const ok = confirm(
+      `Volver a pendiente la apuesta "${bet.matchLabel}"?\n\n` +
+        "Se anulará el beneficio actual y se restará del saldo del usuario. " +
+        "Después podrás liquidarla de nuevo con el estado correcto."
+    );
+    if (!ok) return;
+    try {
+      await unsettleBet(bet.id);
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? `No se pudo cambiar: ${err.message}`
+          : "No se pudo volver a pendiente"
+      );
     }
   }
 
@@ -126,11 +153,11 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setSettling(b)}
+                        onClick={() => handleSettleClick(b)}
                         title={
                           b.status === "pending"
                             ? "Liquidar"
-                            : "Re-liquidar (corregir estado)"
+                            : "Volver a pendiente para corregir"
                         }
                       >
                         <CheckCircle2 className="h-4 w-4" />
@@ -147,11 +174,11 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                               <Pencil className="h-4 w-4" /> Abrir / editar
                             </Link>
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setSettling(b)}>
+                          <DropdownMenuItem onSelect={() => handleSettleClick(b)}>
                             <CheckCircle2 className="h-4 w-4" />{" "}
                             {b.status === "pending"
                               ? "Liquidar"
-                              : "Cambiar estado"}
+                              : "Volver a pendiente"}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => handleDelete(b)}
