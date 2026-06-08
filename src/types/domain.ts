@@ -47,6 +47,26 @@ export interface AppUser {
   currentBalance: number;             // initialBalance + totalProfit
   initialBalances?: BookmakerBalances; // saldo inicial por casa (configurable por el usuario)
   stats: UserStats;
+  /** Grupos a los que pertenece el usuario (IDs de la colección `groups`).
+   *  Toda la información visible en la app (ranking, feed, popups de apuestas,
+   *  comparador, perfiles…) se filtra a los miembros del `activeGroupId`. */
+  groups?: string[];
+  /** Grupo seleccionado actualmente como contexto. Si el usuario pertenece a
+   *  un solo grupo, este campo coincide. Cuando hay varios, el usuario puede
+   *  alternar desde el topbar. Persistido en Firestore para sincronizar entre
+   *  dispositivos. */
+  activeGroupId?: string | null;
+}
+
+// ============================================================
+// GROUPS
+// ============================================================
+export interface AppGroup {
+  id: string;
+  name: string;
+  createdAt: Timestamp;
+  /** UID del admin que creó el grupo. Sólo informativo. */
+  createdBy?: string | null;
 }
 
 export const EMPTY_USER_STATS: UserStats = {

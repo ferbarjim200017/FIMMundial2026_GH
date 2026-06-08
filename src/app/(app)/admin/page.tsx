@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
+import { ShieldCheck, ShieldOff, Trash2, Users as UsersIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   setUserRole,
   subscribeToRanking,
 } from "@/features/users/users.service";
+import { seedFIMGroup, type SeedFIMResult } from "@/features/groups/groups.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -22,6 +23,8 @@ export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [pendingUid, setPendingUid] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedMsg, setSeedMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace(ROUTES.dashboard);
@@ -53,6 +56,33 @@ export default function AdminPage() {
       );
     } finally {
       setPendingUid(null);
+    }
+  }
+
+  async function handleSeedFIM() {
+    if (
+      !window.confirm(
+        "Crear el grupo \"FIM\" si no existe y asignar a todos los usuarios " +
+          "actuales como miembros (es seguro reejecutarlo). ¿Continuar?"
+      )
+    )
+      return;
+    setSeeding(true);
+    setSeedMsg(null);
+    try {
+      const res: SeedFIMResult = await seedFIMGroup(me?.uid ?? null);
+      setSeedMsg(
+        `✅ Listo. Grupo ${res.groupCreated ? "creado" : "ya existía"} · ` +
+          `Asignados: ${res.usersAssigned} · Ya miembros: ${res.usersAlreadyMember} · ` +
+          `Activo nuevo: ${res.usersWithNewActive} · Total usuarios: ${res.total}`
+      );
+    } catch (err) {
+      console.error("[admin seed FIM]", err);
+      setSeedMsg(
+        `❌ ${err instanceof Error ? err.message : "Error al crear el grupo"}`
+      );
+    } finally {
+      setSeeding(false);
     }
   }
 
@@ -102,6 +132,30 @@ export default function AdminPage() {
           description="Lista de miembros del grupo"
         />
       </div>
+
+      <Card className="border-primary/40 bg-primary/5">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UsersIcon className="h-4 w-4 text-primary" />
+              Bootstrap del grupo FIM
+            </CardTitle>
+            <CardDescription>
+              Crea el grupo &quot;FIM&quot; si no existe y asigna a todos los
+              usuarios actuales como miembros. Idempotente — puedes volver a
+              ejecutarlo sin riesgo.
+            </CardDescription>
+          </div>
+          <Button onClick={handleSeedFIM} disabled={seeding}>
+            {seeding ? "Asignando…" : "Crear y asignar"}
+          </Button>
+        </CardHeader>
+        {seedMsg && (
+          <CardContent>
+            <p className="text-sm">{seedMsg}</p>
+          </CardContent>
+        )}
+      </Card>
 
       <Card id="users">
         <CardHeader>
