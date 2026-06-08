@@ -61,6 +61,17 @@ export default function ProfilePage() {
 
   const groupStats = useMemo(() => computeUserStats(groupBets), [groupBets]);
 
+  // Cuánto dinero tiene "en juego" ahora mismo: suma de stakes de las
+  // apuestas pendientes que NO sean freebet (las freebets no inmovilizan
+  // dinero del usuario). Mismo criterio que `computeBookmakerSummary`.
+  const inPlay = useMemo(() => {
+    const pending = groupBets.filter(
+      (b) => b.status === "pending" && !b.isFreebet
+    );
+    const amount = pending.reduce((acc, b) => acc + b.stake, 0);
+    return { amount, count: pending.length };
+  }, [groupBets]);
+
   const groupBalances = useMemo(() => {
     if (!user || !activeGroup) {
       return { initial: 0, current: 0 };
@@ -192,6 +203,16 @@ export default function ProfilePage() {
         <StatBox label="Saldo inicial" value={formatCurrency(groupBalances.initial)} />
         <StatBox label="Saldo actual" value={formatCurrency(groupBalances.current)} />
         <StatBox
+          label="Dinero en juego"
+          value={formatCurrency(inPlay.amount)}
+          valueClass={inPlay.amount > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
+          subtitle={
+            inPlay.count === 0
+              ? "Sin apuestas pendientes"
+              : `${inPlay.count} apuesta${inPlay.count === 1 ? "" : "s"} pendiente${inPlay.count === 1 ? "" : "s"}`
+          }
+        />
+        <StatBox
           label="Beneficio total"
           value={formatCurrency(groupStats.totalProfit)}
           valueClass={profitClass(groupStats.totalProfit)}
@@ -218,16 +239,21 @@ function StatBox({
   label,
   value,
   valueClass,
+  subtitle,
 }: {
   label: string;
   value: string;
   valueClass?: string;
+  subtitle?: string;
 }) {
   return (
     <Card>
       <CardContent className="p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
         <p className={`mt-1 text-xl font-bold ${valueClass ?? ""}`}>{value}</p>
+        {subtitle && (
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
+        )}
       </CardContent>
     </Card>
   );
