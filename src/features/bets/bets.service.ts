@@ -91,6 +91,62 @@ export function subscribeToBetsByMatch(
   );
 }
 
+/**
+ * Suscripción combinada: apuestas directas al partido (`matchIds
+ * array-contains` matchId) + apuestas a futuro vinculadas a alguno de los
+ * dos equipos (`teams array-contains-any` [homeLabel, awayLabel]).
+ *
+ * Permite que un outright sobre, p. ej., "España" aparezca automáticamente
+ * en el popup de cualquier partido suyo. Dedup en cliente por `id`.
+ */
+export function subscribeToBetsForMatch(
+  match: { id: string; homeLabel: string; awayLabel: string },
+  cb: (bets: Bet[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  let byMatch: Bet[] = [];
+  let byTeam: Bet[] = [];
+
+  const emit = () => {
+    const map = new Map<string, Bet>();
+    for (const b of byMatch) map.set(b.id, b);
+    for (const b of byTeam) map.set(b.id, b);
+    const bets = [...map.values()];
+    bets.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+    cb(bets);
+  };
+
+  const unsubMatch = onSnapshot(
+    query(betsCol(), where("matchIds", "array-contains", match.id)),
+    (snap) => {
+      byMatch = snap.docs.map((d) => d.data());
+      emit();
+    },
+    (err) => onError?.(err)
+  );
+
+  const teamLabels = [match.homeLabel, match.awayLabel].filter(
+    (s): s is string => typeof s === "string" && s.length > 0
+  );
+
+  let unsubTeam: Unsubscribe = () => {};
+  if (teamLabels.length > 0) {
+    unsubTeam = onSnapshot(
+      query(betsCol(), where("teams", "array-contains-any", teamLabels)),
+      (snap) => {
+        byTeam = snap.docs.map((d) => d.data());
+        emit();
+      },
+      (err) => onError?.(err)
+    );
+  }
+
+  return () => {
+    unsubMatch();
+    unsubTeam();
+  };
+}
+
 export async function getBet(betId: string): Promise<Bet | null> {
   const snap = await getDoc(betDoc(betId));
   return snap.exists() ? snap.data() : null;
@@ -130,6 +186,10 @@ export async function createBet(input: CreateBetInput): Promise<string> {
     isCombo: input.market === "combo" || matchIds.length > 1,
     isFreebet: !!input.isFreebet,
     notes: input.notes?.trim() ?? "",
+    // Equipos vinculados solo tienen sentido en apuestas a futuro.
+    ...(input.market === "outright" && (input.teams?.length ?? 0) > 0
+      ? { teams: input.teams }
+      : {}),
   };
 
   // Ignoramos converter aquí porque queremos pasar serverTimestamp si quisiéramos
@@ -169,6 +229,9 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
     notes: input.notes?.trim() ?? "",
     isCombo: input.market === "combo" || matchIds.length > 1,
     isFreebet: !!input.isFreebet,
+    // En edición sobrescribimos siempre el campo (incluyendo array vacío) para
+    // que si el usuario quita todos los equipos también se borre.
+    teams: input.market === "outright" ? input.teams ?? [] : [],
   };
 
   let userIdToRecompute: string | null = null;

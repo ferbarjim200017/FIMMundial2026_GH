@@ -28,6 +28,7 @@ import {
   getMatch,
   matchLabel,
 } from "@/features/matches/matches.service";
+import { TEAMS_2026 } from "@/features/matches/teams-2026";
 import { formatCurrency } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
@@ -77,6 +78,7 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       : toLocalDatetimeValue(new Date()),
     isFreebet: seed?.isFreebet ?? false,
     notes: seed?.notes ?? "",
+    teams: seed?.teams ?? [],
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -320,6 +322,15 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
             )}
           </div>
 
+          {isOutright && (
+            <div className="space-y-2 sm:col-span-2">
+              <TeamPicker
+                value={values.teams ?? []}
+                onChange={(next) => update("teams", next)}
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>Mercado</Label>
             <Select
@@ -501,5 +512,127 @@ function MatchChip({ match, onRemove }: { match: Match; onRemove: () => void }) 
         <X className="h-3 w-3" />
       </button>
     </span>
+  );
+}
+
+/**
+ * Multi-select de equipos del Mundial 2026 para apuestas a futuro. Permite
+ * elegir cero, uno o varios equipos. Al guardar la apuesta, esos nombres
+ * quedan en `bet.teams` y el popup "Apuestas sobre este partido" los
+ * detecta automáticamente en todos los partidos de esos equipos.
+ *
+ * UI: chips de los seleccionados + botón para abrir un panel con buscador
+ * y los 48 equipos como chips toggleables.
+ */
+function TeamPicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = new Set(value);
+
+  function toggle(team: string) {
+    if (selected.has(team)) {
+      onChange(value.filter((t) => t !== team));
+    } else {
+      onChange([...value, team]);
+    }
+  }
+
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase();
+  const q = norm(query.trim());
+  const filtered = q
+    ? TEAMS_2026.filter((t) => norm(t).includes(q))
+    : TEAMS_2026;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label>Vincular a equipos (opcional)</Label>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="text-xs text-primary hover:underline"
+        >
+          {open ? "Ocultar lista" : value.length > 0 ? "Editar equipos" : "Añadir equipos"}
+        </button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Si vinculas un equipo (p.ej. España), esta apuesta aparecerá en el
+        popup de cualquier partido suyo. Déjalo vacío para que solo se vea
+        en tu lista de apuestas.
+      </p>
+
+      <div className="flex flex-wrap gap-1.5 rounded-md border border-dashed bg-muted/20 p-2">
+        {value.length === 0 ? (
+          <span className="px-1 text-xs text-muted-foreground">
+            Sin equipos vinculados.
+          </span>
+        ) : (
+          value.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full border bg-background py-0.5 pl-2.5 pr-1 text-xs"
+            >
+              <span className="font-medium">{t}</span>
+              <button
+                type="button"
+                onClick={() => toggle(t)}
+                className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                aria-label={`Quitar ${t}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {open && (
+        <div className="space-y-2 rounded-md border bg-card p-2">
+          <Input
+            placeholder="Buscar equipo…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-8 text-sm"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {filtered.length === 0 && (
+              <span className="px-1 text-xs text-muted-foreground">
+                Ningún equipo coincide.
+              </span>
+            )}
+            {filtered.map((t) => {
+              const isSel = selected.has(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggle(t)}
+                  className={
+                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors " +
+                    (isSel
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "bg-background hover:bg-accent/40")
+                  }
+                  aria-pressed={isSel}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

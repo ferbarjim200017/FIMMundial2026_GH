@@ -128,6 +128,12 @@ export interface Bet {
   isFreebet?: boolean;
   legs?: BetLeg[];
   notes?: string;
+  /** Equipos vinculados a la apuesta — solo aplica a apuestas a futuro
+   *  (outright). Si esta lista incluye, p.ej. "España", la apuesta
+   *  aparecerá automáticamente en el popup de cualquier partido cuyo
+   *  homeLabel o awayLabel sea "España". Es opcional: vacío = no se
+   *  vincula a ningún partido y solo se ve en /bets y /feed. */
+  teams?: string[];
 }
 
 // ============================================================

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
-import { subscribeToBetsByMatch } from "@/features/bets/bets.service";
+import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -48,8 +48,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
       setBets((prev) => (prev === null ? [] : prev));
     }, 4000);
 
-    const unsubBets = subscribeToBetsByMatch(
-      match.id,
+    const unsubBets = subscribeToBetsForMatch(
+      match,
       (bets) => {
         window.clearTimeout(safety);
         setBets(bets);
@@ -160,6 +160,11 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                         {bet.isCombo && (
                           <span className="rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
                             Combo
+                          </span>
+                        )}
+                        {bet.market === "outright" && (
+                          <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-600 dark:text-sky-400">
+                            Outright
                           </span>
                         )}
                         {bet.isFreebet && (

@@ -73,6 +73,9 @@ export const betFormSchema = z
     placedAt: z.string().min(1, "Selecciona fecha"),
     isFreebet: z.boolean().optional().default(false),
     notes: z.string().max(500).optional().default(""),
+    /** Solo se usa cuando market === "outright". Vincula la apuesta a uno
+     *  o varios equipos para que aparezca en el popup de sus partidos. */
+    teams: z.array(z.string()).optional().default([]),
   })
   .refine(
     (data) => data.bookmaker !== "other" || (data.bookmakerLabel ?? "").length >= 2,
