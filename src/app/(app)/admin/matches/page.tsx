@@ -38,7 +38,7 @@ import {
   type BracketResolutionResult,
 } from "@/features/matches/bracket-resolver";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
-import { teamFlag } from "@/features/matches/teams-2026";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { formatDateTime } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Match } from "@/types/domain";
@@ -446,13 +446,9 @@ export default function AdminMatchesPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-2 font-medium">
-                      {teamFlag(m.homeLabel) && (
-                        <span className="mr-1" aria-hidden>{teamFlag(m.homeLabel)}</span>
-                      )}
+                      <TeamFlag name={m.homeLabel} className="mr-1" />
                       {m.homeLabel} <span className="text-muted-foreground">vs</span>{" "}
-                      {teamFlag(m.awayLabel) && (
-                        <span className="mr-1" aria-hidden>{teamFlag(m.awayLabel)}</span>
-                      )}
+                      <TeamFlag name={m.awayLabel} className="mr-1" />
                       {m.awayLabel}
                     </td>
                     <td className="px-4 py-2 text-center">

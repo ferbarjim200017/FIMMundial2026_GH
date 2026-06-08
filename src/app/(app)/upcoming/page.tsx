@@ -29,7 +29,7 @@ import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isTveMatch } from "@/features/matches/tve-matches";
-import { teamFlag } from "@/features/matches/teams-2026";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { ROUTES } from "@/lib/constants";
 import {
   cn,
@@ -500,9 +500,7 @@ function MatchRow({
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">
-            {teamFlag(match.homeLabel) && (
-              <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
-            )}
+            <TeamFlag name={match.homeLabel} className="mr-1" />
             {match.homeLabel}{" "}
             {match.result && (
               <span className="font-mono font-bold">
@@ -510,9 +508,7 @@ function MatchRow({
               </span>
             )}{" "}
             <span className="text-muted-foreground">vs</span>{" "}
-            {teamFlag(match.awayLabel) && (
-              <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
-            )}
+            <TeamFlag name={match.awayLabel} className="mr-1" />
             {match.awayLabel}
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">

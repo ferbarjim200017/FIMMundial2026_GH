@@ -4,7 +4,7 @@ import { Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { GROUP_COLORS, STAGE_STYLES } from "@/features/matches/stage-styles";
 import { isSpainTeam, isTveMatch } from "@/features/matches/tve-matches";
-import { teamFlag } from "@/features/matches/teams-2026";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -140,13 +140,9 @@ export function MatchCard({
           )}
           title={match.homeLabel}
         >
-          <span className="truncate">
-            {teamFlag(match.homeLabel) && (
-              <span className="mr-1" aria-hidden>
-                {teamFlag(match.homeLabel)}
-              </span>
-            )}
-            {match.homeLabel}
+          <span className="inline-flex items-center gap-1 truncate">
+            <TeamFlag name={match.homeLabel} />
+            <span className="truncate">{match.homeLabel}</span>
           </span>
           {homeIsSpain && spainStar}
         </div>
@@ -193,13 +189,9 @@ export function MatchCard({
           title={match.awayLabel}
         >
           {awayIsSpain && spainStar}
-          <span className="truncate">
-            {teamFlag(match.awayLabel) && (
-              <span className="mr-1" aria-hidden>
-                {teamFlag(match.awayLabel)}
-              </span>
-            )}
-            {match.awayLabel}
+          <span className="inline-flex items-center gap-1 truncate">
+            <TeamFlag name={match.awayLabel} />
+            <span className="truncate">{match.awayLabel}</span>
           </span>
         </div>
       </div>

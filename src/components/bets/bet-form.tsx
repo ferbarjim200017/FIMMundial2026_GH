@@ -28,7 +28,8 @@ import {
   getMatch,
   matchLabel,
 } from "@/features/matches/matches.service";
-import { TEAMS_2026, teamFlag } from "@/features/matches/teams-2026";
+import { TEAMS_2026 } from "@/features/matches/teams-2026";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { formatCurrency } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
@@ -491,13 +492,9 @@ function MatchChip({ match, onRemove }: { match: Match; onRemove: () => void }) 
   return (
     <span className="group inline-flex items-center gap-2 rounded-full border bg-background py-0.5 pl-2.5 pr-1 text-xs">
       <span className="font-medium">
-        {teamFlag(match.homeLabel) && (
-          <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
-        )}
+        <TeamFlag name={match.homeLabel} className="mr-1" />
         {match.homeLabel} <span className="text-muted-foreground">vs</span>{" "}
-        {teamFlag(match.awayLabel) && (
-          <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
-        )}
+        <TeamFlag name={match.awayLabel} className="mr-1" />
         {match.awayLabel}
       </span>
       <span className="text-muted-foreground">
@@ -590,12 +587,8 @@ function TeamPicker({
               key={t}
               className="inline-flex items-center gap-1 rounded-full border bg-background py-0.5 pl-2.5 pr-1 text-xs"
             >
-              <span className="font-medium">
-                {teamFlag(t) && (
-                  <span className="mr-1" aria-hidden>
-                    {teamFlag(t)}
-                  </span>
-                )}
+              <span className="inline-flex items-center gap-1 font-medium">
+                <TeamFlag name={t} />
                 {t}
               </span>
               <button
@@ -633,18 +626,14 @@ function TeamPicker({
                   type="button"
                   onClick={() => toggle(t)}
                   className={
-                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors " +
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors " +
                     (isSel
                       ? "border-primary bg-primary text-primary-foreground"
                       : "bg-background hover:bg-accent/40")
                   }
                   aria-pressed={isSel}
                 >
-                  {teamFlag(t) && (
-                    <span className="mr-1" aria-hidden>
-                      {teamFlag(t)}
-                    </span>
-                  )}
+                  <TeamFlag name={t} />
                   {t}
                 </button>
               );

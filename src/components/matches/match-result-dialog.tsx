@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setMatchResult } from "@/features/matches/matches.service";
-import { teamFlag } from "@/features/matches/teams-2026";
 import { useAuth } from "@/features/auth/auth.context";
+import { TeamFlag } from "@/components/matches/team-flag";
 import type { Match, MatchResult } from "@/types/domain";
 
 interface Props {
@@ -126,13 +126,9 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
         <DialogHeader>
           <DialogTitle>Resultado del partido</DialogTitle>
           <DialogDescription>
-            {teamFlag(match.homeLabel) && (
-              <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
-            )}
+            <TeamFlag name={match.homeLabel} className="mr-1" />
             {match.homeLabel} vs{" "}
-            {teamFlag(match.awayLabel) && (
-              <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
-            )}
+            <TeamFlag name={match.awayLabel} className="mr-1" />
             {match.awayLabel}
             {match.groupId && ` · Grupo ${match.groupId}`}
             {match.matchday && ` · J${match.matchday}`}
@@ -165,9 +161,7 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
                     }
                     onClick={() => update("penaltyWinner", "home")}
                   >
-                    {teamFlag(match.homeLabel) && (
-                      <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
-                    )}
+                    <TeamFlag name={match.homeLabel} className="mr-1" />
                     {match.homeLabel}
                   </Button>
                   <Button
@@ -177,9 +171,7 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
                     }
                     onClick={() => update("penaltyWinner", "away")}
                   >
-                    {teamFlag(match.awayLabel) && (
-                      <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
-                    )}
+                    <TeamFlag name={match.awayLabel} className="mr-1" />
                     {match.awayLabel}
                   </Button>
                 </div>
@@ -263,9 +255,7 @@ function ResultRow({
       <div className="text-right">
         {homeTeam && (
           <p className="mb-1 text-xs text-muted-foreground">
-            {teamFlag(homeTeam) && (
-              <span className="mr-1" aria-hidden>{teamFlag(homeTeam)}</span>
-            )}
+            <TeamFlag name={homeTeam} className="mr-1" />
             {homeTeam}
           </p>
         )}
@@ -292,9 +282,7 @@ function ResultRow({
       <div>
         {awayTeam && (
           <p className="mb-1 text-xs text-muted-foreground">
-            {teamFlag(awayTeam) && (
-              <span className="mr-1" aria-hidden>{teamFlag(awayTeam)}</span>
-            )}
+            <TeamFlag name={awayTeam} className="mr-1" />
             {awayTeam}
           </p>
         )}
