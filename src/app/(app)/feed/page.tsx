@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
@@ -592,9 +593,16 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
             {bet.matchLabel}
           </p>
 
-          <p className="truncate text-xs text-muted-foreground">
-            {bet.selection} @ {bet.odds.toFixed(2)} ·{" "}
-            {formatCurrency(bet.stake)} · {bookmakerLabel(bet.bookmaker, bet.bookmakerLabel)}
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="truncate">
+              {bet.selection} @ {bet.odds.toFixed(2)} ·{" "}
+              {formatCurrency(bet.stake)}
+            </span>
+            <BookmakerPill
+              bookmaker={bet.bookmaker}
+              customLabel={bet.bookmakerLabel}
+              size="xs"
+            />
           </p>
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

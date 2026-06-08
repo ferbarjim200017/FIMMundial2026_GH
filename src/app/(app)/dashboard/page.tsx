@@ -11,6 +11,7 @@ import {
   getInitialBalances,
 } from "@/features/bets/bets.utils";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
 import { updateInitialBalances } from "@/features/users/users.service";
 import {
@@ -195,9 +196,15 @@ export default function DashboardPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{b.matchLabel}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {b.selection} @ {b.odds.toFixed(2)} ·{" "}
-                        {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
+                      <p className="flex flex-wrap items-center gap-1.5 truncate text-xs text-muted-foreground">
+                        <span className="truncate">
+                          {b.selection} @ {b.odds.toFixed(2)}
+                        </span>
+                        <BookmakerPill
+                          bookmaker={b.bookmaker}
+                          customLabel={b.bookmakerLabel}
+                          size="xs"
+                        />
                       </p>
                     </div>
                     <div className="text-right">

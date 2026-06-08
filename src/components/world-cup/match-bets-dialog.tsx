@@ -12,6 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
@@ -256,10 +257,16 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                       <p className="truncate text-sm font-medium">
                         {bet.selection}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        Cuota {bet.odds.toFixed(2)} · Stake{" "}
-                        {formatCurrency(bet.stake)} ·{" "}
-                        {bookmakerLabel(bet.bookmaker, bet.bookmakerLabel)}
+                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="truncate">
+                          Cuota {bet.odds.toFixed(2)} · Stake{" "}
+                          {formatCurrency(bet.stake)}
+                        </span>
+                        <BookmakerPill
+                          bookmaker={bet.bookmaker}
+                          customLabel={bet.bookmakerLabel}
+                          size="xs"
+                        />
                       </p>
                     </div>
                     {bet.status !== "pending" && (

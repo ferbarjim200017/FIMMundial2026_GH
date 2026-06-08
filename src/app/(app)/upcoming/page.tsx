@@ -26,6 +26,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
@@ -623,10 +624,15 @@ function BetRow({
         </div>
 
         <p className="truncate text-sm font-medium">{bet.matchLabel}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {bet.selection} @ {bet.odds.toFixed(2)} ·{" "}
-          {formatCurrency(bet.stake)} ·{" "}
-          {bookmakerLabel(bet.bookmaker, bet.bookmakerLabel)}
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate">
+            {bet.selection} @ {bet.odds.toFixed(2)} · {formatCurrency(bet.stake)}
+          </span>
+          <BookmakerPill
+            bookmaker={bet.bookmaker}
+            customLabel={bet.bookmakerLabel}
+            size="xs"
+          />
         </p>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">

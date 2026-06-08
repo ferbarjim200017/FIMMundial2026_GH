@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { deleteBet } from "@/features/bets/bets.service";
-import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
 import type { Bet } from "@/types/domain";
@@ -90,18 +90,10 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                   <div>{b.selection}</div>
                 </td>
                 <td className="px-3 py-2 text-xs">
-                  <span
-                    className={
-                      "inline-block rounded-md border px-1.5 py-0.5 text-xs font-medium " +
-                      (b.bookmaker === "bet365"
-                        ? "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
-                        : b.bookmaker === "winamax"
-                        ? "border-red-500/70 text-red-600 dark:text-red-400"
-                        : "border-sky-500/70 text-sky-600 dark:text-sky-400")
-                    }
-                  >
-                    {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
-                  </span>
+                  <BookmakerPill
+                    bookmaker={b.bookmaker}
+                    customLabel={b.bookmakerLabel}
+                  />
                 </td>
                 <td className="px-3 py-2 text-right font-mono">{b.odds.toFixed(2)}</td>
                 <td className="px-3 py-2 text-right font-mono">

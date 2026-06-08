@@ -21,11 +21,11 @@ import {
 } from "@/components/ui/card";
 import { BetForm } from "@/components/bets/bet-form";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
+import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { getBet } from "@/features/bets/bets.service";
-import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { getUser } from "@/features/users/users.service";
 import { ROUTES } from "@/lib/constants";
@@ -79,15 +79,6 @@ export default function BetDetailPage() {
   const isOwner = bet.userId === appUser.uid;
   const canManage = isOwner || isAdmin;
   const authorName = author?.username ?? "Usuario";
-
-  // Devuelve clase de borde de la casa de apuestas, mismo código de color
-  // que en la tabla de /bets.
-  const bookmakerBorder =
-    bet.bookmaker === "bet365"
-      ? "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
-      : bet.bookmaker === "winamax"
-      ? "border-red-500/70 text-red-600 dark:text-red-400"
-      : "border-sky-500/70 text-sky-600 dark:text-sky-400";
 
   return (
     <div className="space-y-6">
@@ -243,14 +234,10 @@ export default function BetDetailPage() {
                 Casa
               </p>
               <p className="mt-1">
-                <span
-                  className={cn(
-                    "inline-block rounded-md border px-2 py-0.5 text-sm font-medium",
-                    bookmakerBorder
-                  )}
-                >
-                  {bookmakerLabel(bet.bookmaker, bet.bookmakerLabel)}
-                </span>
+                <BookmakerPill
+                  bookmaker={bet.bookmaker}
+                  customLabel={bet.bookmakerLabel}
+                />
               </p>
             </div>
           </div>
