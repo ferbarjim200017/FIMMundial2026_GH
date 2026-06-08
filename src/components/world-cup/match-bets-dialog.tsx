@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Eye } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -192,16 +193,11 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                 return (
                   <li
                     key={bet.id}
-                    className="relative flex items-start gap-3 px-1 py-3 text-sm transition-colors hover:bg-accent/30"
+                    className="flex items-start gap-3 px-1 py-3 text-sm"
                   >
                     <Link
-                      href={`${ROUTES.bets}/${bet.id}`}
-                      className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`Abrir apuesta de ${user?.username ?? "Usuario"}`}
-                    />
-                    <Link
                       href={user ? ROUTES.profile(user.uid) : "#"}
-                      className="relative z-10 shrink-0"
+                      className="shrink-0"
                     >
                       <Avatar className="h-9 w-9">
                         {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
@@ -210,7 +206,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                         </AvatarFallback>
                       </Avatar>
                     </Link>
-                    <div className="relative z-10 min-w-0 flex-1 space-y-0.5">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={user ? ROUTES.profile(user.uid) : "#"}
@@ -269,8 +265,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                         />
                       </p>
                     </div>
-                    {bet.status !== "pending" && (
-                      <div className="relative z-10 text-right">
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {bet.status !== "pending" && (
                         <p
                           className={cn(
                             "font-mono text-sm font-bold",
@@ -280,8 +276,14 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                           {bet.profit > 0 ? "+" : ""}
                           {formatCurrency(bet.profit)}
                         </p>
-                      </div>
-                    )}
+                      )}
+                      <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs">
+                        <Link href={`${ROUTES.bets}/${bet.id}`}>
+                          <Eye className="h-3.5 w-3.5" />
+                          Ver
+                        </Link>
+                      </Button>
+                    </div>
                   </li>
                 );
               })}
