@@ -2,6 +2,7 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -11,6 +12,7 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -117,6 +119,51 @@ export async function setActiveGroup(
   await updateDoc(doc(db, USERS, uid), {
     activeGroupId: groupId,
   });
+}
+
+export interface DeleteGroupResult {
+  groupDeleted: boolean;
+  membersUnassigned: number;
+}
+
+/**
+ * Elimina un grupo y desasigna a todos sus miembros: les quita el id de
+ * `groups` y resetea su `activeGroupId` cuando coincidía. Las APUESTAS
+ * etiquetadas con ese grupo se quedan en Firestore pero no aparecerán en
+ * ninguna pantalla — no existe un grupo activo al que pertenezcan, así
+ * que cualquier filtro las descarta. Las dejamos como historial.
+ */
+export async function deleteGroup(groupId: string): Promise<DeleteGroupResult> {
+  // 1. Localizar miembros actuales del grupo.
+  const usersSnap = await getDocs(
+    query(collection(db, USERS), where("groups", "array-contains", groupId))
+  );
+
+  // 2. Batch para retirar el groupId de cada miembro.
+  let membersUnassigned = 0;
+  const BATCH_SIZE = 400;
+  const docs = usersSnap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const slice = docs.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const d of slice) {
+      const data = d.data();
+      const patch: Record<string, unknown> = {
+        groups: arrayRemove(groupId),
+      };
+      if (data.activeGroupId === groupId) {
+        patch.activeGroupId = null;
+      }
+      batch.update(doc(db, USERS, d.id), patch);
+      membersUnassigned += 1;
+    }
+    await batch.commit();
+  }
+
+  // 3. Borrar el documento del grupo.
+  await deleteDoc(doc(db, GROUPS, groupId));
+
+  return { groupDeleted: true, membersUnassigned };
 }
 
 export interface SeedFIMResult {

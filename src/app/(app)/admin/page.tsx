@@ -27,12 +27,9 @@ import {
 import {
   addUserToGroup,
   createGroup,
+  deleteGroup,
   removeUserFromGroup,
 } from "@/features/groups/groups.service";
-import {
-  migrateBetsToGroup,
-  type MigrateBetsResult,
-} from "@/features/bets/bets.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -49,35 +46,32 @@ export default function AdminPage() {
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
 
-  // Migración one-shot de apuestas sin groupId al grupo FIM.
-  const [migrating, setMigrating] = useState(false);
-  const [migrateMsg, setMigrateMsg] = useState<string | null>(null);
-
-  async function handleMigrateBets() {
-    if (
-      !window.confirm(
-        "Vas a asignar todas las apuestas SIN grupo al grupo FIM. " +
-          "Es idempotente — las que ya tengan grupo no se tocan. ¿Continuar?"
-      )
-    )
-      return;
-    setMigrating(true);
-    setMigrateMsg(null);
+  async function handleDeleteGroup(groupId: string, groupName: string, memberCount: number) {
+    const ok = window.confirm(
+      `¿Eliminar el grupo "${groupName}"?\n\n` +
+        `Se desasignará de los ${memberCount} miembro(s) actuales y se ` +
+        "borrará el documento del grupo. Las apuestas etiquetadas con este " +
+        "grupo se quedan en Firestore como historial pero ya no aparecen en " +
+        "ninguna pantalla. Esta acción no se puede deshacer."
+    );
+    if (!ok) return;
+    setDeletingGroupId(groupId);
     try {
-      const res: MigrateBetsResult = await migrateBetsToGroup("FIM");
-      setMigrateMsg(
-        `✅ Total apuestas: ${res.total} · Ya etiquetadas: ${res.alreadyTagged} · Migradas a FIM: ${res.migrated}`
-      );
+      await deleteGroup(groupId);
     } catch (err) {
-      console.error("[admin migrate bets]", err);
-      setMigrateMsg(
-        `❌ ${err instanceof Error ? err.message : "Error al migrar las apuestas"}`
+      console.error("[admin delete group]", err);
+      window.alert(
+        err instanceof Error
+          ? `No se pudo eliminar: ${err.message}`
+          : "No se pudo eliminar el grupo"
       );
     } finally {
-      setMigrating(false);
+      setDeletingGroupId(null);
     }
   }
+
 
   /** Deriva un ID válido de Firestore a partir del nombre. Conserva la
    *  caja; sustituye espacios por guiones bajos; quita caracteres
@@ -228,29 +222,6 @@ export default function AdminPage() {
         />
       </div>
 
-      <Card className="border-amber-500/40 bg-amber-500/5">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base">
-              Migrar apuestas antiguas al grupo FIM
-            </CardTitle>
-            <CardDescription>
-              Asigna el groupId &quot;FIM&quot; a todas las apuestas creadas
-              ANTES de implementar grupos. Idempotente. Necesario una sola
-              vez.
-            </CardDescription>
-          </div>
-          <Button onClick={handleMigrateBets} disabled={migrating}>
-            {migrating ? "Migrando…" : "Migrar apuestas a FIM"}
-          </Button>
-        </CardHeader>
-        {migrateMsg && (
-          <CardContent>
-            <p className="text-sm">{migrateMsg}</p>
-          </CardContent>
-        )}
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -307,15 +278,26 @@ export default function AdminPage() {
                   const memberCount =
                     users?.filter((u) => (u.groups ?? []).includes(g.id))
                       .length ?? 0;
+                  const busy = deletingGroupId === g.id;
                   return (
                     <li
                       key={g.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-xs"
+                      className="inline-flex items-center gap-1 rounded-full border bg-card py-0.5 pl-2.5 pr-1 text-xs"
                     >
                       <span className="font-medium">{g.name}</span>
                       <span className="font-mono text-muted-foreground">
                         · {memberCount}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteGroup(g.id, g.name, memberCount)}
+                        disabled={busy}
+                        className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:opacity-50"
+                        aria-label={`Eliminar grupo ${g.name}`}
+                        title={`Eliminar grupo "${g.name}"`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                     </li>
                   );
                 })}

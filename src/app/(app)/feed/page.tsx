@@ -257,6 +257,14 @@ export default function FeedPage() {
     };
   }, [usersById, memberUids, bets]);
 
+  // Totales históricos del grupo (todas las apuestas, no solo de hoy).
+  const groupTotals = useMemo(() => {
+    if (!sortedBets) return null;
+    const wonCount = sortedBets.filter((b) => b.status === "won").length;
+    const lostCount = sortedBets.filter((b) => b.status === "lost").length;
+    return { wonCount, lostCount };
+  }, [sortedBets]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -268,13 +276,29 @@ export default function FeedPage() {
       </div>
 
       {sortedBets && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <SummaryCard
             label="Apuestas totales"
             value={String(sortedBets.length)}
             icon={<Receipt className="h-5 w-5 text-primary" />}
             accent="text-primary"
           />
+          {groupTotals && (
+            <>
+              <SummaryCard
+                label="Total ganadas"
+                value={String(groupTotals.wonCount)}
+                icon={<TrendingUp className="h-5 w-5 text-profit" />}
+                accent="text-profit"
+              />
+              <SummaryCard
+                label="Total perdidas"
+                value={String(groupTotals.lostCount)}
+                icon={<TrendingDown className="h-5 w-5 text-loss" />}
+                accent="text-loss"
+              />
+            </>
+          )}
           {todaySummary && (
             <>
               <SummaryCard

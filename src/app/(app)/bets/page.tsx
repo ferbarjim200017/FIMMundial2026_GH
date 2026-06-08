@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Filter } from "lucide-react";
+import { Plus, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { bookmakerLabel } from "@/features/bets/bets.utils";
 import {
   Select,
   SelectContent,
@@ -34,6 +36,7 @@ export default function BetsPage() {
   const [scope, setScope] = useState<ScopeKey>("me");
   const [status, setStatus] = useState<BetsFilter["status"]>("all");
   const [bookmaker, setBookmaker] = useState<BetsFilter["bookmaker"]>("all");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!appUser) return;
@@ -53,17 +56,30 @@ export default function BetsPage() {
     return unsub;
   }, [appUser, scope, status, bookmaker]);
 
-  // Filtrado adicional por grupo activo: solo apuestas etiquetadas en este
-  // grupo Y, si el scope es "todas", de miembros del grupo.
+  // Filtrado adicional por grupo activo + búsqueda de texto en tiempo real.
+  const normalizedQuery = query.trim().toLowerCase();
   const bets = useMemo(() => {
     if (!activeGroup) return [];
     return allBets.filter((b) => {
       if (b.groupId !== activeGroup.id) return false;
       if (scope === "all" && memberUids.size > 0 && !memberUids.has(b.userId))
         return false;
+      if (normalizedQuery) {
+        const haystack = [
+          b.matchLabel,
+          b.selection,
+          b.marketDetail ?? "",
+          b.bookmakerLabel ?? "",
+          bookmakerLabel(b.bookmaker, b.bookmakerLabel),
+          b.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [allBets, activeGroup, memberUids, scope]);
+  }, [allBets, activeGroup, memberUids, scope, normalizedQuery]);
 
   const stats = useMemo(() => summarize(bets), [bets]);
 
@@ -104,6 +120,31 @@ export default function BetsPage() {
           value={`${stats.pending} (${formatCurrency(stats.pendingStake)})`}
         />
       </div>
+
+      {/* Búsqueda */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por partido, selección, mercado, casa, notas…"
+              className="pl-9 pr-9"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filtros */}
       <Card>
