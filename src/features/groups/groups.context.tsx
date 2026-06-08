@@ -14,7 +14,8 @@ import {
   setActiveGroup,
   subscribeToGroups,
 } from "@/features/groups/groups.service";
-import type { AppGroup } from "@/types/domain";
+import { subscribeToGroupMembers } from "@/features/users/users.service";
+import type { AppGroup, AppUser } from "@/types/domain";
 
 interface GroupContextValue {
   /** Catálogo completo de grupos del sistema. */
@@ -25,6 +26,12 @@ interface GroupContextValue {
   /** Grupo activo seleccionado por el usuario. `null` si no tiene ninguno
    *  asignado todavía (estado de onboarding). */
   activeGroup: AppGroup | null;
+  /** Miembros del grupo activo (incluyendo al propio usuario). Lista
+   *  completa con perfiles para usar en ranking, feed, popups, etc. */
+  groupMembers: AppUser[];
+  /** Set de UIDs de los miembros del grupo activo. Atajo para `.has()`
+   *  en filtros caros (feed, popup de apuestas, etc.). */
+  memberUids: Set<string>;
   /** True hasta que llega el primer snapshot de grupos. */
   loading: boolean;
   /** Cambia el grupo activo. Persiste en Firestore. */
@@ -35,6 +42,8 @@ const GroupContext = createContext<GroupContextValue>({
   allGroups: [],
   userGroups: [],
   activeGroup: null,
+  groupMembers: [],
+  memberUids: new Set(),
   loading: true,
   switchActiveGroup: async () => {},
 });
@@ -100,10 +109,29 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     [appUser, userGroupIds]
   );
 
+  // Suscripción a los miembros del grupo activo. Cuando cambia el grupo,
+  // reabrimos el listener; cuando no hay grupo, lista vacía.
+  const [groupMembers, setGroupMembers] = useState<AppUser[]>([]);
+  useEffect(() => {
+    if (!activeGroup) {
+      setGroupMembers([]);
+      return;
+    }
+    const unsub = subscribeToGroupMembers(activeGroup.id, setGroupMembers);
+    return unsub;
+  }, [activeGroup?.id]);
+
+  const memberUids = useMemo(
+    () => new Set(groupMembers.map((u) => u.uid)),
+    [groupMembers]
+  );
+
   const value: GroupContextValue = {
     allGroups,
     userGroups,
     activeGroup,
+    groupMembers,
+    memberUids,
     loading,
     switchActiveGroup,
   };

@@ -4,10 +4,12 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { RankingCarousel } from "@/components/layout/ranking-carousel";
+import { OnboardingGate } from "@/components/layout/onboarding-gate";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
+      <OnboardingGate />
       <div className="flex min-h-screen flex-col">
         {/* Wrapper sticky para que el carrusel y la barra superior se queden
          *  fijos al hacer scroll. z-30 los pone por encima del contenido y

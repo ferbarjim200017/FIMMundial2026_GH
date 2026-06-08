@@ -10,6 +10,8 @@ import {
   query,
   limit as limitTo,
   serverTimestamp,
+  where,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { userConverter } from "@/lib/firebase/converters";
@@ -69,6 +71,27 @@ export function subscribeToRanking(
     users.sort(compareUsersForRanking);
     callback(users);
   });
+}
+
+/**
+ * Suscripción a los miembros de un grupo concreto (`users` donde
+ * `groups` array-contains groupId). Usado por el GroupContext para saber
+ * a quién filtrar en cada pantalla.
+ */
+export function subscribeToGroupMembers(
+  groupId: string,
+  callback: (users: AppUser[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(usersCol(), where("groups", "array-contains", groupId)),
+    (snap) => {
+      const users = snap.docs.map((d) => d.data());
+      users.sort(compareUsersForRanking);
+      callback(users);
+    },
+    (err) => onError?.(err)
+  );
 }
 
 export interface CreateUserInput {

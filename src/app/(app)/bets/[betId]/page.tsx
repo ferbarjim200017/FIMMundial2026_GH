@@ -25,6 +25,7 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { getBet } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { getUser } from "@/features/users/users.service";
@@ -46,6 +47,7 @@ export default function BetDetailPage() {
   const params = useParams<{ betId: string }>();
   const router = useRouter();
   const { appUser, isAdmin } = useAuth();
+  const { activeGroup, memberUids } = useGroup();
   const [bet, setBet] = useState<Bet | null>(null);
   const [author, setAuthor] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +81,21 @@ export default function BetDetailPage() {
   const isOwner = bet.userId === appUser.uid;
   const canManage = isOwner || isAdmin;
   const authorName = author?.username ?? "Usuario";
+
+  // Bloqueo cross-group: si el autor de la apuesta no comparte grupo activo
+  // contigo, ocultamos el contenido (excepto si es tuya — la tuya siempre
+  // se puede ver).
+  const outsideOfGroup =
+    !!activeGroup && memberUids.size > 0 && !isOwner && !memberUids.has(bet.userId);
+  if (outsideOfGroup) {
+    return (
+      <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
+        Esta apuesta es de un usuario que no está en tu grupo{" "}
+        <strong>{activeGroup.name}</strong>. Cambia de grupo activo desde el
+        icono de grupos si necesitas verla.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

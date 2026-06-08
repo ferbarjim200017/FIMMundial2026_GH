@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -24,6 +25,7 @@ import type { AppUser } from "@/types/domain";
 export default function ProfilePage() {
   const params = useParams<{ userId: string }>();
   const { appUser: me } = useAuth();
+  const { activeGroup, memberUids } = useGroup();
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -45,6 +47,20 @@ export default function ProfilePage() {
   if (!user) return <p className="text-sm text-muted-foreground">Usuario no encontrado.</p>;
 
   const isOwner = me?.uid === user.uid;
+  // Bloqueo cross-group: si el target no comparte grupo activo y no eres tú
+  // mismo, no enseñamos nada (decisión del usuario: misma regla para admin).
+  // memberUids puede estar vacío durante el primer render — solo bloqueamos
+  // cuando los miembros ya han cargado (size > 0).
+  const outsideOfGroup =
+    !!activeGroup && memberUids.size > 0 && !isOwner && !memberUids.has(user.uid);
+  if (outsideOfGroup) {
+    return (
+      <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
+        Este usuario no está en tu grupo <strong>{activeGroup.name}</strong>.
+        Cambia de grupo activo desde el icono de grupos si necesitas verlo.
+      </div>
+    );
+  }
 
   async function handleSave() {
     if (!user) return;
