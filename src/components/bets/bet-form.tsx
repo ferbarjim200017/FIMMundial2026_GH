@@ -491,7 +491,14 @@ function MatchChip({ match, onRemove }: { match: Match; onRemove: () => void }) 
   return (
     <span className="group inline-flex items-center gap-2 rounded-full border bg-background py-0.5 pl-2.5 pr-1 text-xs">
       <span className="font-medium">
-        {match.homeLabel} <span className="text-muted-foreground">vs</span> {match.awayLabel}
+        {teamFlag(match.homeLabel) && (
+          <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
+        )}
+        {match.homeLabel} <span className="text-muted-foreground">vs</span>{" "}
+        {teamFlag(match.awayLabel) && (
+          <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
+        )}
+        {match.awayLabel}
       </span>
       <span className="text-muted-foreground">
         · {STAGE_LABELS[match.stage]}

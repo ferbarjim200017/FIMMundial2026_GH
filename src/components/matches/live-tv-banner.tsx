@@ -6,6 +6,7 @@ import { Radio, Tv } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { isTveMatch } from "@/features/matches/tve-matches";
+import { teamFlag } from "@/features/matches/teams-2026";
 import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
@@ -201,6 +202,9 @@ function BannerRow({ item }: { item: BannerItem }) {
               </span>
             </div>
             <p className="mt-0.5 truncate text-sm font-semibold sm:text-base">
+              {teamFlag(match.homeLabel) && (
+                <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
+              )}
               {match.homeLabel}{" "}
               {match.result && (
                 <span className="font-mono font-bold">
@@ -208,6 +212,9 @@ function BannerRow({ item }: { item: BannerItem }) {
                 </span>
               )}{" "}
               <span className="text-muted-foreground">vs</span>{" "}
+              {teamFlag(match.awayLabel) && (
+                <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
+              )}
               {match.awayLabel}
             </p>
           </div>

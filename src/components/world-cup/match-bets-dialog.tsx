@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
+import { teamFlag } from "@/features/matches/teams-2026";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -117,8 +118,15 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
             Apuestas sobre este partido
           </DialogTitle>
           <DialogDescription>
+            {teamFlag(match.homeLabel) && (
+              <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
+            )}
             {match.homeLabel}{" "}
-            <span className="text-muted-foreground">vs</span> {match.awayLabel}
+            <span className="text-muted-foreground">vs</span>{" "}
+            {teamFlag(match.awayLabel) && (
+              <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
+            )}
+            {match.awayLabel}
             {match.groupId && ` · Grupo ${match.groupId}`}
             {match.matchday && ` · J${match.matchday}`}
           </DialogDescription>

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setMatchResult } from "@/features/matches/matches.service";
+import { teamFlag } from "@/features/matches/teams-2026";
 import { useAuth } from "@/features/auth/auth.context";
 import type { Match, MatchResult } from "@/types/domain";
 
@@ -125,7 +126,14 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
         <DialogHeader>
           <DialogTitle>Resultado del partido</DialogTitle>
           <DialogDescription>
-            {match.homeLabel} vs {match.awayLabel}
+            {teamFlag(match.homeLabel) && (
+              <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
+            )}
+            {match.homeLabel} vs{" "}
+            {teamFlag(match.awayLabel) && (
+              <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
+            )}
+            {match.awayLabel}
             {match.groupId && ` · Grupo ${match.groupId}`}
             {match.matchday && ` · J${match.matchday}`}
           </DialogDescription>
@@ -157,6 +165,9 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
                     }
                     onClick={() => update("penaltyWinner", "home")}
                   >
+                    {teamFlag(match.homeLabel) && (
+                      <span className="mr-1" aria-hidden>{teamFlag(match.homeLabel)}</span>
+                    )}
                     {match.homeLabel}
                   </Button>
                   <Button
@@ -166,6 +177,9 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
                     }
                     onClick={() => update("penaltyWinner", "away")}
                   >
+                    {teamFlag(match.awayLabel) && (
+                      <span className="mr-1" aria-hidden>{teamFlag(match.awayLabel)}</span>
+                    )}
                     {match.awayLabel}
                   </Button>
                 </div>
@@ -247,7 +261,14 @@ function ResultRow({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
       <div className="text-right">
-        {homeTeam && <p className="mb-1 text-xs text-muted-foreground">{homeTeam}</p>}
+        {homeTeam && (
+          <p className="mb-1 text-xs text-muted-foreground">
+            {teamFlag(homeTeam) && (
+              <span className="mr-1" aria-hidden>{teamFlag(homeTeam)}</span>
+            )}
+            {homeTeam}
+          </p>
+        )}
         <Input
           type="number"
           min="0"
@@ -269,7 +290,14 @@ function ResultRow({
         {label}
       </div>
       <div>
-        {awayTeam && <p className="mb-1 text-xs text-muted-foreground">{awayTeam}</p>}
+        {awayTeam && (
+          <p className="mb-1 text-xs text-muted-foreground">
+            {teamFlag(awayTeam) && (
+              <span className="mr-1" aria-hidden>{teamFlag(awayTeam)}</span>
+            )}
+            {awayTeam}
+          </p>
+        )}
         <Input
           type="number"
           min="0"
