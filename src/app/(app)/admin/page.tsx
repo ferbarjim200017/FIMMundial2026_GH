@@ -3,17 +3,31 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, ShieldOff, Trash2, Users as UsersIcon } from "lucide-react";
+import { Plus, ShieldCheck, ShieldOff, Trash2, Users as UsersIcon, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import {
   deleteUserDoc,
   setUserRole,
   subscribeToRanking,
 } from "@/features/users/users.service";
-import { seedFIMGroup, type SeedFIMResult } from "@/features/groups/groups.service";
+import {
+  addUserToGroup,
+  removeUserFromGroup,
+  seedFIMGroup,
+  type SeedFIMResult,
+} from "@/features/groups/groups.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -21,10 +35,47 @@ import type { AppUser } from "@/types/domain";
 export default function AdminPage() {
   const { appUser: me, isAdmin, loading } = useAuth();
   const router = useRouter();
+  const { allGroups } = useGroup();
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [pendingUid, setPendingUid] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
+  const [groupBusy, setGroupBusy] = useState<string | null>(null);
+
+  async function handleAddGroup(u: AppUser, groupId: string) {
+    setGroupBusy(`${u.uid}:${groupId}`);
+    try {
+      await addUserToGroup(groupId, u.uid);
+    } catch (err) {
+      console.error("[admin add group]", err);
+      window.alert(
+        err instanceof Error ? `No se pudo añadir: ${err.message}` : "Error"
+      );
+    } finally {
+      setGroupBusy(null);
+    }
+  }
+
+  async function handleRemoveGroup(u: AppUser, groupId: string) {
+    if (
+      !window.confirm(
+        `¿Quitar a ${u.username} del grupo "${groupId}"? Si era su grupo ` +
+          "activo, se le marcará como sin grupo activo hasta que elija otro."
+      )
+    )
+      return;
+    setGroupBusy(`${u.uid}:${groupId}`);
+    try {
+      await removeUserFromGroup(groupId, u.uid);
+    } catch (err) {
+      console.error("[admin remove group]", err);
+      window.alert(
+        err instanceof Error ? `No se pudo quitar: ${err.message}` : "Error"
+      );
+    } finally {
+      setGroupBusy(null);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace(ROUTES.dashboard);
@@ -174,6 +225,7 @@ export default function AdminPage() {
                   <th className="px-4 py-2">Usuario</th>
                   <th className="px-4 py-2">Email</th>
                   <th className="px-4 py-2">Rol</th>
+                  <th className="px-4 py-2">Grupos</th>
                   <th className="px-4 py-2">Alta</th>
                   <th className="px-4 py-2 text-right">Saldo</th>
                   <th className="px-4 py-2 text-right">Beneficio</th>
@@ -212,6 +264,15 @@ export default function AdminPage() {
                         >
                           {u.role}
                         </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <UserGroupsCell
+                          user={u}
+                          allGroups={allGroups}
+                          groupBusy={groupBusy}
+                          onAdd={(gid) => handleAddGroup(u, gid)}
+                          onRemove={(gid) => handleRemoveGroup(u, gid)}
+                        />
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">
                         {u.joinedAt ? formatDate(u.joinedAt.toDate()) : "—"}
@@ -265,7 +326,7 @@ export default function AdminPage() {
                 })}
                 {users !== null && users.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                       Aún no hay usuarios registrados.
                     </td>
                   </tr>
@@ -296,5 +357,80 @@ function AdminTile({
       <p className="text-sm font-semibold">{title}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
     </Link>
+  );
+}
+
+function UserGroupsCell({
+  user,
+  allGroups,
+  groupBusy,
+  onAdd,
+  onRemove,
+}: {
+  user: AppUser;
+  allGroups: { id: string; name: string }[];
+  groupBusy: string | null;
+  onAdd: (groupId: string) => void;
+  onRemove: (groupId: string) => void;
+}) {
+  const userGroupIds = new Set(user.groups ?? []);
+  const available = allGroups.filter((g) => !userGroupIds.has(g.id));
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {(user.groups ?? []).length === 0 && (
+        <span className="text-xs text-muted-foreground">—</span>
+      )}
+      {(user.groups ?? []).map((gid) => {
+        const g = allGroups.find((x) => x.id === gid);
+        const label = g?.name ?? gid;
+        const busy = groupBusy === `${user.uid}:${gid}`;
+        return (
+          <span
+            key={gid}
+            className="inline-flex items-center gap-0.5 rounded-full border bg-card px-1.5 py-0.5 text-[11px]"
+          >
+            <span className="font-medium">{label}</span>
+            <button
+              type="button"
+              onClick={() => onRemove(gid)}
+              disabled={busy}
+              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:opacity-50"
+              aria-label={`Quitar de ${label}`}
+              title={`Quitar de ${label}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        );
+      })}
+      {available.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              title="Añadir a grupo"
+              aria-label="Añadir a grupo"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Añadir a grupo
+              </p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {available.map((g) => (
+              <DropdownMenuItem key={g.id} onSelect={() => onAdd(g.id)}>
+                {g.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }
