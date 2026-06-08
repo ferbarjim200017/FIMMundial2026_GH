@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
+import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
@@ -26,6 +27,10 @@ import {
   profitClass,
 } from "@/lib/utils";
 import type { AppUser, Bet, Match } from "@/types/domain";
+
+function marketLabel(value: string): string {
+  return MARKET_OPTIONS.find((m) => m.value === value)?.label ?? value;
+}
 
 interface Props {
   match: Match | null;
@@ -229,6 +234,25 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                           </span>
                         )}
                       </div>
+                      <p className="truncate text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {marketLabel(bet.market)}
+                        {bet.market === "outright" && bet.matchLabel && (
+                          <>
+                            <span className="mx-1.5 text-border" aria-hidden>·</span>
+                            <span className="normal-case tracking-normal text-foreground/80">
+                              {bet.matchLabel}
+                            </span>
+                          </>
+                        )}
+                        {bet.market !== "outright" && bet.marketDetail && (
+                          <>
+                            <span className="mx-1.5 text-border" aria-hidden>·</span>
+                            <span className="normal-case tracking-normal">
+                              {bet.marketDetail}
+                            </span>
+                          </>
+                        )}
+                      </p>
                       <p className="truncate text-sm font-medium">
                         {bet.selection}
                       </p>
