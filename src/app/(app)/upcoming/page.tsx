@@ -6,8 +6,10 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   CalendarClock,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Copy,
   Radio,
@@ -22,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { useAuth } from "@/features/auth/auth.context";
@@ -140,6 +143,13 @@ export default function UpcomingPage() {
   // Partido sobre el que abrimos el popup de "Apuestas sobre este partido"
   // (mismo `MatchBetsDialog` que usa el apartado Mundial).
   const [betsFor, setBetsFor] = useState<Match | null>(null);
+  // Por defecto solo mostramos eventos del día seleccionado (1 día); el
+  // usuario puede ampliar la ventana a los próximos 2 días con el botón
+  // "Ver próximos 2 días". Reseteamos a falso cuando cambia el día.
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    setExpanded(false);
+  }, [selectedDayMs]);
 
   // Solo apuestas del usuario actual.
   useEffect(() => {
@@ -167,8 +177,9 @@ export default function UpcomingPage() {
   }, [now, selectedDayMs]);
 
   const todayStart = startOfDayMs(now);
+  const windowDays = expanded ? WINDOW_DAYS : 1;
   const windowStart = selectedDayMs;
-  const windowEnd = selectedDayMs + WINDOW_DAYS * DAY_MS;
+  const windowEnd = selectedDayMs + windowDays * DAY_MS;
   const isViewingToday = selectedDayMs === todayStart;
 
   const dayStrip = useMemo(
@@ -231,7 +242,9 @@ export default function UpcomingPage() {
     (liveMatches?.length ?? 0) === 0 &&
     (upcomingMatches?.length ?? 0) === 0;
 
-  const windowLabel = `${format(new Date(windowStart), "EEE d MMM", { locale: es })} → ${format(new Date(windowEnd - DAY_MS), "EEE d MMM", { locale: es })}`;
+  const windowLabel = expanded
+    ? `${format(new Date(windowStart), "EEE d MMM", { locale: es })} → ${format(new Date(windowEnd - DAY_MS), "EEE d MMM", { locale: es })}`
+    : format(new Date(windowStart), "EEEE d 'de' MMMM", { locale: es });
 
   return (
     <div className="space-y-6">
@@ -280,8 +293,8 @@ export default function UpcomingPage() {
             </div>
           </div>
           <CardDescription>
-            Cargando ventana: <span className="font-medium">{windowLabel}</span>{" "}
-            ({WINDOW_DAYS} días)
+            Mostrando: <span className="font-medium capitalize">{windowLabel}</span>{" "}
+            ({windowDays === 1 ? "1 día" : `${windowDays} días`})
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -359,7 +372,11 @@ export default function UpcomingPage() {
         <SectionCard
           title="Próximos partidos"
           icon={<Tv className="h-4 w-4 text-primary" />}
-          description={`${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en el rango. Los marcados con borde verde son del día seleccionado.`}
+          description={
+            expanded
+              ? `${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} en el rango. Los marcados con borde verde son del día seleccionado.`
+              : `${upcomingMatches.length} partido${upcomingMatches.length === 1 ? "" : "s"} del día seleccionado.`
+          }
         >
           <div className="space-y-2">
             {upcomingMatches.map((m) => (
@@ -373,6 +390,30 @@ export default function UpcomingPage() {
             ))}
           </div>
         </SectionCard>
+      )}
+
+      {!loading && (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setExpanded((v) => !v)}
+            className="gap-1.5"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-4 w-4" />
+                Ocultar próximos 2 días
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                Ver próximos 2 días
+              </>
+            )}
+          </Button>
+        </div>
       )}
 
       <MatchBetsDialog
