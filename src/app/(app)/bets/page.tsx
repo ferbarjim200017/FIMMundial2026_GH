@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { BetsTable } from "@/components/bets/bets-table";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets, type BetsFilter } from "@/features/bets/bets.service";
 import {
   BOOKMAKER_OPTIONS,
@@ -27,7 +28,8 @@ type ScopeKey = "me" | "all";
 
 export default function BetsPage() {
   const { appUser, isAdmin } = useAuth();
-  const [bets, setBets] = useState<Bet[]>([]);
+  const { activeGroup, memberUids } = useGroup();
+  const [allBets, setAllBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<ScopeKey>("me");
   const [status, setStatus] = useState<BetsFilter["status"]>("all");
@@ -43,13 +45,25 @@ export default function BetsPage() {
         bookmaker,
       },
       (next) => {
-        setBets(next);
+        setAllBets(next);
         setLoading(false);
       },
       () => setLoading(false)
     );
     return unsub;
   }, [appUser, scope, status, bookmaker]);
+
+  // Filtrado adicional por grupo activo: solo apuestas etiquetadas en este
+  // grupo Y, si el scope es "todas", de miembros del grupo.
+  const bets = useMemo(() => {
+    if (!activeGroup) return [];
+    return allBets.filter((b) => {
+      if (b.groupId !== activeGroup.id) return false;
+      if (scope === "all" && memberUids.size > 0 && !memberUids.has(b.userId))
+        return false;
+      return true;
+    });
+  }, [allBets, activeGroup, memberUids, scope]);
 
   const stats = useMemo(() => summarize(bets), [bets]);
 

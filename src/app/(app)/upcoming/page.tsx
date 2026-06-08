@@ -29,6 +29,7 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { useAuth } from "@/features/auth/auth.context";
+import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
@@ -130,6 +131,7 @@ function buildDayStrip(monthStartMs: number, todayStart: number): DayChipInfo[] 
 
 export default function UpcomingPage() {
   const { appUser } = useAuth();
+  const { activeGroup } = useGroup();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -197,17 +199,20 @@ export default function UpcomingPage() {
   }, [matches]);
 
   // ── Mis apuestas pendientes dentro de la ventana ──
+  // Filtramos también por grupo activo: el subscribe ya filtra a userId
+  // (tu propio user), pero un mismo user tiene apuestas en cada uno de
+  // sus grupos.
   const myPendingBets = useMemo(() => {
-    if (!bets || !appUser) return null;
+    if (!bets || !appUser || !activeGroup) return null;
     return bets
-      .filter((b) => b.status === "pending")
+      .filter((b) => b.status === "pending" && b.groupId === activeGroup.id)
       .map((b) => ({ bet: b, kickoff: earliestKickoff(b, matchById) }))
       .filter(({ kickoff }) => {
         if (kickoff === null) return false; // sin fecha conocida → fuera del filtro por día
         return kickoff >= windowStart && kickoff < windowEnd;
       })
       .sort((a, b) => (a.kickoff! - b.kickoff!));
-  }, [bets, appUser, matchById, windowStart, windowEnd]);
+  }, [bets, appUser, activeGroup, matchById, windowStart, windowEnd]);
 
   // ── En vivo: solo cuando estás viendo el día de hoy ──
   const liveMatches = useMemo(() => {

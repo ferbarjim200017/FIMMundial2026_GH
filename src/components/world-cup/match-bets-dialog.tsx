@@ -43,7 +43,7 @@ interface Props {
 
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { appUser } = useAuth();
-  const { memberUids } = useGroup();
+  const { memberUids, activeGroup } = useGroup();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   // "all"  → comportamiento por defecto (todas las apuestas).
@@ -93,12 +93,15 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     };
   }, [open, match]);
 
-  // Filtrado base por grupo activo: solo apuestas de miembros del grupo.
+  // Filtrado base por grupo activo: solo apuestas etiquetadas con este grupo
+  // y de miembros del mismo (defensa contra apuestas viejas sin migrar).
   const groupBets = useMemo(() => {
     if (!bets) return null;
-    if (memberUids.size === 0) return [];
-    return bets.filter((b) => memberUids.has(b.userId));
-  }, [bets, memberUids]);
+    if (!activeGroup || memberUids.size === 0) return [];
+    return bets.filter(
+      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+    );
+  }, [bets, memberUids, activeGroup]);
 
   const visibleBets = useMemo(() => {
     if (!groupBets) return null;

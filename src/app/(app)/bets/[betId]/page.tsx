@@ -82,17 +82,19 @@ export default function BetDetailPage() {
   const canManage = isOwner || isAdmin;
   const authorName = author?.username ?? "Usuario";
 
-  // Bloqueo cross-group: si el autor de la apuesta no comparte grupo activo
-  // contigo, ocultamos el contenido (excepto si es tuya — la tuya siempre
-  // se puede ver).
-  const outsideOfGroup =
-    !!activeGroup && memberUids.size > 0 && !isOwner && !memberUids.has(bet.userId);
-  if (outsideOfGroup) {
+  // Bloqueo cross-group por (a) tag de la apuesta y (b) membresía del autor.
+  // Una apuesta etiquetada con otro grupo NO se muestra ni a su propio autor
+  // — la idea es que dentro de cada grupo solo "existen" las apuestas hechas
+  // en ese contexto.
+  const wrongGroup = !!activeGroup && bet.groupId !== activeGroup.id;
+  const authorNotInGroup =
+    !!activeGroup && memberUids.size > 0 && !memberUids.has(bet.userId);
+  if (wrongGroup || (authorNotInGroup && !isOwner)) {
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
-        Esta apuesta es de un usuario que no está en tu grupo{" "}
-        <strong>{activeGroup.name}</strong>. Cambia de grupo activo desde el
-        icono de grupos si necesitas verla.
+        Esta apuesta no pertenece a tu grupo activo{" "}
+        <strong>{activeGroup?.name}</strong>. Cambia de grupo desde el icono
+        de la barra superior si quieres verla.
       </div>
     );
   }

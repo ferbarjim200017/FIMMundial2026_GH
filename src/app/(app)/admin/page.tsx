@@ -29,6 +29,10 @@ import {
   createGroup,
   removeUserFromGroup,
 } from "@/features/groups/groups.service";
+import {
+  migrateBetsToGroup,
+  type MigrateBetsResult,
+} from "@/features/bets/bets.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -45,6 +49,35 @@ export default function AdminPage() {
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
+
+  // Migración one-shot de apuestas sin groupId al grupo FIM.
+  const [migrating, setMigrating] = useState(false);
+  const [migrateMsg, setMigrateMsg] = useState<string | null>(null);
+
+  async function handleMigrateBets() {
+    if (
+      !window.confirm(
+        "Vas a asignar todas las apuestas SIN grupo al grupo FIM. " +
+          "Es idempotente — las que ya tengan grupo no se tocan. ¿Continuar?"
+      )
+    )
+      return;
+    setMigrating(true);
+    setMigrateMsg(null);
+    try {
+      const res: MigrateBetsResult = await migrateBetsToGroup("FIM");
+      setMigrateMsg(
+        `✅ Total apuestas: ${res.total} · Ya etiquetadas: ${res.alreadyTagged} · Migradas a FIM: ${res.migrated}`
+      );
+    } catch (err) {
+      console.error("[admin migrate bets]", err);
+      setMigrateMsg(
+        `❌ ${err instanceof Error ? err.message : "Error al migrar las apuestas"}`
+      );
+    } finally {
+      setMigrating(false);
+    }
+  }
 
   /** Deriva un ID válido de Firestore a partir del nombre. Conserva la
    *  caja; sustituye espacios por guiones bajos; quita caracteres
@@ -194,6 +227,29 @@ export default function AdminPage() {
           description="Lista de miembros del grupo"
         />
       </div>
+
+      <Card className="border-amber-500/40 bg-amber-500/5">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">
+              Migrar apuestas antiguas al grupo FIM
+            </CardTitle>
+            <CardDescription>
+              Asigna el groupId &quot;FIM&quot; a todas las apuestas creadas
+              ANTES de implementar grupos. Idempotente. Necesario una sola
+              vez.
+            </CardDescription>
+          </div>
+          <Button onClick={handleMigrateBets} disabled={migrating}>
+            {migrating ? "Migrando…" : "Migrar apuestas a FIM"}
+          </Button>
+        </CardHeader>
+        {migrateMsg && (
+          <CardContent>
+            <p className="text-sm">{migrateMsg}</p>
+          </CardContent>
+        )}
+      </Card>
 
       <Card>
         <CardHeader>

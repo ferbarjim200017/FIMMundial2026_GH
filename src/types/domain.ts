@@ -124,6 +124,12 @@ export interface BetLeg {
 export interface Bet {
   id: string;
   userId: string;
+  /** Grupo al que pertenece la apuesta — se fija al crearla con el
+   *  `activeGroupId` del autor en ese momento y NO se cambia al editar.
+   *  Toda la información derivada (ranking, feed, dashboard) se filtra
+   *  por este campo, así una apuesta hecha en el grupo A nunca aparece
+   *  en el grupo B aunque el autor pertenezca a ambos. */
+  groupId: string;
   createdAt: Timestamp;
   settledAt: Timestamp | null;
   bookmaker: Bookmaker;

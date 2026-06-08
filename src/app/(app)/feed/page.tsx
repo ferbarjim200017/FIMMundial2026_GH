@@ -82,7 +82,7 @@ type BookmakerFilter = Bookmaker | "all";
 export default function FeedPage() {
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
-  const { memberUids } = useGroup();
+  const { memberUids, activeGroup } = useGroup();
   const [filter, setFilter] = useState<FeedFilter>("results");
   const [query, setQuery] = useState("");
   const [userFilter, setUserFilter] = useState<string>("all");
@@ -124,12 +124,17 @@ export default function FeedPage() {
     };
   }, []);
 
-  // Filtra a las apuestas de miembros del grupo activo.
+  // Filtra a las apuestas TAGGEADAS con el grupo activo. La membresía del
+  // usuario en el grupo se queda como segunda condición de seguridad — una
+  // apuesta antigua sin groupId que no se haya migrado quedaría fuera, lo
+  // cual es lo deseable.
   const bets = useMemo(() => {
     if (allBets === null) return null;
-    if (memberUids.size === 0) return null;
-    return allBets.filter((b) => memberUids.has(b.userId));
-  }, [allBets, memberUids]);
+    if (!activeGroup || memberUids.size === 0) return null;
+    return allBets.filter(
+      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+    );
+  }, [allBets, memberUids, activeGroup]);
 
   // Resort por timestamp efectivo (settledAt si existe, si no createdAt)
   // para que las apuestas recién liquidadas suban arriba aunque sean antiguas.

@@ -60,10 +60,12 @@ export default function RankingPage() {
     return allUsers.filter((u) => memberUids.has(u.uid));
   }, [allUsers, memberUids, activeGroup]);
 
-  const bets = useMemo(
-    () => allBets.filter((b) => memberUids.has(b.userId)),
-    [allBets, memberUids]
-  );
+  const bets = useMemo(() => {
+    if (!activeGroup) return [];
+    return allBets.filter(
+      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+    );
+  }, [allBets, memberUids, activeGroup]);
 
   return (
     <div className="space-y-6">

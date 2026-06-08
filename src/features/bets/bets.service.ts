@@ -13,6 +13,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type QueryConstraint,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -156,6 +157,10 @@ export async function getBet(betId: string): Promise<Bet | null> {
 
 export interface CreateBetInput extends BetFormValues {
   userId: string;
+  /** Grupo al que se asigna la apuesta — habitualmente el `activeGroup.id`
+   *  del autor en el momento de crearla. La apuesta solo será visible para
+   *  miembros de este grupo. */
+  groupId: string;
 }
 
 export async function createBet(input: CreateBetInput): Promise<string> {
@@ -166,6 +171,7 @@ export async function createBet(input: CreateBetInput): Promise<string> {
 
   const payload = {
     userId: input.userId,
+    groupId: input.groupId,
     createdAt: Timestamp.fromDate(placedAtDate),
     settledAt: null,
     bookmaker: input.bookmaker,
@@ -361,4 +367,45 @@ export async function recomputeAndPersistStats(userId: string): Promise<void> {
   const userBets = await listBets({ userId });
   const stats = computeUserStats(userBets);
   await updateDoc(doc(db, USERS, userId), { stats });
+}
+
+export interface MigrateBetsResult {
+  total: number;
+  alreadyTagged: number;
+  migrated: number;
+}
+
+/**
+ * Migración one-shot: asigna `groupId` a todas las apuestas que aún no
+ * lo tengan, usando el `defaultGroupId` (típicamente "FIM"). Es idempotente
+ * — las que ya tengan groupId se saltan.
+ */
+export async function migrateBetsToGroup(
+  defaultGroupId: string
+): Promise<MigrateBetsResult> {
+  const snap = await getDocs(query(betsCol()));
+  let alreadyTagged = 0;
+  let migrated = 0;
+  const total = snap.size;
+
+  const BATCH_SIZE = 400;
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const slice = docs.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    let dirty = false;
+    for (const d of slice) {
+      const data = d.data();
+      if (data.groupId) {
+        alreadyTagged += 1;
+        continue;
+      }
+      batch.update(doc(db, BETS, d.id), { groupId: defaultGroupId });
+      migrated += 1;
+      dirty = true;
+    }
+    if (dirty) await batch.commit();
+  }
+
+  return { total, alreadyTagged, migrated };
 }

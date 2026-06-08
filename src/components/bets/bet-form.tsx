@@ -30,6 +30,7 @@ import {
 } from "@/features/matches/matches.service";
 import { TEAMS_2026 } from "@/features/matches/teams-2026";
 import { TeamFlag } from "@/components/matches/team-flag";
+import { useGroup } from "@/features/groups/groups.context";
 import { formatCurrency } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
@@ -58,6 +59,7 @@ function composeLabel(matches: Match[]): string {
 
 export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
+  const { activeGroup } = useGroup();
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.
@@ -192,7 +194,18 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       if (initial) {
         await updateBet({ ...parsed.data, betId: initial.id });
       } else {
-        await createBet({ ...parsed.data, userId });
+        if (!activeGroup) {
+          setServerError(
+            "No tienes un grupo activo. Selecciona uno desde el icono de grupos."
+          );
+          setSubmitting(false);
+          return;
+        }
+        await createBet({
+          ...parsed.data,
+          userId,
+          groupId: activeGroup.id,
+        });
       }
       if (onDone) onDone();
       else router.push(ROUTES.bets);
