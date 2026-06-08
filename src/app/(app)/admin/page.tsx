@@ -7,6 +7,8 @@ import { Plus, ShieldCheck, ShieldOff, Trash2, Users as UsersIcon, X } from "luc
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,9 +26,8 @@ import {
 } from "@/features/users/users.service";
 import {
   addUserToGroup,
+  createGroup,
   removeUserFromGroup,
-  seedFIMGroup,
-  type SeedFIMResult,
 } from "@/features/groups/groups.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -38,9 +39,46 @@ export default function AdminPage() {
   const { allGroups } = useGroup();
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [pendingUid, setPendingUid] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [seedMsg, setSeedMsg] = useState<string | null>(null);
   const [groupBusy, setGroupBusy] = useState<string | null>(null);
+
+  // Estado del formulario para crear un grupo nuevo.
+  const [newGroupName, setNewGroupName] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
+
+  /** Deriva un ID válido de Firestore a partir del nombre. Conserva la
+   *  caja; sustituye espacios por guiones bajos; quita caracteres
+   *  conflictivos. */
+  function deriveGroupId(name: string): string {
+    return name.trim().replace(/\s+/g, "_").replace(/[/.#$\[\]]/g, "");
+  }
+
+  async function handleCreateGroup() {
+    const name = newGroupName.trim();
+    if (name.length < 2) {
+      setCreateMsg("El nombre debe tener al menos 2 caracteres.");
+      return;
+    }
+    const id = deriveGroupId(name);
+    if (!id) {
+      setCreateMsg("Ese nombre no produce un ID válido. Prueba otro.");
+      return;
+    }
+    setCreatingGroup(true);
+    setCreateMsg(null);
+    try {
+      await createGroup({ id, name, createdBy: me?.uid ?? null });
+      setCreateMsg(`✅ Grupo "${name}" creado (id: ${id}).`);
+      setNewGroupName("");
+    } catch (err) {
+      console.error("[admin create group]", err);
+      setCreateMsg(
+        err instanceof Error ? `❌ ${err.message}` : "❌ Error al crear el grupo"
+      );
+    } finally {
+      setCreatingGroup(false);
+    }
+  }
 
   async function handleAddGroup(u: AppUser, groupId: string) {
     setGroupBusy(`${u.uid}:${groupId}`);
@@ -110,33 +148,6 @@ export default function AdminPage() {
     }
   }
 
-  async function handleSeedFIM() {
-    if (
-      !window.confirm(
-        "Crear el grupo \"FIM\" si no existe y asignar a todos los usuarios " +
-          "actuales como miembros (es seguro reejecutarlo). ¿Continuar?"
-      )
-    )
-      return;
-    setSeeding(true);
-    setSeedMsg(null);
-    try {
-      const res: SeedFIMResult = await seedFIMGroup(me?.uid ?? null);
-      setSeedMsg(
-        `✅ Listo. Grupo ${res.groupCreated ? "creado" : "ya existía"} · ` +
-          `Asignados: ${res.usersAssigned} · Ya miembros: ${res.usersAlreadyMember} · ` +
-          `Activo nuevo: ${res.usersWithNewActive} · Total usuarios: ${res.total}`
-      );
-    } catch (err) {
-      console.error("[admin seed FIM]", err);
-      setSeedMsg(
-        `❌ ${err instanceof Error ? err.message : "Error al crear el grupo"}`
-      );
-    } finally {
-      setSeeding(false);
-    }
-  }
-
   async function handleDeleteUser(target: AppUser) {
     const ok = window.confirm(
       `¿Eliminar a ${target.username}?\n\n` +
@@ -184,28 +195,78 @@ export default function AdminPage() {
         />
       </div>
 
-      <Card className="border-primary/40 bg-primary/5">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <UsersIcon className="h-4 w-4 text-primary" />
-              Bootstrap del grupo FIM
-            </CardTitle>
-            <CardDescription>
-              Crea el grupo &quot;FIM&quot; si no existe y asigna a todos los
-              usuarios actuales como miembros. Idempotente — puedes volver a
-              ejecutarlo sin riesgo.
-            </CardDescription>
-          </div>
-          <Button onClick={handleSeedFIM} disabled={seeding}>
-            {seeding ? "Asignando…" : "Crear y asignar"}
-          </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UsersIcon className="h-4 w-4 text-primary" />
+            Grupos
+          </CardTitle>
+          <CardDescription>
+            Crea grupos nuevos. Para asignar miembros usa la columna
+            &quot;Grupos&quot; en la tabla de usuarios.
+          </CardDescription>
         </CardHeader>
-        {seedMsg && (
-          <CardContent>
-            <p className="text-sm">{seedMsg}</p>
-          </CardContent>
-        )}
+        <CardContent className="space-y-4">
+          {/* Crear grupo */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="new-group-name">Nombre del grupo</Label>
+              <Input
+                id="new-group-name"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="Ej: FIM, Trotamundos, Amigos del Cole…"
+                maxLength={40}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleCreateGroup();
+                }}
+              />
+              {newGroupName.trim() && (
+                <p className="text-[10px] text-muted-foreground">
+                  ID generado: <code>{deriveGroupId(newGroupName)}</code>
+                </p>
+              )}
+            </div>
+            <Button
+              onClick={handleCreateGroup}
+              disabled={creatingGroup || newGroupName.trim().length < 2}
+            >
+              {creatingGroup ? "Creando…" : "Crear grupo"}
+            </Button>
+          </div>
+          {createMsg && <p className="text-sm">{createMsg}</p>}
+
+          {/* Grupos existentes */}
+          <div className="border-t pt-3">
+            <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+              Grupos existentes ({allGroups.length})
+            </p>
+            {allGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aún no hay grupos. Crea uno arriba para empezar.
+              </p>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {allGroups.map((g) => {
+                  const memberCount =
+                    users?.filter((u) => (u.groups ?? []).includes(g.id))
+                      .length ?? 0;
+                  return (
+                    <li
+                      key={g.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-xs"
+                    >
+                      <span className="font-medium">{g.name}</span>
+                      <span className="font-mono text-muted-foreground">
+                        · {memberCount}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
       <Card id="users">

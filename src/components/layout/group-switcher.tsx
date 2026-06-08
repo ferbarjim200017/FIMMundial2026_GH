@@ -30,24 +30,33 @@ export function GroupSwitcher() {
   const multiple = userGroups.length > 1;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative"
-          aria-label="Grupos"
-          title={activeGroup ? `Grupo activo: ${activeGroup.name}` : "Grupos"}
+    <div className="flex items-center gap-1.5">
+      {activeGroup && (
+        <span
+          className="hidden rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-600 dark:text-blue-400 sm:inline-block"
+          title={`Estás viendo datos del grupo "${activeGroup.name}"`}
         >
-          <Users className="h-4 w-4" />
-          {!loading && !hasGroups && (
-            <span
-              className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500"
-              aria-hidden
-            />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
+          {activeGroup.name}
+        </span>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            aria-label="Grupos"
+            title={activeGroup ? `Grupo activo: ${activeGroup.name}` : "Grupos"}
+          >
+            <Users className="h-4 w-4" />
+            {!loading && !hasGroups && (
+              <span
+                className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500"
+                aria-hidden
+              />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -100,7 +109,8 @@ export function GroupSwitcher() {
             </DropdownMenuLabel>
           </>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
