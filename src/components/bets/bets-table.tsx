@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ function marketLabel(value: string): string {
 }
 
 export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
+  const router = useRouter();
   const [settling, setSettling] = useState<Bet | null>(null);
 
   function canManage(bet: Bet): boolean {
@@ -71,7 +73,11 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
           </thead>
           <tbody>
             {bets.map((b) => (
-              <tr key={b.id} className="border-b last:border-0 hover:bg-accent/30">
+              <tr
+                key={b.id}
+                className="cursor-pointer border-b last:border-0 hover:bg-accent/30"
+                onClick={() => router.push(`/bets/${b.id}`)}
+              >
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   {formatDateTime(b.createdAt.toDate())}
                 </td>
@@ -84,7 +90,18 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                   <div>{b.selection}</div>
                 </td>
                 <td className="px-3 py-2 text-xs">
-                  {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
+                  <span
+                    className={
+                      "inline-block rounded-md border px-1.5 py-0.5 text-xs font-medium " +
+                      (b.bookmaker === "bet365"
+                        ? "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
+                        : b.bookmaker === "winamax"
+                        ? "border-red-500/70 text-red-600 dark:text-red-400"
+                        : "border-sky-500/70 text-sky-600 dark:text-sky-400")
+                    }
+                  >
+                    {bookmakerLabel(b.bookmaker, b.bookmakerLabel)}
+                  </span>
                 </td>
                 <td className="px-3 py-2 text-right font-mono">{b.odds.toFixed(2)}</td>
                 <td className="px-3 py-2 text-right font-mono">
@@ -108,7 +125,10 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                 <td className="px-3 py-2">
                   <BetStatusBadge status={b.status} />
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td
+                  className="px-3 py-2 text-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {canManage(b) && (
                     <div className="flex items-center justify-end gap-1">
                       {b.status === "pending" && (
@@ -130,7 +150,7 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
                             <Link href={`/bets/${b.id}`}>
-                              <Pencil className="h-4 w-4" /> Editar
+                              <Pencil className="h-4 w-4" /> Abrir / editar
                             </Link>
                           </DropdownMenuItem>
                           {b.status === "pending" && (
