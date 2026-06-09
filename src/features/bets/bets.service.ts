@@ -433,6 +433,34 @@ export async function recomputeAndPersistStats(userId: string): Promise<void> {
   });
 }
 
+export interface RecomputeAllResult {
+  usersProcessed: number;
+  errors: number;
+}
+
+/**
+ * Lanza `recomputeAndPersistStats` para todos los usuarios del sistema.
+ * Útil cuando hubo operaciones (settle/unsettle/edit) antes de que
+ * `recomputeAndPersistStats` fuera autoritativo y quedó deriva en
+ * `user.stats` o `user.currentBalance`. Es idempotente: se puede
+ * ejecutar las veces que haga falta.
+ */
+export async function recomputeAllUsersStats(): Promise<RecomputeAllResult> {
+  const snap = await getDocs(query(collection(db, USERS)));
+  let usersProcessed = 0;
+  let errors = 0;
+  for (const d of snap.docs) {
+    try {
+      await recomputeAndPersistStats(d.id);
+      usersProcessed += 1;
+    } catch (err) {
+      console.error(`[recomputeAllUsersStats] uid=${d.id}`, err);
+      errors += 1;
+    }
+  }
+  return { usersProcessed, errors };
+}
+
 export interface MigrateBetsResult {
   total: number;
   alreadyTagged: number;

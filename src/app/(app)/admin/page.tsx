@@ -30,6 +30,10 @@ import {
   deleteGroup,
   removeUserFromGroup,
 } from "@/features/groups/groups.service";
+import {
+  recomputeAllUsersStats,
+  type RecomputeAllResult,
+} from "@/features/bets/bets.service";
 import { formatCurrency, formatDate, initials, profitClass } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { AppUser } from "@/types/domain";
@@ -47,6 +51,37 @@ export default function AdminPage() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+
+  // Recalculo global de stats y currentBalance. Útil para limpiar derivas
+  // antiguas (p.ej. de unsettleBet antes de que recompute fuera autoritativo).
+  const [recomputing, setRecomputing] = useState(false);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+
+  async function handleRecomputeAll() {
+    if (
+      !window.confirm(
+        "Recalcular stats globales y saldo de TODOS los usuarios a partir " +
+          "de sus apuestas actuales. Idempotente. Útil cuando admin muestra " +
+          "valores stale. ¿Continuar?"
+      )
+    )
+      return;
+    setRecomputing(true);
+    setRecomputeMsg(null);
+    try {
+      const res: RecomputeAllResult = await recomputeAllUsersStats();
+      setRecomputeMsg(
+        `✅ Procesados ${res.usersProcessed} usuarios${res.errors > 0 ? ` (${res.errors} con error, revisa consola)` : ""}.`
+      );
+    } catch (err) {
+      console.error("[admin recompute all]", err);
+      setRecomputeMsg(
+        `❌ ${err instanceof Error ? err.message : "Error al recalcular"}`
+      );
+    } finally {
+      setRecomputing(false);
+    }
+  }
 
   async function handleDeleteGroup(groupId: string, groupName: string, memberCount: number) {
     const ok = window.confirm(
@@ -221,6 +256,30 @@ export default function AdminPage() {
           description="Lista de miembros del grupo"
         />
       </div>
+
+      <Card className="border-amber-500/40 bg-amber-500/5">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">
+              Recalcular stats y saldo de todos los usuarios
+            </CardTitle>
+            <CardDescription>
+              Reconstruye <code>user.stats</code> y <code>user.currentBalance</code>{" "}
+              desde el array real de apuestas. Idempotente — solo necesario una
+              vez para limpiar deriva antigua (p.ej. valores que quedaron stale
+              tras volver a pendiente una apuesta liquidada).
+            </CardDescription>
+          </div>
+          <Button onClick={handleRecomputeAll} disabled={recomputing}>
+            {recomputing ? "Recalculando…" : "Recalcular todo"}
+          </Button>
+        </CardHeader>
+        {recomputeMsg && (
+          <CardContent>
+            <p className="text-sm">{recomputeMsg}</p>
+          </CardContent>
+        )}
+      </Card>
 
       <Card>
         <CardHeader>
