@@ -361,50 +361,67 @@ export async function deleteBet(betId: string): Promise<void> {
 
 /**
  * Devuelve una apuesta liquidada (won/lost/void/cashout) al estado
- * pending. Se usa para corregir errores: si por equivocación se marcó
- * como ganada en vez de perdida (o viceversa), primero la des-liquida y
- * luego se vuelve a abrir el diálogo de liquidar para elegir el estado
- * correcto. Es no-op si ya estaba pending.
+ * pending y deshace por completo cualquier efecto que tuviera en las
+ * stats y el saldo del usuario. Se apoya en `recomputeAndPersistStats`,
+ * que es autoritativo: recalcula stats y `currentBalance` desde el
+ * array real de apuestas, así que aunque viniera alguna deriva
+ * acumulada queda corregida.
+ *
+ * No-op si la apuesta ya estaba en pending.
  */
 export async function unsettleBet(betId: string): Promise<void> {
-  let userIdToRecompute: string | null = null;
-  await runTransaction(db, async (tx) => {
-    const betRef = doc(db, BETS, betId);
-    const betSnap = await tx.get(betRef);
-    if (!betSnap.exists()) throw new Error("Apuesta no encontrada");
-    const bet = { id: betSnap.id, ...(betSnap.data() as Omit<Bet, "id">) };
-    if (bet.status === "pending") return; // ya estaba pending, nada que hacer
+  const betRef = doc(db, BETS, betId);
+  const existing = await getDoc(betRef);
+  if (!existing.exists()) throw new Error("Apuesta no encontrada");
+  const data = existing.data();
+  if (data.status === "pending") return;
 
-    const userRef = doc(db, USERS, bet.userId).withConverter(userConverter);
-    const userSnap = await tx.get(userRef);
-    if (!userSnap.exists()) throw new Error("Usuario no encontrado");
-    const user = userSnap.data();
-
-    const oldProfit = bet.profit ?? 0;
-
-    tx.update(betRef, {
-      status: "pending" as BetStatus,
-      profit: 0,
-      settledAt: null,
-    });
-    tx.update(doc(db, USERS, bet.userId), {
-      currentBalance: round2(user.currentBalance - oldProfit),
-    });
-    userIdToRecompute = bet.userId;
+  // Resetear los campos del bet en una sola escritura atómica.
+  await updateDoc(betRef, {
+    status: "pending" as BetStatus,
+    profit: 0,
+    settledAt: null,
   });
-  if (userIdToRecompute) {
-    await recomputeAndPersistStats(userIdToRecompute);
-  }
+
+  // Cleanup autoritativo del usuario: stats + currentBalance recalculados
+  // desde cero a partir del array de apuestas actual (que ya tiene esta
+  // apuesta como pending). Así no queda nada de la liquidación previa
+  // en ranking, dashboard, /admin ni feed.
+  await recomputeAndPersistStats(data.userId);
 }
 
 /**
- * Recalcula y persiste las estadísticas agregadas del usuario en su
- * documento. Se llama tras cualquier mutación de apuestas.
+ * Recalcula y persiste las estadísticas agregadas Y el `currentBalance`
+ * legacy del usuario desde cero, a partir de su array actual de apuestas.
+ * Es autoritativo (idempotente): aunque venga una deriva acumulada de
+ * liquidaciones previas, esta función la corrige porque parte del estado
+ * real de los `bets` en Firestore y no de incrementos. Se llama tras
+ * cualquier mutación de apuestas (settle, unsettle, edit, delete).
  */
 export async function recomputeAndPersistStats(userId: string): Promise<void> {
   const userBets = await listBets({ userId });
   const stats = computeUserStats(userBets);
-  await updateDoc(doc(db, USERS, userId), { stats });
+
+  const userSnap = await getDoc(doc(db, USERS, userId).withConverter(userConverter));
+  if (!userSnap.exists()) {
+    await updateDoc(doc(db, USERS, userId), { stats });
+    return;
+  }
+  const user = userSnap.data();
+  const initials = user.initialBalances ?? { bet365: 0, winamax: 0, other: 0 };
+  const initialBalance = round2(
+    (initials.bet365 ?? 0) + (initials.winamax ?? 0) + (initials.other ?? 0)
+  );
+  // currentBalance se mantiene como agregado legacy global. La UI por
+  // grupos no lo lee, pero conviene que esté coherente para /admin y
+  // cualquier consumidor externo.
+  const currentBalance = round2(initialBalance + stats.totalProfit);
+
+  await updateDoc(doc(db, USERS, userId), {
+    stats,
+    initialBalance,
+    currentBalance,
+  });
 }
 
 export interface MigrateBetsResult {
