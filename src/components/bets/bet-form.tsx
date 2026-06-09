@@ -59,11 +59,22 @@ function composeLabel(matches: Match[]): string {
 
 export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
-  const { activeGroup } = useGroup();
+  const { activeGroup, userGroups } = useGroup();
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.
   const seed = initial ?? prefill;
+  // groupIds iniciales: si editamos, preservamos los de la apuesta original
+  // (o legacy single groupId). Si creamos/copiamos, por defecto solo el grupo
+  // activo del autor en este momento.
+  const initialGroupIds = (() => {
+    if (initial) {
+      if (initial.groupIds && initial.groupIds.length > 0)
+        return initial.groupIds;
+      if (initial.groupId) return [initial.groupId];
+    }
+    return activeGroup ? [activeGroup.id] : [];
+  })();
   const [values, setValues] = useState<BetFormValues>(() => ({
     bookmaker: seed?.bookmaker ?? "bet365",
     bookmakerLabel: seed?.bookmakerLabel ?? "",
@@ -82,6 +93,7 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     isFreebet: seed?.isFreebet ?? false,
     notes: seed?.notes ?? "",
     teams: seed?.teams ?? [],
+    groupIds: initialGroupIds,
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -194,9 +206,9 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       if (initial) {
         await updateBet({ ...parsed.data, betId: initial.id });
       } else {
-        if (!activeGroup) {
+        if ((parsed.data.groupIds ?? []).length === 0) {
           setServerError(
-            "No tienes un grupo activo. Selecciona uno desde el icono de grupos."
+            "Selecciona al menos un grupo al que asignar la apuesta."
           );
           setSubmitting(false);
           return;
@@ -204,7 +216,6 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
         await createBet({
           ...parsed.data,
           userId,
-          groupId: activeGroup.id,
         });
       }
       if (onDone) onDone();
@@ -216,8 +227,62 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     }
   }
 
+  // Toggle de un grupo en la selección
+  function toggleGroupId(id: string) {
+    const cur = values.groupIds ?? [];
+    if (cur.includes(id)) {
+      // No permitimos quedarnos sin grupos: al menos uno tiene que estar
+      // marcado. Si el usuario intenta desmarcar el último, ignoramos.
+      if (cur.length === 1) return;
+      update(
+        "groupIds",
+        cur.filter((g) => g !== id)
+      );
+    } else {
+      update("groupIds", [...cur, id]);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {userGroups.length > 1 && (
+        <Card className="border-primary/30">
+          <CardContent className="space-y-2 p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <Label className="text-sm">Compartir con grupos</Label>
+              <p className="text-[11px] text-muted-foreground">
+                La apuesta aparecerá en el feed y el ranking de cada grupo
+                marcado.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {userGroups.map((g) => {
+                const selected = (values.groupIds ?? []).includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggleGroupId(g.id)}
+                    aria-pressed={selected}
+                    className={
+                      "rounded-full border px-2.5 py-0.5 text-xs transition-colors " +
+                      (selected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "bg-background hover:bg-accent/40")
+                    }
+                  >
+                    {g.name}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.groupIds && (
+              <p className="text-xs text-destructive">{errors.groupIds}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
           <div className="space-y-1.5">

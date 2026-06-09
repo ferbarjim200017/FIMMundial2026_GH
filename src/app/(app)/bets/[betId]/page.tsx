@@ -27,6 +27,7 @@ import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getBet, unsettleBet } from "@/features/bets/bets.service";
+import { betInGroup, getBetGroupIds } from "@/features/bets/bets.utils";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { getUser } from "@/features/users/users.service";
 import { ROUTES } from "@/lib/constants";
@@ -47,7 +48,7 @@ export default function BetDetailPage() {
   const params = useParams<{ betId: string }>();
   const router = useRouter();
   const { appUser, isAdmin } = useAuth();
-  const { activeGroup, memberUids } = useGroup();
+  const { activeGroup, memberUids, allGroups } = useGroup();
   const [bet, setBet] = useState<Bet | null>(null);
   const [author, setAuthor] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +87,7 @@ export default function BetDetailPage() {
   // Una apuesta etiquetada con otro grupo NO se muestra ni a su propio autor
   // — la idea es que dentro de cada grupo solo "existen" las apuestas hechas
   // en ese contexto.
-  const wrongGroup = !!activeGroup && bet.groupId !== activeGroup.id;
+  const wrongGroup = !!activeGroup && !betInGroup(bet, activeGroup.id);
   const authorNotInGroup =
     !!activeGroup && memberUids.size > 0 && !memberUids.has(bet.userId);
   if (wrongGroup || (authorNotInGroup && !isOwner)) {
@@ -286,6 +287,31 @@ export default function BetDetailPage() {
               </p>
             </div>
           </div>
+
+          {(() => {
+            const betGroupIds = getBetGroupIds(bet);
+            if (betGroupIds.length <= 1) return null;
+            return (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Compartida en {betGroupIds.length} grupos
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {betGroupIds.map((gid) => {
+                    const g = allGroups.find((x) => x.id === gid);
+                    return (
+                      <span
+                        key={gid}
+                        className="rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium"
+                      >
+                        {g?.name ?? gid}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {bet.teams && bet.teams.length > 0 && (
             <div>

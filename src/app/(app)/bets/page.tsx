@@ -6,7 +6,7 @@ import { Plus, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { bookmakerLabel } from "@/features/bets/bets.utils";
+import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
 import {
   Select,
   SelectContent,
@@ -61,7 +61,7 @@ export default function BetsPage() {
   const bets = useMemo(() => {
     if (!activeGroup) return [];
     return allBets.filter((b) => {
-      if (b.groupId !== activeGroup.id) return false;
+      if (!betInGroup(b, activeGroup.id)) return false;
       if (scope === "all" && memberUids.size > 0 && !memberUids.has(b.userId))
         return false;
       if (normalizedQuery) {

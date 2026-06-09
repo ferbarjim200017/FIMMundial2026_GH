@@ -133,6 +133,15 @@ export interface Bet {
    *  Toda la información derivada (ranking, feed, dashboard) se filtra
    *  por este campo, así una apuesta hecha en el grupo A nunca aparece
    *  en el grupo B aunque el autor pertenezca a ambos. */
+  /** Grupos a los que pertenece la apuesta. Por defecto solo el grupo
+   *  activo del autor en el momento de crearla, pero el usuario puede
+   *  compartirla con varios grupos a la vez. Filtros usan
+   *  `getBetGroupIds(bet)` por compatibilidad con bets legacy. */
+  groupIds?: string[];
+  /** Legacy: groupId único anterior al modelo multi-grupo. Se sigue
+   *  escribiendo a `groupIds[0]` por backwards-compat para que cualquier
+   *  consumidor antiguo no se rompa, pero las apuestas nuevas no lo
+   *  consultan. */
   groupId: string;
   createdAt: Timestamp;
   settledAt: Timestamp | null;

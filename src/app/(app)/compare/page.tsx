@@ -17,7 +17,7 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { getUser } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
-import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import {
   cn,
   formatCurrency,
@@ -168,7 +168,7 @@ function CompareContent() {
   const dataA = useMemo<CompareData | null>(() => {
     if (!userA || !activeGroup) return null;
     const userBets = bets.filter(
-      (b) => b.userId === userA.uid && b.groupId === activeGroup.id
+      (b) => b.userId === userA.uid && betInGroup(b, activeGroup.id)
     );
     const stats = computeUserStats(userBets);
     const initials = getInitialBalances(userA, activeGroup.id);
@@ -180,7 +180,7 @@ function CompareContent() {
   const dataB = useMemo<CompareData | null>(() => {
     if (!userB || !activeGroup) return null;
     const userBets = bets.filter(
-      (b) => b.userId === userB.uid && b.groupId === activeGroup.id
+      (b) => b.userId === userB.uid && betInGroup(b, activeGroup.id)
     );
     const stats = computeUserStats(userBets);
     const initials = getInitialBalances(userB, activeGroup.id);

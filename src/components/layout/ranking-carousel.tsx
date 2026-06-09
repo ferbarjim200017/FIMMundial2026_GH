@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
-import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { formatCurrency, formatPercent, profitClass } from "@/lib/utils";
@@ -39,7 +39,7 @@ export function RankingCarousel() {
   const filtered = useMemo(() => {
     if (memberUids.size === 0 || !activeGroup) return [] as AppUser[];
     const groupBets = allBets.filter(
-      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+      (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
     return users
       .filter((u) => memberUids.has(u.uid))

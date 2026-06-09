@@ -7,6 +7,7 @@ import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import {
+  betInGroup,
   bookmakerLabel,
   computeBookmakerSummary,
   computeUserStats,
@@ -51,7 +52,7 @@ export default function DashboardPage() {
   // grupo seleccionado en el topbar.
   const bets = useMemo(() => {
     if (!activeGroup) return [];
-    return allBets.filter((b) => b.groupId === activeGroup.id);
+    return allBets.filter((b) => betInGroup(b, activeGroup.id));
   }, [allBets, activeGroup]);
 
   const summary = useMemo(

@@ -20,7 +20,7 @@ import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToRanking } from "@/features/users/users.service";
-import { bookmakerLabel } from "@/features/bets/bets.utils";
+import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -99,7 +99,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     if (!bets) return null;
     if (!activeGroup || memberUids.size === 0) return [];
     return bets.filter(
-      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+      (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
   }, [bets, memberUids, activeGroup]);
 

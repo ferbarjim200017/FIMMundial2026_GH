@@ -76,6 +76,12 @@ export const betFormSchema = z
     /** Solo se usa cuando market === "outright". Vincula la apuesta a uno
      *  o varios equipos para que aparezca en el popup de sus partidos. */
     teams: z.array(z.string()).optional().default([]),
+    /** Grupos a los que se asigna la apuesta. Mínimo uno. La UI por
+     *  defecto lo rellena con el grupo activo del autor. */
+    groupIds: z
+      .array(z.string())
+      .min(1, "Indica al menos un grupo")
+      .default([]),
   })
   .refine(
     (data) => data.bookmaker !== "other" || (data.bookmakerLabel ?? "").length >= 2,

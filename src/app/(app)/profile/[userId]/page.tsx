@@ -13,7 +13,7 @@ import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
-import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { ROUTES } from "@/lib/constants";
 import {
   formatCurrency,
@@ -56,7 +56,7 @@ export default function ProfilePage() {
 
   const groupBets = useMemo(() => {
     if (!activeGroup) return [];
-    return bets.filter((b) => b.groupId === activeGroup.id);
+    return bets.filter((b) => betInGroup(b, activeGroup.id));
   }, [bets, activeGroup]);
 
   const groupStats = useMemo(() => computeUserStats(groupBets), [groupBets]);

@@ -15,7 +15,7 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
-import { computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -64,7 +64,7 @@ export default function RankingPage() {
   const bets = useMemo(() => {
     if (!activeGroup) return [];
     return allBets.filter(
-      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+      (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
   }, [allBets, memberUids, activeGroup]);
 

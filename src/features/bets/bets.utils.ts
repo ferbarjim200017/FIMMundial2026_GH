@@ -15,6 +15,21 @@ import { EMPTY_BOOKMAKER_BALANCES, EMPTY_USER_STATS } from "@/types/domain";
  * - void:   0
  * - cashout: valor proporcionado manualmente
  */
+/**
+ * Devuelve los grupos a los que pertenece una apuesta. Prioriza el array
+ * nuevo `groupIds`; cae al `groupId` legacy si el array no existe
+ * (compatibilidad con apuestas creadas antes del modelo multi-grupo).
+ */
+export function getBetGroupIds(bet: Bet): string[] {
+  if (bet.groupIds && bet.groupIds.length > 0) return bet.groupIds;
+  return bet.groupId ? [bet.groupId] : [];
+}
+
+/** True si la apuesta pertenece al grupo dado. */
+export function betInGroup(bet: Bet, groupId: string): boolean {
+  return getBetGroupIds(bet).includes(groupId);
+}
+
 export function calcProfit(
   stake: number,
   odds: number,

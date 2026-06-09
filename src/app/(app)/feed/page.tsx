@@ -40,7 +40,7 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
-import { computeUserStats } from "@/features/bets/bets.utils";
+import { betInGroup, computeUserStats } from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -133,7 +133,7 @@ export default function FeedPage() {
     if (allBets === null) return null;
     if (!activeGroup || memberUids.size === 0) return null;
     return allBets.filter(
-      (b) => b.groupId === activeGroup.id && memberUids.has(b.userId)
+      (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
   }, [allBets, memberUids, activeGroup]);
 

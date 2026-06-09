@@ -157,10 +157,6 @@ export async function getBet(betId: string): Promise<Bet | null> {
 
 export interface CreateBetInput extends BetFormValues {
   userId: string;
-  /** Grupo al que se asigna la apuesta — habitualmente el `activeGroup.id`
-   *  del autor en el momento de crearla. La apuesta solo será visible para
-   *  miembros de este grupo. */
-  groupId: string;
 }
 
 export async function createBet(input: CreateBetInput): Promise<string> {
@@ -168,10 +164,17 @@ export async function createBet(input: CreateBetInput): Promise<string> {
   const stake = round2(input.stake);
   const odds = round2(input.odds);
   const matchIds = input.matchIds ?? [];
+  const groupIds = (input.groupIds ?? []).filter((g) => g.length > 0);
+  if (groupIds.length === 0) {
+    throw new Error("La apuesta necesita pertenecer al menos a un grupo.");
+  }
 
   const payload = {
     userId: input.userId,
-    groupId: input.groupId,
+    // Legacy denormalizado: el primer grupo se sigue escribiendo en
+    // `groupId` para que consumidores antiguos no se rompan.
+    groupId: groupIds[0],
+    groupIds,
     createdAt: Timestamp.fromDate(placedAtDate),
     settledAt: null,
     bookmaker: input.bookmaker,
@@ -217,6 +220,10 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
   const stake = round2(input.stake);
   const odds = round2(input.odds);
   const matchIds = input.matchIds ?? [];
+  const groupIds = (input.groupIds ?? []).filter((g) => g.length > 0);
+  if (groupIds.length === 0) {
+    throw new Error("La apuesta necesita pertenecer al menos a un grupo.");
+  }
 
   const patch: Record<string, unknown> = {
     bookmaker: input.bookmaker,
@@ -224,6 +231,8 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
       input.bookmaker === "other" ? input.bookmakerLabel?.trim() ?? "" : "",
     matchId: matchIds[0] ?? null,
     matchIds,
+    groupId: groupIds[0],
+    groupIds,
     matchLabel: input.matchLabel.trim(),
     market: input.market,
     marketDetail: input.marketDetail?.trim() ?? "",

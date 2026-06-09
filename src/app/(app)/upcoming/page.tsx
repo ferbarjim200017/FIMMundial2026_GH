@@ -32,7 +32,7 @@ import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
-import { bookmakerLabel } from "@/features/bets/bets.utils";
+import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
 import { isTveMatch } from "@/features/matches/tve-matches";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { ROUTES } from "@/lib/constants";
@@ -205,7 +205,7 @@ export default function UpcomingPage() {
   const myPendingBets = useMemo(() => {
     if (!bets || !appUser || !activeGroup) return null;
     return bets
-      .filter((b) => b.status === "pending" && b.groupId === activeGroup.id)
+      .filter((b) => b.status === "pending" && betInGroup(b, activeGroup.id))
       .map((b) => ({ bet: b, kickoff: earliestKickoff(b, matchById) }))
       .filter(({ kickoff }) => {
         if (kickoff === null) return false; // sin fecha conocida → fuera del filtro por día
