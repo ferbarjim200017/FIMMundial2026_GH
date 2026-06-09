@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, LineChart, Minus, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { LineChart, Minus, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { RankingChart } from "@/components/ranking/ranking-chart";
+import { BackButton } from "@/components/layout/back-button";
 import { getUser } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
@@ -255,11 +256,7 @@ function CompareContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
-          <Link href={ROUTES.profile(userB.uid)} aria-label="Volver">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <BackButton fallbackHref={ROUTES.profile(userB.uid)} />
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Swords className="h-5 w-5 text-primary" />

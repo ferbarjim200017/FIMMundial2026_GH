@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft,
   CheckCircle2,
   Copy,
   Pencil,
@@ -23,6 +22,7 @@ import { BetForm } from "@/components/bets/bet-form";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
+import { BackButton } from "@/components/layout/back-button";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
@@ -103,11 +103,7 @@ export default function BetDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
-          <Link href={ROUTES.bets} aria-label="Volver">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <BackButton fallbackHref={ROUTES.bets} />
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">

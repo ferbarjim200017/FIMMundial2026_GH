@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +37,7 @@ import {
   type BracketResolutionResult,
 } from "@/features/matches/bracket-resolver";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
+import { BackButton } from "@/components/layout/back-button";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { formatDateTime } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -191,11 +191,7 @@ export default function AdminMatchesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
-          <Link href={ROUTES.admin} aria-label="Volver">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <BackButton fallbackHref={ROUTES.admin} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Partidos del Mundial</h1>
           <p className="text-sm text-muted-foreground">

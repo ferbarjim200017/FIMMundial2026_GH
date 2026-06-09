@@ -2,11 +2,10 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useAuth } from "@/features/auth/auth.context";
 import { BetForm } from "@/components/bets/bet-form";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/layout/back-button";
 import { getBet } from "@/features/bets/bets.service";
 import { getUser } from "@/features/users/users.service";
 import { ROUTES } from "@/lib/constants";
@@ -61,11 +60,7 @@ function NewBetContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
-          <Link href={ROUTES.bets} aria-label="Volver">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <BackButton fallbackHref={ROUTES.bets} />
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             {isCopying && <Copy className="h-5 w-5 text-primary" aria-hidden />}
