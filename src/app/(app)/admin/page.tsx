@@ -235,9 +235,9 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Crear grupo */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="new-group-name">Nombre del grupo</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-group-name">Nombre del grupo</Label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
               <Input
                 id="new-group-name"
                 value={newGroupName}
@@ -247,19 +247,21 @@ export default function AdminPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleCreateGroup();
                 }}
+                className="flex-1"
               />
-              {newGroupName.trim() && (
-                <p className="text-[10px] text-muted-foreground">
-                  ID generado: <code>{deriveGroupId(newGroupName)}</code>
-                </p>
-              )}
+              <Button
+                onClick={handleCreateGroup}
+                disabled={creatingGroup || newGroupName.trim().length < 2}
+              >
+                {creatingGroup ? "Creando…" : "Crear grupo"}
+              </Button>
             </div>
-            <Button
-              onClick={handleCreateGroup}
-              disabled={creatingGroup || newGroupName.trim().length < 2}
-            >
-              {creatingGroup ? "Creando…" : "Crear grupo"}
-            </Button>
+            {/* Hint fuera del flex para que no cambie la altura del row */}
+            {newGroupName.trim() && (
+              <p className="text-[10px] text-muted-foreground">
+                ID generado: <code>{deriveGroupId(newGroupName)}</code>
+              </p>
+            )}
           </div>
           {createMsg && <p className="text-sm">{createMsg}</p>}
 
