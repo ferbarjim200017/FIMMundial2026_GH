@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 import { subscribeToRanking } from "@/features/users/users.service";
-import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -25,7 +25,7 @@ export function RankingCarousel() {
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     const unsubUsers = subscribeToRanking(setUsers);
-    const unsubBets = subscribeToBets({}, setAllBets);
+    const unsubBets = subscribeToAllBets(setAllBets);
     return () => {
       unsubUsers();
       unsubBets();

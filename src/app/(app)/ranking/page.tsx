@@ -14,7 +14,7 @@ import {
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
-import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -45,7 +45,7 @@ export default function RankingPage() {
       return;
     }
     const unsubUsers = subscribeToRanking(setAllUsers);
-    const unsubBets = subscribeToBets({}, setAllBets);
+    const unsubBets = subscribeToAllBets(setAllBets);
     return () => {
       unsubUsers();
       unsubBets();

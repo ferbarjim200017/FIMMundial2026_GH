@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BackButton } from "@/components/layout/back-button";
 import { getUser } from "@/features/users/users.service";
-import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
 import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import {
@@ -159,7 +159,7 @@ function CompareContent() {
 
   useEffect(() => {
     if (!aUid || !bUid) return;
-    const unsub = subscribeToBets({}, (all) => {
+    const unsub = subscribeToAllBets((all) => {
       setBets(all.filter((bet) => bet.userId === aUid || bet.userId === bUid));
     });
     return unsub;

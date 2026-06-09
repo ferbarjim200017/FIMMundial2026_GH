@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
-import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
 import { betInGroup, computeUserStats } from "@/features/bets/bets.utils";
@@ -113,7 +113,7 @@ export default function FeedPage() {
       setAllBets([]);
       return;
     }
-    const unsubBets = subscribeToBets({}, setAllBets);
+    const unsubBets = subscribeToAllBets(setAllBets);
     const unsubUsers = subscribeToRanking((users) => {
       const map: Record<string, AppUser> = {};
       for (const u of users) map[u.uid] = u;

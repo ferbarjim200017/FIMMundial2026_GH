@@ -69,6 +69,51 @@ export function subscribeToBets(
   );
 }
 
+// ---------- Suscripción global compartida ----------
+//
+// Varias pantallas necesitan "todas las apuestas del sistema" a la vez: el
+// carrusel del ranking (montado en TODAS las páginas), la página de ranking,
+// el feed y el comparador. Antes cada una abría su propio `subscribeToBets({})`,
+// con lo que en /ranking y /feed convivían dos listeners idénticos y se
+// deserializaba la colección por duplicado en memoria.
+//
+// `subscribeToAllBets` mantiene UN único `onSnapshot` subyacente, compartido y
+// con conteo de referencias: se abre con el primer suscriptor y se cierra con
+// el último. A un suscriptor nuevo se le entrega de inmediato el último
+// snapshot conocido, así que el comportamiento visible es idéntico (incluso
+// algo más rápido). El array que se reparte es de solo lectura para los
+// consumidores: todos copian (`[...]`, `.filter`, `.map`) antes de ordenar.
+let sharedUnsub: Unsubscribe | null = null;
+let sharedLatest: Bet[] | null = null;
+const sharedSubscribers = new Set<(bets: Bet[]) => void>();
+
+export function subscribeToAllBets(cb: (bets: Bet[]) => void): Unsubscribe {
+  sharedSubscribers.add(cb);
+
+  // Si ya hay datos en memoria, los servimos al instante al nuevo suscriptor.
+  if (sharedLatest) cb(sharedLatest);
+
+  // Abrimos el listener subyacente solo la primera vez.
+  if (!sharedUnsub) {
+    sharedUnsub = onSnapshot(
+      query(betsCol(), ...buildConstraints({})),
+      (snap) => {
+        sharedLatest = snap.docs.map((d) => d.data());
+        for (const sub of sharedSubscribers) sub(sharedLatest);
+      }
+    );
+  }
+
+  return () => {
+    sharedSubscribers.delete(cb);
+    if (sharedSubscribers.size === 0 && sharedUnsub) {
+      sharedUnsub();
+      sharedUnsub = null;
+      sharedLatest = null;
+    }
+  };
+}
+
 /**
  * Suscripción a todas las apuestas que incluyan un partido concreto. Usa
  * `array-contains` sobre `matchIds`, que en todas las apuestas creadas

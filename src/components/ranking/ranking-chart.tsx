@@ -112,7 +112,11 @@ export function RankingChart({ users, bets }: Props) {
   }, []);
 
   const startMs = useMemo(() => todayStartMs(), []);
-  const nowMs = Date.now();
+  // Fijamos "ahora" al montar el componente. Antes era `Date.now()` a nivel de
+  // render, lo que invalidaba el useMemo de `series` en cada repintado y
+  // recalculaba todas las series sin necesidad. Memoizarlo da una gráfica
+  // estable (idéntica en pantalla) y evita ese recálculo.
+  const nowMs = useMemo(() => Date.now(), []);
 
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
