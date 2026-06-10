@@ -498,7 +498,10 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
           </div>
         )}
 
-        <div>
+        {/* La lista tiene su propio scroll y altura acotada: así el ranking y
+            los filtros quedan siempre visibles arriba y el pop-up mantiene un
+            tamaño consistente aunque haya muchas apuestas. */}
+        <div className="max-h-[45vh] overflow-y-auto">
           {visibleBets === null ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               Cargando apuestas…
@@ -578,16 +581,18 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                       <p className="truncate text-sm font-medium">
                         {bet.selection}
                       </p>
-                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="truncate">
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="min-w-0 truncate">
                           Cuota {bet.odds.toFixed(2)} · Stake{" "}
                           {formatCurrency(bet.stake)}
                         </span>
-                        <BookmakerPill
-                          bookmaker={bet.bookmaker}
-                          customLabel={bet.bookmakerLabel}
-                          size="xs"
-                        />
+                        <span className="shrink-0">
+                          <BookmakerPill
+                            bookmaker={bet.bookmaker}
+                            customLabel={bet.bookmakerLabel}
+                            size="xs"
+                          />
+                        </span>
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
