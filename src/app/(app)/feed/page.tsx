@@ -303,7 +303,7 @@ export default function FeedPage() {
       </div>
 
       {sortedBets && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <SummaryCard
             label="Apuestas totales"
             value={String(sortedBets.length)}
@@ -355,7 +355,7 @@ export default function FeedPage() {
 
       {/* Resumen económico general del grupo */}
       {sortedBets && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             label="Dinero apostado"
             value={formatCurrency(groupAggregates.totalStaked)}

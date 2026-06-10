@@ -104,7 +104,9 @@ export function RankingChart({ users, bets }: Props) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setWidth(Math.max(320, Math.floor(el.clientWidth)));
+    // Mínimo 280 (antes 320) para que en móviles estrechos no se desborde
+    // del contenedor; en PC el contenedor es mucho más ancho, sin efecto.
+    const update = () => setWidth(Math.max(280, Math.floor(el.clientWidth)));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -221,6 +223,7 @@ export function RankingChart({ users, bets }: Props) {
           shapeRendering="geometricPrecision"
           textRendering="geometricPrecision"
           style={{ display: "block" }}
+          onClick={() => setHover(null)}
         >
           {yTicks.map((v) => {
             const y = yFor(v);
@@ -373,6 +376,19 @@ export function RankingChart({ users, bets }: Props) {
                   })
                 }
                 onMouseLeave={() => setHover(null)}
+                onClick={(e) => {
+                  // En móvil (sin hover) el toque muestra el tooltip; en PC el
+                  // hover sigue funcionando igual. stopPropagation evita que el
+                  // onClick del svg lo cierre al instante.
+                  e.stopPropagation();
+                  setHover({
+                    sid: s.uid,
+                    t: p.t,
+                    balance: p.balance,
+                    x: xFor(p.t),
+                    y: yFor(p.balance),
+                  });
+                }}
               />
             ))
           )}

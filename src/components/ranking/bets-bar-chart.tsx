@@ -65,7 +65,8 @@ export function BetsBarChart({ users, bets }: Props) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setWidth(Math.max(320, Math.floor(el.clientWidth)));
+    // Mínimo 280 (antes 320) para que no se desborde en móviles estrechos.
+    const update = () => setWidth(Math.max(280, Math.floor(el.clientWidth)));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
