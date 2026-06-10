@@ -10,6 +10,7 @@ import {
   betInGroup,
   bookmakerLabel,
   computeBookmakerSummary,
+  computeSuperaumentoSummary,
   computeUserStats,
   getInitialBalances,
 } from "@/features/bets/bets.utils";
@@ -66,6 +67,12 @@ export default function DashboardPage() {
   // Stats por grupo: se calculan en cliente desde las apuestas filtradas,
   // no desde el `appUser.stats` global (que es agregado de todos los grupos).
   const stats = useMemo(() => computeUserStats(bets), [bets]);
+
+  // Balance de tus apuestas de tipo superaumento en el grupo activo.
+  const superaumento = useMemo(
+    () => computeSuperaumentoSummary(bets),
+    [bets]
+  );
 
   if (!appUser || !summary) return null;
 
@@ -181,6 +188,36 @@ export default function DashboardPage() {
           <MiniStat
             label="Saldo inicial total"
             value={formatCurrency(summary.total.initial)}
+          />
+        </div>
+      </section>
+
+      {/* ─────── Superaumentos ─────── */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Superaumentos</h2>
+          <p className="text-sm text-muted-foreground">
+            Balance de tus apuestas de tipo superaumento en este grupo.
+          </p>
+        </div>
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+          <MiniStat
+            label="Balance"
+            value={`${superaumento.profit > 0 ? "+" : ""}${formatCurrency(
+              superaumento.profit
+            )}`}
+            accent={profitClass(superaumento.profit)}
+          />
+          <MiniStat label="Total" value={superaumento.count} />
+          <MiniStat
+            label="Ganadas"
+            value={superaumento.won}
+            accent="text-profit"
+          />
+          <MiniStat
+            label="Perdidas"
+            value={superaumento.lost}
+            accent="text-loss"
           />
         </div>
       </section>

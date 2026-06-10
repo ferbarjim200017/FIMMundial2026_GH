@@ -137,6 +137,35 @@ function settledMs(b: Bet): number {
   return b.createdAt.toMillis();
 }
 
+/** Identificador del mercado de apuestas con cuota "superaumentada". */
+export const SUPERAUMENTO_MARKET = "superaumento";
+
+export interface SuperaumentoSummary {
+  count: number;
+  won: number;
+  lost: number;
+  pending: number;
+  /** Beneficio neto (€) de las superaumento liquidadas. */
+  profit: number;
+}
+
+/**
+ * Balance de las apuestas del tipo "superaumento" dentro de un conjunto de
+ * apuestas ya filtrado (por usuario y/o grupo). Devuelve el beneficio neto
+ * y el desglose por estado.
+ */
+export function computeSuperaumentoSummary(bets: Bet[]): SuperaumentoSummary {
+  const sa = bets.filter((b) => b.market === SUPERAUMENTO_MARKET);
+  const profit = sa.reduce((acc, b) => acc + (b.profit ?? 0), 0);
+  return {
+    count: sa.length,
+    won: sa.filter((b) => b.status === "won").length,
+    lost: sa.filter((b) => b.status === "lost").length,
+    pending: sa.filter((b) => b.status === "pending").length,
+    profit: round2(profit),
+  };
+}
+
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

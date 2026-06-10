@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, LineChart } from "lucide-react";
+import { BarChart3, LineChart, Zap } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
@@ -15,7 +15,12 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
-import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  computeSuperaumentoSummary,
+  computeUserStats,
+  getInitialBalances,
+} from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -68,6 +73,13 @@ export default function RankingPage() {
     );
   }, [allBets, memberUids, activeGroup]);
 
+  // Balance general del grupo en apuestas de tipo superaumento (todas las
+  // de los miembros del grupo activo).
+  const superaumento = useMemo(
+    () => computeSuperaumentoSummary(bets),
+    [bets]
+  );
+
   // Stats por usuario calculadas a partir de las apuestas DEL GRUPO ACTIVO.
   // Sustituyen al `user.stats` global para que el ranking refleje solo lo
   // ocurrido en este grupo.
@@ -110,6 +122,54 @@ export default function RankingPage() {
 
   return (
     <div className="space-y-6">
+      {/* ─── Balance general de superaumentos ─── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-4 w-4 text-primary" />
+            Balance de superaumentos
+          </CardTitle>
+          <CardDescription>
+            Resultado conjunto del grupo en apuestas de tipo superaumento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+            {[
+              {
+                label: "Balance",
+                value: `${superaumento.profit > 0 ? "+" : ""}${formatCurrency(
+                  superaumento.profit
+                )}`,
+                accent: profitClass(superaumento.profit),
+              },
+              { label: "Total", value: String(superaumento.count) },
+              {
+                label: "Ganadas",
+                value: String(superaumento.won),
+                accent: "text-profit",
+              },
+              {
+                label: "Perdidas",
+                value: String(superaumento.lost),
+                accent: "text-loss",
+              },
+            ].map((s) => (
+              <div key={s.label} className="rounded-md border bg-card p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {s.label}
+                </p>
+                <p
+                  className={`mt-1 font-mono text-lg font-bold ${s.accent ?? ""}`}
+                >
+                  {s.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ─── Bloque de gráficas ─── */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

@@ -32,7 +32,7 @@ import {
 } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToRanking } from "@/features/users/users.service";
-import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
+import { betInGroup, bookmakerLabel, round2 } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -46,6 +46,22 @@ import type { AppUser, Bet, Match } from "@/types/domain";
 function marketLabel(value: string): string {
   return MARKET_OPTIONS.find((m) => m.value === value)?.label ?? value;
 }
+
+function medal(rank: number) {
+  if (rank === 1) return "🥇";
+  if (rank === 2) return "🥈";
+  if (rank === 3) return "🥉";
+  return `#${rank}`;
+}
+
+// Pestañas por resultado, visibles solo cuando el partido ya terminó. Cada
+// una mapea al mismo estado `status` que usa el filtrado.
+const RESULT_TABS = [
+  { value: "all", label: "Todas" },
+  { value: "won", label: "Ganadas" },
+  { value: "lost", label: "Perdidas" },
+  { value: "pending", label: "Pendientes" },
+] as const;
 
 interface Props {
   match: Match | null;
@@ -126,11 +142,16 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const hasActiveFilters =
     status !== "all" || bookmaker !== "all" || normalizedQuery !== "";
 
-  const visibleBets = useMemo(() => {
+  // ¿El partido ya terminó y tiene resultado? Solo entonces mostramos las
+  // pestañas por resultado.
+  const matchFinished = match?.status === "finished" && !!match?.result;
+
+  // Apuestas filtradas por scope + casa + búsqueda, pero SIN aplicar todavía
+  // el estado. Las usan tanto el dropdown/pestañas como sus contadores.
+  const preStatusBets = useMemo(() => {
     if (!groupBets) return null;
     return groupBets.filter((b) => {
       if (scope === "mine" && appUser && b.userId !== appUser.uid) return false;
-      if (status !== "all" && b.status !== status) return false;
       if (bookmaker !== "all" && b.bookmaker !== bookmaker) return false;
       if (normalizedQuery) {
         const username = usersById[b.userId]?.username?.toLowerCase() ?? "";
@@ -149,12 +170,54 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
       }
       return true;
     });
-  }, [groupBets, scope, appUser, status, bookmaker, normalizedQuery, usersById]);
+  }, [groupBets, scope, appUser, bookmaker, normalizedQuery, usersById]);
+
+  const visibleBets = useMemo(() => {
+    if (!preStatusBets) return null;
+    if (status === "all") return preStatusBets;
+    return preStatusBets.filter((b) => b.status === status);
+  }, [preStatusBets, status]);
+
+  const tabCounts = useMemo(() => {
+    const src = preStatusBets ?? [];
+    return {
+      all: src.length,
+      won: src.filter((b) => b.status === "won").length,
+      lost: src.filter((b) => b.status === "lost").length,
+      pending: src.filter((b) => b.status === "pending").length,
+    };
+  }, [preStatusBets]);
 
   const myBetsCount = useMemo(() => {
     if (!groupBets || !appUser) return 0;
     return groupBets.filter((b) => b.userId === appUser.uid).length;
   }, [groupBets, appUser]);
+
+  // Ranking de jugadores SOLO con las apuestas de este partido (todas las del
+  // grupo, sin aplicar los filtros de arriba) para ver quién gana/pierde más.
+  const matchRanking = useMemo(() => {
+    if (!groupBets) return [];
+    const byUser = new Map<
+      string,
+      { profit: number; count: number; pending: number }
+    >();
+    for (const b of groupBets) {
+      const cur = byUser.get(b.userId) ?? { profit: 0, count: 0, pending: 0 };
+      cur.profit += b.profit ?? 0;
+      cur.count += 1;
+      if (b.status === "pending") cur.pending += 1;
+      byUser.set(b.userId, cur);
+    }
+    return [...byUser.entries()]
+      .map(([uid, v]) => ({
+        uid,
+        user: usersById[uid] ?? null,
+        profit: round2(v.profit),
+        count: v.count,
+        pending: v.pending,
+      }))
+      .sort((a, b) => b.profit - a.profit);
+  }, [groupBets, usersById]);
 
   const summary = useMemo(() => {
     if (!visibleBets) return null;
@@ -171,7 +234,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">
             Apuestas sobre este partido
@@ -229,28 +292,51 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                Estado
-              </label>
-              <Select
-                value={status}
-                onValueChange={(v) => setStatus(v as Bet["status"] | "all")}
-              >
-                <SelectTrigger className="h-9 w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {STATUS_OPTIONS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Si el partido ha terminado, pestañas por resultado en lugar del
+              desplegable de Estado (ambos controlan el mismo filtro). */}
+          {matchFinished && (
+            <div className="flex flex-wrap gap-1.5">
+              {RESULT_TABS.map((t) => (
+                <Button
+                  key={t.value}
+                  type="button"
+                  variant={status === t.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatus(t.value)}
+                >
+                  {t.label}
+                  <span className="ml-1 text-xs opacity-70">
+                    {tabCounts[t.value]}
+                  </span>
+                </Button>
+              ))}
             </div>
+          )}
+
+          <div className="flex flex-wrap items-end gap-2">
+            {!matchFinished && (
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Estado
+                </label>
+                <Select
+                  value={status}
+                  onValueChange={(v) => setStatus(v as Bet["status"] | "all")}
+                >
+                  <SelectTrigger className="h-9 w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
                 Casa
@@ -308,7 +394,51 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
           </div>
         )}
 
-        <div className="max-h-[60vh] overflow-y-auto">
+        {/* Ranking de este partido — quién gana/pierde más con las apuestas
+            relacionadas (todas las del grupo, al margen de los filtros). */}
+        {matchRanking.length >= 2 && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Ranking del partido
+            </p>
+            <ul className="max-h-44 divide-y overflow-y-auto rounded-md border">
+              {matchRanking.map((r, i) => (
+                <li
+                  key={r.uid}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm"
+                >
+                  <span className="w-6 shrink-0 text-center text-xs font-semibold">
+                    {medal(i + 1)}
+                  </span>
+                  <Avatar className="h-6 w-6 shrink-0">
+                    {r.user?.avatarUrl && <AvatarImage src={r.user.avatarUrl} />}
+                    <AvatarFallback className="text-[10px]">
+                      {initials(r.user?.username ?? "?")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.user?.username ?? "Usuario"}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {r.count} ap.
+                    {r.pending > 0 ? ` · ${r.pending} pdte.` : ""}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 font-mono font-semibold",
+                      profitClass(r.profit)
+                    )}
+                  >
+                    {r.profit > 0 ? "+" : ""}
+                    {formatCurrency(r.profit)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div>
           {visibleBets === null ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               Cargando apuestas…
