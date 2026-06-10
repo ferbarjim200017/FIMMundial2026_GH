@@ -68,6 +68,18 @@ export default function BetDetailPage() {
     });
   }, [params.betId]);
 
+  // Deep-link `?edit=1` (p.ej. desde el botón Editar del pop-up de detalle):
+  // entra directo en modo edición si el usuario puede gestionar la apuesta.
+  useEffect(() => {
+    if (!bet || !appUser) return;
+    if (typeof window === "undefined") return;
+    const wantsEdit =
+      new URLSearchParams(window.location.search).get("edit") === "1";
+    if (wantsEdit && (bet.userId === appUser.uid || isAdmin)) {
+      setEditing(true);
+    }
+  }, [bet, appUser, isAdmin]);
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Cargando…</p>;
   }

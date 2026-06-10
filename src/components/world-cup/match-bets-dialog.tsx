@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
@@ -72,6 +73,7 @@ interface Props {
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { appUser } = useAuth();
   const { memberUids, activeGroup } = useGroup();
+  const { openBet } = useBetDetail();
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   // "all"  → comportamiento por defecto (todas las apuestas).
@@ -80,6 +82,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   // Filtros equivalentes a los de la página de Apuestas / Feed.
   const [status, setStatus] = useState<Bet["status"] | "all">("all");
   const [bookmaker, setBookmaker] = useState<Bet["bookmaker"] | "all">("all");
+  const [playerFilter, setPlayerFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   // Reseteamos los filtros cada vez que cambia el partido para que el usuario
   // no se quede atrapado en ellos al saltar entre popups.
@@ -87,6 +90,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     setScope("all");
     setStatus("all");
     setBookmaker("all");
+    setPlayerFilter("all");
     setQuery("");
   }, [match?.id]);
 
@@ -140,18 +144,22 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
 
   const normalizedQuery = query.trim().toLowerCase();
   const hasActiveFilters =
-    status !== "all" || bookmaker !== "all" || normalizedQuery !== "";
+    status !== "all" ||
+    bookmaker !== "all" ||
+    playerFilter !== "all" ||
+    normalizedQuery !== "";
 
   // ¿El partido ya terminó y tiene resultado? Solo entonces mostramos las
   // pestañas por resultado.
   const matchFinished = match?.status === "finished" && !!match?.result;
 
-  // Apuestas filtradas por scope + casa + búsqueda, pero SIN aplicar todavía
-  // el estado. Las usan tanto el dropdown/pestañas como sus contadores.
+  // Apuestas filtradas por scope + jugador + casa + búsqueda, pero SIN aplicar
+  // todavía el estado. Las usan tanto el dropdown/pestañas como sus contadores.
   const preStatusBets = useMemo(() => {
     if (!groupBets) return null;
     return groupBets.filter((b) => {
       if (scope === "mine" && appUser && b.userId !== appUser.uid) return false;
+      if (playerFilter !== "all" && b.userId !== playerFilter) return false;
       if (bookmaker !== "all" && b.bookmaker !== bookmaker) return false;
       if (normalizedQuery) {
         const username = usersById[b.userId]?.username?.toLowerCase() ?? "";
@@ -170,7 +178,15 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
       }
       return true;
     });
-  }, [groupBets, scope, appUser, bookmaker, normalizedQuery, usersById]);
+  }, [
+    groupBets,
+    scope,
+    appUser,
+    playerFilter,
+    bookmaker,
+    normalizedQuery,
+    usersById,
+  ]);
 
   const visibleBets = useMemo(() => {
     if (!preStatusBets) return null;
@@ -219,6 +235,16 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
       .sort((a, b) => b.profit - a.profit);
   }, [groupBets, usersById]);
 
+  // Jugadores con alguna apuesta en este partido, para el desplegable de
+  // filtro por jugador (ordenados alfabéticamente).
+  const playerOptions = useMemo(() => {
+    return matchRanking
+      .map((r) => ({ uid: r.uid, name: r.user?.username ?? "Usuario" }))
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "es", { sensitivity: "base" })
+      );
+  }, [matchRanking]);
+
   const summary = useMemo(() => {
     if (!visibleBets) return null;
     const total = visibleBets.length;
@@ -256,7 +282,10 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
               type="button"
               variant={scope === "all" ? "default" : "outline"}
               size="sm"
-              onClick={() => setScope("all")}
+              onClick={() => {
+                setScope("all");
+                setPlayerFilter("all");
+              }}
             >
               Todas{groupBets ? ` · ${groupBets.length}` : ""}
             </Button>
@@ -264,7 +293,10 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
               type="button"
               variant={scope === "mine" ? "default" : "outline"}
               size="sm"
-              onClick={() => setScope("mine")}
+              onClick={() => {
+                setScope("mine");
+                setPlayerFilter("all");
+              }}
             >
               Mis apuestas{groupBets ? ` · ${myBetsCount}` : ""}
             </Button>
@@ -358,6 +390,33 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            {playerOptions.length >= 2 && (
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Jugador
+                </label>
+                <Select
+                  value={playerFilter}
+                  onValueChange={(v) => {
+                    setPlayerFilter(v);
+                    // Evita que choque con el atajo "Mis apuestas".
+                    if (v !== "all") setScope("all");
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {playerOptions.map((p) => (
+                      <SelectItem key={p.uid} value={p.uid}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {hasActiveFilters && (
               <Button
                 type="button"
@@ -366,6 +425,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                 onClick={() => {
                   setStatus("all");
                   setBookmaker("all");
+                  setPlayerFilter("all");
                   setQuery("");
                 }}
               >
@@ -542,11 +602,15 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                           {formatCurrency(bet.profit)}
                         </p>
                       )}
-                      <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs">
-                        <Link href={`${ROUTES.bets}/${bet.id}`}>
-                          <Eye className="h-3.5 w-3.5" />
-                          Ver
-                        </Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={() => openBet(bet, user)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Ver
                       </Button>
                     </div>
                   </li>

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
@@ -579,6 +580,7 @@ function ExtremeCard({
 }
 
 function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
+  const { openBet } = useBetDetail();
   const accent =
     bet.status === "won"
       ? "border-l-4 border-l-profit"
@@ -596,9 +598,10 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
 
   return (
     <Card className={cn("relative overflow-hidden transition-colors hover:bg-accent/30", accent)}>
-      {/* Link cubre-tarjeta: click en cualquier zona sin sub-link → detalle */}
-      <Link
-        href={`${ROUTES.bets}/${bet.id}`}
+      {/* Botón cubre-tarjeta: click en cualquier zona sin sub-link → pop-up */}
+      <button
+        type="button"
+        onClick={() => openBet(bet, user)}
         className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Abrir apuesta de ${displayName}`}
       />

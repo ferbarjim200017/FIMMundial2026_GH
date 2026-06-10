@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ function marketLabel(value: string): string {
 }
 
 export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
-  const router = useRouter();
+  const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
 
   function canManage(bet: Bet): boolean {
@@ -103,7 +103,7 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
               <tr
                 key={b.id}
                 className="cursor-pointer border-b last:border-0 hover:bg-accent/30"
-                onClick={() => router.push(`/bets/${b.id}`)}
+                onClick={() => openBet(b)}
               >
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   {formatDateTime(b.createdAt.toDate())}

@@ -5,11 +5,13 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { RankingCarousel } from "@/components/layout/ranking-carousel";
 import { OnboardingGate } from "@/components/layout/onboarding-gate";
+import { BetDetailProvider } from "@/components/bets/bet-detail-dialog";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <OnboardingGate />
+      <BetDetailProvider>
       <div className="flex min-h-screen flex-col">
         {/* Wrapper sticky para que el carrusel y la barra superior se queden
          *  fijos al hacer scroll. z-30 los pone por encima del contenido y
@@ -27,6 +29,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
         <BottomNav />
       </div>
+      </BetDetailProvider>
     </AuthGuard>
   );
 }

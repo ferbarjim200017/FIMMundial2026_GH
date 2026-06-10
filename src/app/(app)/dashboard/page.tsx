@@ -35,11 +35,13 @@ import {
   profitClass,
 } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
+import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import type { Bet } from "@/types/domain";
 
 export default function DashboardPage() {
   const { appUser } = useAuth();
   const { activeGroup } = useGroup();
+  const { openBet } = useBetDetail();
   const [allBets, setAllBets] = useState<Bet[]>([]);
 
   useEffect(() => {
@@ -249,9 +251,10 @@ export default function DashboardPage() {
             <ul className="divide-y">
               {recent.map((b) => (
                 <li key={b.id}>
-                  <Link
-                    href={`${ROUTES.bets}/${b.id}`}
-                    className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-accent/30 focus:outline-none focus-visible:bg-accent/30"
+                  <button
+                    type="button"
+                    onClick={() => openBet(b, appUser)}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-accent/30 focus:outline-none focus-visible:bg-accent/30"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{b.matchLabel}</p>
@@ -278,7 +281,7 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <BetStatusBadge status={b.status} />
-                  </Link>
+                  </button>
                 </li>
               ))}
             </ul>
