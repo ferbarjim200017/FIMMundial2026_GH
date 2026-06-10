@@ -269,8 +269,9 @@ export default function FeedPage() {
     return { wonCount, lostCount };
   }, [sortedBets]);
 
-  // Agregados económicos del grupo: total apostado, beneficio neto, ROI y
-  // dinero "en juego" (stake de apuestas pendientes, sin contar freebets).
+  // Agregados económicos del grupo: dinero apostado (solo dinero real, sin
+  // freebets), beneficio neto, ROI y dinero "en juego" (stake de apuestas
+  // pendientes, sin contar freebets).
   const groupAggregates = useMemo(() => {
     const src = sortedBets ?? [];
     let totalStaked = 0;
@@ -278,7 +279,9 @@ export default function FeedPage() {
     let decidedStaked = 0;
     let pendingStake = 0;
     for (const b of src) {
-      totalStaked += b.stake;
+      // "Dinero apostado": solo dinero real del jugador, los freebets (dinero
+      // de la casa) no cuentan, independientemente del resultado.
+      if (!b.isFreebet) totalStaked += b.stake;
       totalProfit += b.profit ?? 0;
       if (b.status === "pending" && !b.isFreebet) pendingStake += b.stake;
       if (b.status !== "pending" && b.status !== "void" && !b.isFreebet) {
