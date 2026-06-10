@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { Eye, Search, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,12 +12,24 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
-import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
+import {
+  MARKET_OPTIONS,
+  STATUS_OPTIONS,
+  BOOKMAKER_OPTIONS,
+} from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
@@ -49,10 +61,17 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   // "all"  → comportamiento por defecto (todas las apuestas).
   // "mine" → solo las del usuario logueado.
   const [scope, setScope] = useState<"all" | "mine">("all");
-  // Reseteamos a "all" cada vez que cambia el partido para que el usuario
-  // no se quede atrapado en el filtro al saltar entre popups.
+  // Filtros equivalentes a los de la página de Apuestas / Feed.
+  const [status, setStatus] = useState<Bet["status"] | "all">("all");
+  const [bookmaker, setBookmaker] = useState<Bet["bookmaker"] | "all">("all");
+  const [query, setQuery] = useState("");
+  // Reseteamos los filtros cada vez que cambia el partido para que el usuario
+  // no se quede atrapado en ellos al saltar entre popups.
   useEffect(() => {
     setScope("all");
+    setStatus("all");
+    setBookmaker("all");
+    setQuery("");
   }, [match?.id]);
 
   useEffect(() => {
@@ -103,13 +122,34 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     );
   }, [bets, memberUids, activeGroup]);
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const hasActiveFilters =
+    status !== "all" || bookmaker !== "all" || normalizedQuery !== "";
+
   const visibleBets = useMemo(() => {
     if (!groupBets) return null;
-    if (scope === "mine" && appUser) {
-      return groupBets.filter((b) => b.userId === appUser.uid);
-    }
-    return groupBets;
-  }, [groupBets, scope, appUser]);
+    return groupBets.filter((b) => {
+      if (scope === "mine" && appUser && b.userId !== appUser.uid) return false;
+      if (status !== "all" && b.status !== status) return false;
+      if (bookmaker !== "all" && b.bookmaker !== bookmaker) return false;
+      if (normalizedQuery) {
+        const username = usersById[b.userId]?.username?.toLowerCase() ?? "";
+        const haystack = [
+          username,
+          b.matchLabel,
+          b.selection,
+          b.marketDetail ?? "",
+          b.bookmakerLabel ?? "",
+          bookmakerLabel(b.bookmaker, b.bookmakerLabel),
+          b.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
+      return true;
+    });
+  }, [groupBets, scope, appUser, status, bookmaker, normalizedQuery, usersById]);
 
   const myBetsCount = useMemo(() => {
     if (!groupBets || !appUser) return 0;
@@ -168,6 +208,87 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
           </div>
         )}
 
+        {/* Filtros — mismos que en la página de Apuestas / Feed */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por usuario, selección, mercado, casa…"
+              className="h-9 pl-9 pr-9"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Estado
+              </label>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as Bet["status"] | "all")}
+              >
+                <SelectTrigger className="h-9 w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Casa
+              </label>
+              <Select
+                value={bookmaker}
+                onValueChange={(v) => setBookmaker(v as Bet["bookmaker"] | "all")}
+              >
+                <SelectTrigger className="h-9 w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {BOOKMAKER_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {hasActiveFilters && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStatus("all");
+                  setBookmaker("all");
+                  setQuery("");
+                }}
+              >
+                Limpiar
+              </Button>
+            )}
+          </div>
+        </div>
+
         {summary && summary.total > 0 && (
           <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-4">
             <SummaryStat label="Apuestas" value={String(summary.total)} />
@@ -194,7 +315,9 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
             </p>
           ) : visibleBets.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-              {scope === "mine"
+              {hasActiveFilters
+                ? "No hay apuestas que coincidan con los filtros."
+                : scope === "mine"
                 ? "No tienes apuestas registradas para este partido."
                 : "Aún nadie ha registrado apuestas para este partido."}
             </p>
