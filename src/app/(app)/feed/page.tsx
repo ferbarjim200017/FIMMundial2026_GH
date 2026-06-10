@@ -8,7 +8,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
+  Coins,
   Copy,
+  Percent,
   Receipt,
   Search,
   SlidersHorizontal,
@@ -48,6 +50,7 @@ import { ROUTES } from "@/lib/constants";
 import {
   cn,
   formatCurrency,
+  formatPercent,
   initials,
   profitClass,
 } from "@/lib/utils";
@@ -266,6 +269,26 @@ export default function FeedPage() {
     return { wonCount, lostCount };
   }, [sortedBets]);
 
+  // Agregados económicos del grupo: total apostado, beneficio neto, ROI y
+  // dinero "en juego" (stake de apuestas pendientes, sin contar freebets).
+  const groupAggregates = useMemo(() => {
+    const src = sortedBets ?? [];
+    let totalStaked = 0;
+    let totalProfit = 0;
+    let decidedStaked = 0;
+    let pendingStake = 0;
+    for (const b of src) {
+      totalStaked += b.stake;
+      totalProfit += b.profit ?? 0;
+      if (b.status === "pending" && !b.isFreebet) pendingStake += b.stake;
+      if (b.status !== "pending" && b.status !== "void" && !b.isFreebet) {
+        decidedStaked += b.stake;
+      }
+    }
+    const roi = decidedStaked > 0 ? (totalProfit / decidedStaked) * 100 : 0;
+    return { totalStaked, totalProfit, roi, pendingStake };
+  }, [sortedBets]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -315,7 +338,7 @@ export default function FeedPage() {
                 accent="text-loss"
               />
               <SummaryCard
-                label="Resultado del grupo"
+                label="Resultado de hoy"
                 value={`${todaySummary.netProfit > 0 ? "+" : ""}${formatCurrency(
                   todaySummary.netProfit
                 )}`}
@@ -324,6 +347,44 @@ export default function FeedPage() {
               />
             </>
           )}
+        </div>
+      )}
+
+      {/* Resumen económico general del grupo */}
+      {sortedBets && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryCard
+            label="Total apostado"
+            value={formatCurrency(groupAggregates.totalStaked)}
+            icon={<Coins className="h-5 w-5 text-primary" />}
+          />
+          <SummaryCard
+            label="Beneficio total"
+            value={`${groupAggregates.totalProfit > 0 ? "+" : ""}${formatCurrency(
+              groupAggregates.totalProfit
+            )}`}
+            icon={
+              <TrendingUp
+                className={cn("h-5 w-5", profitClass(groupAggregates.totalProfit))}
+              />
+            }
+            accent={profitClass(groupAggregates.totalProfit)}
+          />
+          <SummaryCard
+            label="ROI del grupo"
+            value={formatPercent(groupAggregates.roi)}
+            icon={
+              <Percent
+                className={cn("h-5 w-5", profitClass(groupAggregates.roi))}
+              />
+            }
+            accent={profitClass(groupAggregates.roi)}
+          />
+          <SummaryCard
+            label="En juego"
+            value={formatCurrency(groupAggregates.pendingStake)}
+            icon={<Clock className="h-5 w-5 text-amber-500" />}
+          />
         </div>
       )}
 

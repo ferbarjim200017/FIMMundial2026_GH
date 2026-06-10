@@ -39,12 +39,12 @@ export const BOOKMAKER_OPTIONS = [
 export const betFormSchema = z
   .object({
     bookmaker: z.enum(BOOKMAKERS),
-    bookmakerLabel: z.string().max(40).optional(),
+    bookmakerLabel: z.string().max(60).optional(),
     matchIds: z.array(z.string()).optional().default([]),
     matchLabel: z
       .string()
       .min(2, "Indica el partido (selecciónalo o escríbelo)")
-      .max(160),
+      .max(250),
     market: z.enum([
       "winner",
       "double_chance",
@@ -62,19 +62,19 @@ export const betFormSchema = z
       "combo",
       "custom",
     ]),
-    marketDetail: z.string().max(60).optional().default(""),
-    selection: z.string().min(1, "Indica tu selección").max(120),
+    marketDetail: z.string().max(150).optional().default(""),
+    selection: z.string().min(1, "Indica tu selección").max(300),
     odds: z.coerce
       .number()
       .min(1.01, "La cuota debe ser >= 1.01")
-      .max(1000, "Cuota demasiado alta"),
+      .max(99999, "Cuota demasiado alta (máx. 5 dígitos)"),
     stake: z.coerce
       .number()
       .min(0.01, "El stake debe ser > 0")
       .max(100000, "Stake demasiado alto"),
     placedAt: z.string().min(1, "Selecciona fecha"),
     isFreebet: z.boolean().optional().default(false),
-    notes: z.string().max(500).optional().default(""),
+    notes: z.string().max(1000).optional().default(""),
     /** Solo se usa cuando market === "outright". Vincula la apuesta a uno
      *  o varios equipos para que aparezca en el popup de sus partidos. */
     teams: z.array(z.string()).optional().default([]),
