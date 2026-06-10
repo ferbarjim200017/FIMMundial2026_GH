@@ -43,7 +43,11 @@ import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
-import { betInGroup, computeUserStats } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  computeUserStats,
+  getInitialBalances,
+} from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -289,6 +293,21 @@ export default function FeedPage() {
     return { totalStaked, totalProfit, roi, pendingStake };
   }, [sortedBets]);
 
+  // Dinero total del grupo = suma del dinero de cada jugador en este grupo:
+  // por cada miembro, su saldo inicial del grupo + su beneficio. Equivale a
+  // (suma de saldos iniciales) + (beneficio total del grupo).
+  const groupMoney = useMemo(() => {
+    if (!activeGroup) return 0;
+    const members = Object.values(usersById).filter((u) =>
+      memberUids.has(u.uid)
+    );
+    const totalInitial = members.reduce((acc, u) => {
+      const ib = getInitialBalances(u, activeGroup.id);
+      return acc + ib.bet365 + ib.winamax + ib.other;
+    }, 0);
+    return totalInitial + groupAggregates.totalProfit;
+  }, [usersById, memberUids, activeGroup, groupAggregates.totalProfit]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -354,8 +373,8 @@ export default function FeedPage() {
       {sortedBets && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
-            label="Total apostado"
-            value={formatCurrency(groupAggregates.totalStaked)}
+            label="Dinero total"
+            value={formatCurrency(groupMoney)}
             icon={<Coins className="h-5 w-5 text-primary" />}
           />
           <SummaryCard
