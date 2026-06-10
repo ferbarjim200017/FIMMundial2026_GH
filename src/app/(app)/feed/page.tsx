@@ -597,17 +597,31 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
   });
 
   return (
-    <Card className={cn("relative overflow-hidden transition-colors hover:bg-accent/30", accent)}>
-      {/* Botón cubre-tarjeta: click en cualquier zona sin sub-link → pop-up */}
-      <button
-        type="button"
-        onClick={() => openBet(bet, user)}
-        className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Abrir apuesta de ${displayName}`}
-      />
+    // Toda la tarjeta es clicable → abre el pop-up. Los enlaces internos
+    // (perfil, copiar) cortan la propagación para navegar sin abrir el pop-up.
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={() => openBet(bet, user)}
+      onKeyDown={(e) => {
+        if (
+          e.target === e.currentTarget &&
+          (e.key === "Enter" || e.key === " ")
+        ) {
+          e.preventDefault();
+          openBet(bet, user);
+        }
+      }}
+      aria-label={`Abrir apuesta de ${displayName}`}
+      className={cn(
+        "relative cursor-pointer overflow-hidden transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        accent
+      )}
+    >
       <CardContent className="relative flex items-start gap-3 p-4">
         <Link
           href={user ? ROUTES.profile(user.uid) : "#"}
+          onClick={(e) => e.stopPropagation()}
           className="relative z-10 shrink-0"
         >
           <Avatar className="h-10 w-10">
@@ -620,6 +634,7 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <Link
               href={user ? ROUTES.profile(user.uid) : "#"}
+              onClick={(e) => e.stopPropagation()}
               className="font-semibold hover:underline"
             >
               {displayName}
@@ -659,6 +674,7 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
             <span aria-hidden>·</span>
             <Link
               href={`${ROUTES.bets}/new?from=${bet.id}`}
+              onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-primary hover:bg-primary/10"
               title="Copiar esta apuesta a una nueva"
             >
