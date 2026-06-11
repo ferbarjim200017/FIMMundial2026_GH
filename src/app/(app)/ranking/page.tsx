@@ -171,7 +171,9 @@ export default function RankingPage() {
       </Card>
 
       {/* ─── Bloque de gráficas ─── */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* grid-cols-1 en móvil: limita la columna al ancho disponible para que
+          el SVG de las gráficas no la "estire" y se desborde a la derecha. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

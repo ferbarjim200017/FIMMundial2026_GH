@@ -183,7 +183,7 @@ export function BetsBarChart({ users, bets }: Props) {
           viewBox={`0 0 ${W} ${H}`}
           shapeRendering="geometricPrecision"
           textRendering="geometricPrecision"
-          style={{ display: "block" }}
+          className="block max-w-full"
         >
           {/* Grid Y */}
           {yTicks.map((v) => {
