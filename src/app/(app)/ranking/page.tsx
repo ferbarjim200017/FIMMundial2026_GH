@@ -241,27 +241,31 @@ export default function RankingPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+              {/* min-w fuerza que en móvil la tabla sea más ancha que la
+                  pantalla → el contenedor (overflow-x-auto) permite desplazar
+                  horizontalmente para ver todas las columnas. En PC el
+                  contenedor es más ancho que 640px, así que no cambia nada. */}
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground [&_th]:whitespace-nowrap">
                   <tr>
                     <th className="px-4 py-3 w-16">#</th>
                     <th className="px-2 py-3">Usuario</th>
                     <th className="px-2 py-3 text-right">ROI</th>
-                    <th className="px-2 py-3 text-right hidden sm:table-cell">
+                    <th className="px-2 py-3 text-right">
                       Beneficio
                     </th>
-                    <th className="px-2 py-3 text-right hidden md:table-cell">
+                    <th className="px-2 py-3 text-right">
                       Saldo
                     </th>
-                    <th className="px-2 py-3 text-right hidden md:table-cell">
+                    <th className="px-2 py-3 text-right">
                       % Acierto
                     </th>
-                    <th className="px-4 py-3 text-right hidden lg:table-cell">
+                    <th className="px-4 py-3 text-right">
                       Apuestas
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y [&_td]:whitespace-nowrap">
                   {(rankedUsers ?? users).map((u, idx) => {
                     const rank = idx + 1;
                     const s = groupStatsByUid.get(u.uid);
@@ -298,20 +302,20 @@ export default function RankingPage() {
                           {formatPercent(roi)}
                         </td>
                         <td
-                          className={`px-2 py-3 text-right font-mono hidden sm:table-cell ${profitClass(
+                          className={`px-2 py-3 text-right font-mono ${profitClass(
                             profit
                           )}`}
                         >
                           {profit > 0 ? "+" : ""}
                           {formatCurrency(profit)}
                         </td>
-                        <td className="px-2 py-3 text-right font-mono hidden md:table-cell">
+                        <td className="px-2 py-3 text-right font-mono">
                           {formatCurrency(balance)}
                         </td>
-                        <td className="px-2 py-3 text-right font-mono text-muted-foreground hidden md:table-cell">
+                        <td className="px-2 py-3 text-right font-mono text-muted-foreground">
                           {formatPercent(hitRate)}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono text-muted-foreground hidden lg:table-cell">
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">
                           {s?.betsCount ?? 0}
                         </td>
                       </tr>
