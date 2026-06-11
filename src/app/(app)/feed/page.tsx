@@ -18,6 +18,7 @@ import {
   TrendingUp,
   Trophy,
   X,
+  Zap,
 } from "lucide-react";
 import {
   Card,
@@ -43,7 +44,11 @@ import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
-import { betInGroup, computeUserStats } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  computeSuperaumentoSummary,
+  computeUserStats,
+} from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
@@ -292,6 +297,13 @@ export default function FeedPage() {
     return { totalStaked, totalProfit, roi, pendingStake };
   }, [sortedBets]);
 
+  // Balance de superaumentos del grupo (beneficio neto de las apuestas de
+  // tipo superaumento de todos los miembros).
+  const superaumento = useMemo(
+    () => computeSuperaumentoSummary(sortedBets ?? []),
+    [sortedBets]
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -355,7 +367,7 @@ export default function FeedPage() {
 
       {/* Resumen económico general del grupo */}
       {sortedBets && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryCard
             label="Dinero apostado"
             value={formatCurrency(groupAggregates.totalStaked)}
@@ -387,6 +399,16 @@ export default function FeedPage() {
             label="En juego"
             value={formatCurrency(groupAggregates.pendingStake)}
             icon={<Clock className="h-5 w-5 text-amber-500" />}
+          />
+          <SummaryCard
+            label="Beneficio superaumento"
+            value={`${superaumento.profit > 0 ? "+" : ""}${formatCurrency(
+              superaumento.profit
+            )}`}
+            icon={
+              <Zap className={cn("h-5 w-5", profitClass(superaumento.profit))} />
+            }
+            accent={profitClass(superaumento.profit)}
           />
         </div>
       )}
