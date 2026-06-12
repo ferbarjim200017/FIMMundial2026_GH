@@ -54,12 +54,12 @@ export function MatchPickerDialog({
   }, [open]);
 
   const filtered = useMemo(() => {
-    // Excluir partidos ya terminados: no tiene sentido apostar a un partido
-    // cuyo resultado ya está cerrado.
-    const upcoming = matches.filter((m) => m.status !== "finished");
+    // Incluimos también partidos pasados/terminados: este tracker registra
+    // apuestas ya realizadas, así que el usuario puede querer apuntar una de
+    // un partido que ya se jugó.
     const s = search.trim().toLowerCase();
-    if (!s) return upcoming;
-    return upcoming.filter(
+    if (!s) return matches;
+    return matches.filter(
       (m) =>
         m.homeLabel.toLowerCase().includes(s) ||
         m.awayLabel.toLowerCase().includes(s) ||
@@ -195,6 +195,11 @@ export function MatchPickerDialog({
                           </p>
                         </div>
                         <div className="flex items-center gap-2 text-right text-xs text-muted-foreground">
+                          {m.status === "finished" && (
+                            <span className="rounded-[3px] bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">
+                              Final
+                            </span>
+                          )}
                           {isTveMatch(m) && (
                             <span className="rounded-[3px] bg-blue-600 px-1 py-0 text-[10px] font-semibold uppercase text-white">
                               TVE
