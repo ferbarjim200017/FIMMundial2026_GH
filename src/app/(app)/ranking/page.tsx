@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, LineChart, Zap } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  BarChart3,
+  LineChart,
+  Zap,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
@@ -39,10 +46,51 @@ function medal(rank: number) {
   return `#${rank}`;
 }
 
+type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "username";
+
 export default function RankingPage() {
   const [allUsers, setAllUsers] = useState<AppUser[] | null>(null);
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const { memberUids, activeGroup } = useGroup();
+
+  // Columna por la que se ordena el ranking (por defecto ROI descendente).
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "roi",
+    dir: "desc",
+  });
+
+  function handleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "username" ? "asc" : "desc" }
+    );
+  }
+
+  // Cabecera de columna clicable: ordena por ese campo (y al re-pulsar invierte).
+  const sortTh = (k: SortKey, label: string, thClass: string) => (
+    <th className={thClass}>
+      <button
+        type="button"
+        onClick={() => handleSort(k)}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
+          sort.key === k ? "text-foreground" : ""
+        }`}
+        aria-label={`Ordenar por ${label}`}
+      >
+        {label}
+        {sort.key === k ? (
+          sort.dir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </button>
+    </th>
+  );
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -105,20 +153,43 @@ export default function RankingPage() {
     return map;
   }, [users, groupStatsByUid, activeGroup]);
 
-  // Lista ordenada por ROI del grupo (con beneficio como desempate).
+  // Lista ordenada según la columna elegida (por defecto ROI desc). Desempate
+  // estable por beneficio.
   const rankedUsers = useMemo(() => {
     if (!users) return null;
+    const valueOf = (u: AppUser): number | string => {
+      const s = groupStatsByUid.get(u.uid);
+      switch (sort.key) {
+        case "roi":
+          return s?.roi ?? 0;
+        case "profit":
+          return s?.totalProfit ?? 0;
+        case "balance":
+          return balanceByUid.get(u.uid) ?? 0;
+        case "hitRate":
+          return s?.hitRate ?? 0;
+        case "betsCount":
+          return s?.betsCount ?? 0;
+        case "username":
+          return u.username.toLowerCase();
+      }
+    };
     return [...users].sort((a, b) => {
-      const sa = groupStatsByUid.get(a.uid);
-      const sb = groupStatsByUid.get(b.uid);
-      const roiA = sa?.roi ?? 0;
-      const roiB = sb?.roi ?? 0;
-      if (roiA !== roiB) return roiB - roiA;
-      const profitA = sa?.totalProfit ?? 0;
-      const profitB = sb?.totalProfit ?? 0;
-      return profitB - profitA;
+      const va = valueOf(a);
+      const vb = valueOf(b);
+      let cmp =
+        typeof va === "string" && typeof vb === "string"
+          ? va.localeCompare(vb, "es")
+          : (va as number) - (vb as number);
+      cmp = sort.dir === "asc" ? cmp : -cmp;
+      if (cmp !== 0) return cmp;
+      // Desempate estable: más beneficio primero.
+      return (
+        (groupStatsByUid.get(b.uid)?.totalProfit ?? 0) -
+        (groupStatsByUid.get(a.uid)?.totalProfit ?? 0)
+      );
     });
-  }, [users, groupStatsByUid]);
+  }, [users, groupStatsByUid, balanceByUid, sort]);
 
   return (
     <div className="space-y-6">
@@ -226,8 +297,9 @@ export default function RankingPage() {
         <CardHeader>
           <CardTitle>Clasificación</CardTitle>
           <CardDescription>
-            Ordenado por <strong>ROI</strong> (% de beneficio/pérdida sobre lo
-            apostado). Se actualiza en tiempo real.
+            Pulsa una columna para ordenar por ese campo (vuelve a pulsar para
+            invertir). Por defecto, por <strong>ROI</strong>. Se actualiza en
+            tiempo real.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -249,20 +321,12 @@ export default function RankingPage() {
                 <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground [&_th]:whitespace-nowrap">
                   <tr>
                     <th className="px-4 py-3 w-16">#</th>
-                    <th className="px-2 py-3">Usuario</th>
-                    <th className="px-2 py-3 text-right">ROI</th>
-                    <th className="px-2 py-3 text-right">
-                      Beneficio
-                    </th>
-                    <th className="px-2 py-3 text-right">
-                      Saldo
-                    </th>
-                    <th className="px-2 py-3 text-right">
-                      % Acierto
-                    </th>
-                    <th className="px-4 py-3 text-right">
-                      Apuestas
-                    </th>
+                    {sortTh("username", "Usuario", "px-2 py-3")}
+                    {sortTh("roi", "ROI", "px-2 py-3 text-right")}
+                    {sortTh("profit", "Beneficio", "px-2 py-3 text-right")}
+                    {sortTh("balance", "Saldo", "px-2 py-3 text-right")}
+                    {sortTh("hitRate", "% Acierto", "px-2 py-3 text-right")}
+                    {sortTh("betsCount", "Apuestas", "px-4 py-3 text-right")}
                   </tr>
                 </thead>
                 <tbody className="divide-y [&_td]:whitespace-nowrap">
