@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -19,11 +20,27 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { betConverter, userConverter } from "@/lib/firebase/converters";
-import type { Bet, BetStatus } from "@/types/domain";
+import type {
+  Bet,
+  BetHistoryAction,
+  BetHistoryEntry,
+  BetStatus,
+} from "@/types/domain";
 import type { BetFormValues } from "./bets.schema";
 import { calcProfit, computeUserStats, round2 } from "./bets.utils";
 
 const BETS = "bets";
+
+/** Entrada de historial con la hora del cliente (no se puede usar
+ *  serverTimestamp dentro de un array). */
+function historyEntry(
+  action: BetHistoryAction,
+  status?: BetStatus
+): BetHistoryEntry {
+  return status
+    ? { at: Timestamp.now(), action, status }
+    : { at: Timestamp.now(), action };
+}
 const USERS = "users";
 
 export function betsCol() {
@@ -240,6 +257,7 @@ export async function createBet(input: CreateBetInput): Promise<string> {
     isCombo: input.market === "combo" || matchIds.length > 1,
     isFreebet: !!input.isFreebet,
     notes: input.notes?.trim() ?? "",
+    history: [historyEntry("created")],
     // Equipos vinculados solo tienen sentido en apuestas a futuro.
     ...(input.market === "outright" && (input.teams?.length ?? 0) > 0
       ? { teams: input.teams }
@@ -292,6 +310,7 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
     // En edición sobrescribimos siempre el campo (incluyendo array vacío) para
     // que si el usuario quita todos los equipos también se borre.
     teams: input.market === "outright" ? input.teams ?? [] : [],
+    history: arrayUnion(historyEntry("edited")),
   };
 
   let userIdToRecompute: string | null = null;
@@ -379,6 +398,7 @@ export async function settleBet(
       status: newStatus,
       profit: newProfit,
       settledAt: serverTimestamp(),
+      history: arrayUnion(historyEntry("settled", newStatus)),
     });
 
     // 5. Update balance (incremental). Las stats se recalcularán fuera
@@ -435,6 +455,7 @@ export async function unsettleBet(betId: string): Promise<void> {
     status: "pending" as BetStatus,
     profit: 0,
     settledAt: null,
+    history: arrayUnion(historyEntry("unsettled", "pending")),
   });
 
   // Cleanup autoritativo del usuario: stats + currentBalance recalculados

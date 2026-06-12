@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { BetForm } from "@/components/bets/bet-form";
+import { BetHistory } from "@/components/bets/bet-history";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
@@ -367,6 +368,21 @@ export default function BetDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ─── Historial (solo admin) ─── */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Historial</CardTitle>
+            <CardDescription>
+              Registro de cambios de esta apuesta (visible solo para admins).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0 pb-2">
+            <BetHistory bet={bet} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* ─── Modo edición (toggle) ─── */}
       {canManage && editing && (

@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { BetHistory } from "@/components/bets/bet-history";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { getUser } from "@/features/users/users.service";
@@ -97,7 +98,7 @@ function BetDetailDialog({
   onOpenChange: (open: boolean) => void;
   onAuthorResolved: (u: AppUser | null) => void;
 }) {
-  const { appUser } = useAuth();
+  const { appUser, isAdmin } = useAuth();
 
   // Si no nos pasaron el autor (o es de otra apuesta), lo resolvemos por uid.
   useEffect(() => {
@@ -254,6 +255,18 @@ function BetDetailDialog({
             </div>
           )}
         </div>
+
+        {/* Historial — solo admins */}
+        {isAdmin && (
+          <div className="border-t pt-3">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Historial (admin)
+            </p>
+            <div className="mt-1 overflow-hidden rounded-md border">
+              <BetHistory bet={bet} />
+            </div>
+          </div>
+        )}
 
         {/* Acciones */}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">

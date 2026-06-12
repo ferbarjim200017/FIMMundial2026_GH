@@ -116,6 +116,17 @@ export type BetMarket =
 
 export type BetStatus = "pending" | "won" | "lost" | "void" | "cashout";
 
+/** Acción registrada en el historial de una apuesta (control para admins). */
+export type BetHistoryAction = "created" | "edited" | "settled" | "unsettled";
+
+export interface BetHistoryEntry {
+  /** Cuándo ocurrió (hora del cliente que realizó el cambio). */
+  at: Timestamp;
+  action: BetHistoryAction;
+  /** Estado resultante de la apuesta (para settled/unsettled). */
+  status?: BetStatus;
+}
+
 export interface BetLeg {
   matchId?: string;
   matchLabel: string;
@@ -174,6 +185,9 @@ export interface Bet {
    *  homeLabel o awayLabel sea "España". Es opcional: vacío = no se
    *  vincula a ningún partido y solo se ve en /bets y /feed. */
   teams?: string[];
+  /** Historial de cambios (creada/editada/liquidada/reabierta) con fecha-hora.
+   *  Solo se muestra a admins en la ficha de la apuesta. */
+  history?: BetHistoryEntry[];
 }
 
 // ============================================================
