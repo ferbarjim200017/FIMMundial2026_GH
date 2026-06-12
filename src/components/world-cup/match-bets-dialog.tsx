@@ -34,7 +34,12 @@ import {
 import { TeamFlag } from "@/components/matches/team-flag";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { subscribeToRanking } from "@/features/users/users.service";
-import { betInGroup, bookmakerLabel, round2 } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  betOutcome,
+  bookmakerLabel,
+  round2,
+} from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -362,6 +367,12 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const visibleBets = useMemo(() => {
     if (!preStatusBets) return null;
     if (status === "all") return preStatusBets;
+    // "won"/"lost" incluyen los cashout según su resultado; el resto (void,
+    // cashout, pending) filtra por estado exacto.
+    if (status === "won")
+      return preStatusBets.filter((b) => betOutcome(b) === "won");
+    if (status === "lost")
+      return preStatusBets.filter((b) => betOutcome(b) === "lost");
     return preStatusBets.filter((b) => b.status === status);
   }, [preStatusBets, status]);
 
@@ -369,8 +380,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     const src = preStatusBets ?? [];
     return {
       all: src.length,
-      won: src.filter((b) => b.status === "won").length,
-      lost: src.filter((b) => b.status === "lost").length,
+      won: src.filter((b) => betOutcome(b) === "won").length,
+      lost: src.filter((b) => betOutcome(b) === "lost").length,
       pending: src.filter((b) => b.status === "pending").length,
     };
   }, [preStatusBets]);

@@ -53,6 +53,23 @@ export function calcProfit(
 }
 
 /**
+ * Resultado EFECTIVO de una apuesta para los conteos (ganadas/perdidas, racha,
+ * % acierto). Un CASHOUT cuenta como GANADA si su beneficio es > 0 (cerraste
+ * por encima del stake) y como PERDIDA si es < 0 (por debajo); si quedó justo
+ * a la par (0) no cuenta ni como una ni como otra.
+ */
+export function betOutcome(b: Bet): "won" | "lost" | "void" | "pending" {
+  if (b.status === "pending") return "pending";
+  if (b.status === "void") return "void";
+  if (b.status === "won") return "won";
+  if (b.status === "lost") return "lost";
+  // cashout
+  if ((b.profit ?? 0) > 0) return "won";
+  if ((b.profit ?? 0) < 0) return "lost";
+  return "void";
+}
+
+/**
  * Recalcula TODAS las estadísticas del usuario a partir de su lista completa
  * de apuestas. Es O(n) pero para un grupo de amigos con cientos de apuestas
  * es trivial y garantiza consistencia.
@@ -65,8 +82,10 @@ export function computeUserStats(bets: Bet[]): UserStats {
 
   stats.betsCount = bets.length;
   stats.betsPending = bets.filter((b) => b.status === "pending").length;
-  stats.betsWon = bets.filter((b) => b.status === "won").length;
-  stats.betsLost = bets.filter((b) => b.status === "lost").length;
+  // Los cashout cuentan como ganada/perdida según su beneficio (cashout vs
+  // stake), no como una categoría aparte.
+  stats.betsWon = bets.filter((b) => betOutcome(b) === "won").length;
+  stats.betsLost = bets.filter((b) => betOutcome(b) === "lost").length;
   stats.betsVoid = bets.filter((b) => b.status === "void").length;
 
   // Para ROI/Yield: solo cuentan las apuestas decididas (no pending, no void)
@@ -82,9 +101,12 @@ export function computeUserStats(bets: Bet[]): UserStats {
   stats.totalProfit = round2(totalProfit);
   stats.roi = totalStaked > 0 ? round2((totalProfit / totalStaked) * 100) : 0;
   stats.yield = stats.roi; // mismo concepto en este modelo
+  // % acierto = ganadas / (ganadas + perdidas), contando cashouts según su
+  // resultado. Las "a la par" y nulas no entran.
+  const decidedByOutcome = stats.betsWon + stats.betsLost;
   stats.hitRate =
-    decided.length > 0
-      ? round2((stats.betsWon / decided.length) * 100)
+    decidedByOutcome > 0
+      ? round2((stats.betsWon / decidedByOutcome) * 100)
       : 0;
   stats.avgOdds =
     bets.length > 0
@@ -96,16 +118,20 @@ export function computeUserStats(bets: Bet[]): UserStats {
       : 0;
 
   // Streaks: secuencia consecutiva más reciente de ganadas (positivo)
-  // o perdidas (negativo). Ignoramos void/pending para el cómputo.
+  // o perdidas (negativo). Los cashout cuentan según su resultado; void/
+  // pending/"a la par" se ignoran.
   const chronological = [...settled]
-    .filter((b) => b.status === "won" || b.status === "lost")
+    .filter((b) => {
+      const o = betOutcome(b);
+      return o === "won" || o === "lost";
+    })
     .sort((a, b) => settledMs(a) - settledMs(b));
 
   let bestStreak = 0;
   let runningWin = 0;
   let runningLoss = 0;
   for (const b of chronological) {
-    if (b.status === "won") {
+    if (betOutcome(b) === "won") {
       runningWin += 1;
       runningLoss = 0;
       if (runningWin > bestStreak) bestStreak = runningWin;
@@ -117,7 +143,7 @@ export function computeUserStats(bets: Bet[]): UserStats {
   const last = chronological[chronological.length - 1];
   if (!last) {
     stats.currentStreak = 0;
-  } else if (last.status === "won") {
+  } else if (betOutcome(last) === "won") {
     stats.currentStreak = runningWin;
   } else {
     stats.currentStreak = -runningLoss;

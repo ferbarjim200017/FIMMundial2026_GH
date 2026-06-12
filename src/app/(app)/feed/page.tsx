@@ -46,6 +46,7 @@ import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betInGroup,
+  betOutcome,
   computeSuperaumentoSummary,
   computeUserStats,
 } from "@/features/bets/bets.utils";
@@ -80,8 +81,9 @@ function eventDate(bet: Bet): Date {
 
 function matchesFilter(bet: Bet, filter: FeedFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "won") return bet.status === "won";
-  if (filter === "lost") return bet.status === "lost";
+  // Cashout cuenta como ganada/perdida según su resultado.
+  if (filter === "won") return betOutcome(bet) === "won";
+  if (filter === "lost") return betOutcome(bet) === "lost";
   if (filter === "pending") return bet.status === "pending";
   // "results" → todo lo que ya tiene un desenlace
   return bet.status !== "pending";
@@ -230,8 +232,8 @@ export default function FeedPage() {
     const todays = sortedBets.filter(
       (b) => b.settledAt && b.settledAt.toMillis() >= startMs
     );
-    const won = todays.filter((b) => b.status === "won");
-    const lost = todays.filter((b) => b.status === "lost");
+    const won = todays.filter((b) => betOutcome(b) === "won");
+    const lost = todays.filter((b) => betOutcome(b) === "lost");
     const netProfit = todays.reduce((acc, b) => acc + b.profit, 0);
     return { won: won.length, lost: lost.length, netProfit };
   }, [sortedBets]);
@@ -269,8 +271,8 @@ export default function FeedPage() {
   // Totales históricos del grupo (todas las apuestas, no solo de hoy).
   const groupTotals = useMemo(() => {
     if (!sortedBets) return null;
-    const wonCount = sortedBets.filter((b) => b.status === "won").length;
-    const lostCount = sortedBets.filter((b) => b.status === "lost").length;
+    const wonCount = sortedBets.filter((b) => betOutcome(b) === "won").length;
+    const lostCount = sortedBets.filter((b) => betOutcome(b) === "lost").length;
     return { wonCount, lostCount };
   }, [sortedBets]);
 
