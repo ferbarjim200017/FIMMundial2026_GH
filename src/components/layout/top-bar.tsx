@@ -34,11 +34,11 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         <Link href={ROUTES.dashboard} className="flex items-center gap-2">
           {/* En móvil mostramos solo el icono + año para ahorrar espacio. */}
-          <span className="text-base font-bold tracking-tight sm:hidden">
-            ⚽ Mundial 26
+          <span className="font-display text-base font-bold tracking-tight sm:hidden">
+            ⚽ <span className="text-brand">Mundial 26</span>
           </span>
-          <span className="hidden text-base font-bold tracking-tight sm:inline">
-            ⚽ {APP_NAME}
+          <span className="hidden font-display text-base font-bold tracking-tight sm:inline">
+            ⚽ <span className="text-brand">{APP_NAME}</span>
           </span>
         </Link>
       </div>

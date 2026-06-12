@@ -82,6 +82,22 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  h1, h2, h3 {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.012em;
+  }
+}
+
+@layer components {
+  /* Acento de marca: degradado azul → violeta recortado al texto. */
+  .text-brand {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      90deg,
+      hsl(217 91% 60%),
+      hsl(265 89% 66%)
+    );
+  }
 }
 
 /* Scrollbar slim estilo fintech */

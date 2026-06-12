@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import {
@@ -286,8 +287,14 @@ export default function RankingPage() {
           </CardHeader>
           <CardContent>
             {users === null ? (
-              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-                Cargando…
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-44" />
+                <Skeleton className="h-[320px] w-full rounded-lg" />
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </div>
               </div>
             ) : (
               <RankingChart users={users} bets={bets} />
@@ -308,8 +315,14 @@ export default function RankingPage() {
           </CardHeader>
           <CardContent>
             {users === null ? (
-              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-                Cargando…
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-44" />
+                <Skeleton className="h-[320px] w-full rounded-lg" />
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </div>
               </div>
             ) : (
               <BetsBarChart users={users} bets={bets} />
@@ -330,8 +343,15 @@ export default function RankingPage() {
         </CardHeader>
         <CardContent className="p-0">
           {users === null ? (
-            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-              Cargando ranking…
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <Skeleton className="h-4 flex-1" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
             </div>
           ) : users.length === 0 ? (
             <div className="px-6 py-8 text-center text-sm text-muted-foreground">

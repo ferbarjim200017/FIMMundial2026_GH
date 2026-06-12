@@ -117,7 +117,7 @@ export default function DashboardPage() {
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
-          Hola, {appUser.username} 👋
+          Hola, <span className="text-brand">{appUser.username}</span> 👋
         </h1>
         <p className="text-sm text-muted-foreground">
           Aquí tienes tu resumen completo: saldos por casa y estadísticas en tiempo real.
@@ -332,7 +332,7 @@ export default function DashboardPage() {
 
 /** Mini-gráfica de línea sin ejes para incrustar en una tarjeta KPI. */
 function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const gid = useId();
+  const gid = `spark-${useId().replace(/:/g, "")}`;
   const w = 84;
   const h = 30;
   const pad = 3;
