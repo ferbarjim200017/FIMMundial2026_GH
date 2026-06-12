@@ -91,6 +91,50 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
   return points;
 }
 
+/**
+ * Spline cúbico monótono (Fritsch–Carlson) sobre puntos ya proyectados a
+ * píxeles, con x estrictamente creciente. Da curvas suaves y "vistosas" pero
+ * SIN sobrepasos: la línea nunca se sale del rango de los datos, así que no
+ * inventa subidas/bajadas que no ocurrieron. Sustituye a las líneas quebradas
+ * con un punto en cada dato (que ensuciaban mucho la gráfica).
+ */
+function monotonePath(pts: { x: number; y: number }[]): string {
+  const n = pts.length;
+  if (n === 0) return "";
+  if (n < 3) {
+    return pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+      .join(" ");
+  }
+  const dx: number[] = [];
+  const m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1].x - pts[i].x;
+    m[i] = (pts[i + 1].y - pts[i].y) / dx[i];
+  }
+  const t: number[] = [];
+  t[0] = m[0];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) {
+      t[i] = 0;
+    } else {
+      const w1 = 2 * dx[i] + dx[i - 1];
+      const w2 = dx[i] + 2 * dx[i - 1];
+      t[i] = (w1 + w2) / (w1 / m[i - 1] + w2 / m[i]);
+    }
+  }
+  t[n - 1] = m[n - 2];
+  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const c1x = pts[i].x + dx[i] / 3;
+    const c1y = pts[i].y + (t[i] * dx[i]) / 3;
+    const c2x = pts[i + 1].x - dx[i] / 3;
+    const c2y = pts[i + 1].y - (t[i + 1] * dx[i]) / 3;
+    d += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}`;
+  }
+  return d;
+}
+
 function formatTickCurrency(v: number): string {
   const sign = v > 0 ? "+" : "";
   if (Math.abs(v) >= 1000) {
@@ -111,6 +155,9 @@ export function RankingChart({ users, bets }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(500);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Serie resaltada (hover sobre la línea o sobre su chip de leyenda). Atenúa
+  // las demás y dibuja el área degradada bajo la destacada.
+  const [active, setActive] = useState<string | null>(null);
   const [hover, setHover] = useState<
     | { sid: string; t: number; balance: number; x: number; y: number }
     | null
@@ -199,7 +246,8 @@ export function RankingChart({ users, bets }: Props) {
   const W = width;
   const H = 360;
   const PAD_LEFT = 64;
-  const PAD_RIGHT = 18;
+  // Más aire a la derecha: ahí van el punto final y la etiqueta del total.
+  const PAD_RIGHT = 58;
   const PAD_TOP = 20;
   const PAD_BOT = 40;
   const PLOT_W = W - PAD_LEFT - PAD_RIGHT;
@@ -231,6 +279,52 @@ export function RankingChart({ users, bets }: Props) {
   }, [bounds, xTickCount]);
 
   const zeroY = bounds.minY < 0 && bounds.maxY > 0 ? yFor(0) : null;
+  const baseY = PAD_TOP + PLOT_H;
+
+  // Proyección a píxeles + deduplicado de puntos con la misma x (dos apuestas
+  // liquidadas en el mismo instante romperían el spline monótono con dx=0).
+  function pixelPoints(s: Series): { x: number; y: number }[] {
+    const out: { x: number; y: number }[] = [];
+    for (const p of s.points) {
+      const x = xFor(p.t);
+      if (out.length && Math.abs(out[out.length - 1].x - x) < 0.01) {
+        out[out.length - 1] = { x, y: yFor(p.balance) };
+      } else {
+        out.push({ x, y: yFor(p.balance) });
+      }
+    }
+    return out;
+  }
+
+  // Etiquetas del total al final de cada línea visible, con anticolisión
+  // vertical (si dos finales quedan muy juntos, se separan un mínimo).
+  const endLabels = useMemo(() => {
+    const items = visibleSeries
+      .map((s) => {
+        const last = s.points[s.points.length - 1];
+        return {
+          uid: s.uid,
+          color: s.color,
+          value: last.balance,
+          x: xFor(last.t),
+          y: yFor(last.balance),
+        };
+      })
+      .sort((a, b) => a.y - b.y);
+    const GAP = 15;
+    for (let i = 1; i < items.length; i++) {
+      if (items[i].y - items[i - 1].y < GAP) {
+        items[i].y = items[i - 1].y + GAP;
+      }
+    }
+    const maxYpx = PAD_TOP + PLOT_H;
+    for (let i = items.length - 1; i > 0; i--) {
+      if (items[i].y > maxYpx) items[i].y = maxYpx;
+      if (items[i].y - items[i - 1].y < GAP) items[i - 1].y = items[i].y - GAP;
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleSeries, bounds, width]);
 
   function toggle(uid: string) {
     setHidden((prev) => {
@@ -248,6 +342,11 @@ export function RankingChart({ users, bets }: Props) {
       </div>
     );
   }
+
+  const activeSeries =
+    active && !hidden.has(active)
+      ? visibleSeries.find((s) => s.uid === active) ?? null
+      : null;
 
   return (
     <div className="space-y-3">
@@ -275,7 +374,21 @@ export function RankingChart({ users, bets }: Props) {
           textRendering="geometricPrecision"
           className="block max-w-full"
           onClick={() => setHover(null)}
+          onMouseLeave={() => {
+            setHover(null);
+            setActive(null);
+          }}
         >
+          {activeSeries && (
+            <defs>
+              <linearGradient id="ranking-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={activeSeries.color} stopOpacity={0.26} />
+                <stop offset="100%" stopColor={activeSeries.color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+          )}
+
+          {/* Rejilla horizontal — fina y discreta */}
           {yTicks.map((v) => {
             const y = yFor(v);
             return (
@@ -287,13 +400,14 @@ export function RankingChart({ users, bets }: Props) {
                 y2={y}
                 stroke="currentColor"
                 className="text-border"
-                strokeOpacity={0.55}
-                strokeDasharray="2 4"
+                strokeOpacity={0.4}
+                strokeDasharray="2 5"
                 strokeWidth={1}
               />
             );
           })}
 
+          {/* Línea del 0 € — referencia destacada */}
           {zeroY !== null && (
             <line
               x1={PAD_LEFT}
@@ -302,136 +416,161 @@ export function RankingChart({ users, bets }: Props) {
               y2={zeroY}
               stroke="currentColor"
               className="text-muted-foreground"
-              strokeOpacity={0.6}
-              strokeWidth={1}
+              strokeOpacity={0.5}
+              strokeWidth={1.25}
             />
           )}
 
-          <line
-            x1={PAD_LEFT}
-            x2={PAD_LEFT}
-            y1={PAD_TOP}
-            y2={PAD_TOP + PLOT_H}
-            stroke="currentColor"
-            className="text-border"
-            strokeWidth={1.25}
-          />
+          {/* Eje X discreto (sin eje Y vertical, para aligerar) */}
           <line
             x1={PAD_LEFT}
             x2={PAD_LEFT + PLOT_W}
-            y1={PAD_TOP + PLOT_H}
-            y2={PAD_TOP + PLOT_H}
+            y1={baseY}
+            y2={baseY}
             stroke="currentColor"
             className="text-border"
-            strokeWidth={1.25}
+            strokeWidth={1}
           />
 
           {yTicks.map((v) => {
             const y = yFor(v);
             return (
-              <g key={`yt-${v}`}>
-                <line
-                  x1={PAD_LEFT - 4}
-                  x2={PAD_LEFT}
-                  y1={y}
-                  y2={y}
-                  stroke="currentColor"
-                  className="text-muted-foreground"
-                  strokeOpacity={0.7}
-                  strokeWidth={1}
-                />
-                <text
-                  x={PAD_LEFT - 8}
-                  y={y}
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                  fontSize={11}
-                  className="fill-muted-foreground"
-                  style={{
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  }}
-                >
-                  {formatTickCurrency(v)}
-                </text>
-              </g>
+              <text
+                key={`yt-${v}`}
+                x={PAD_LEFT - 10}
+                y={y}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={11}
+                className="fill-muted-foreground"
+                style={{
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                }}
+              >
+                {formatTickCurrency(v)}
+              </text>
             );
           })}
 
           {xTicks.map((t, i) => {
             const x = xFor(t);
             return (
-              <g key={`xt-${i}`}>
-                <line
-                  x1={x}
-                  x2={x}
-                  y1={PAD_TOP + PLOT_H}
-                  y2={PAD_TOP + PLOT_H + 4}
-                  stroke="currentColor"
-                  className="text-muted-foreground"
-                  strokeOpacity={0.7}
-                  strokeWidth={1}
-                />
-                <text
-                  x={x}
-                  y={PAD_TOP + PLOT_H + 18}
-                  textAnchor="middle"
-                  fontSize={11}
-                  className="fill-muted-foreground"
-                >
-                  {formatDateShort(t)}
-                </text>
-              </g>
+              <text
+                key={`xt-${i}`}
+                x={x}
+                y={baseY + 18}
+                textAnchor="middle"
+                fontSize={11}
+                className="fill-muted-foreground"
+              >
+                {formatDateShort(t)}
+              </text>
             );
           })}
 
+          {/* Área degradada bajo la serie resaltada */}
+          {activeSeries &&
+            (() => {
+              const px = pixelPoints(activeSeries);
+              if (px.length < 2) return null;
+              const d =
+                monotonePath(px) +
+                ` L${px[px.length - 1].x.toFixed(2)},${baseY.toFixed(2)}` +
+                ` L${px[0].x.toFixed(2)},${baseY.toFixed(2)} Z`;
+              return <path d={d} fill="url(#ranking-area)" stroke="none" />;
+            })()}
+
+          {/* Líneas (curvas suaves, sin puntos intermedios) */}
           {visibleSeries.map((s) => {
-            if (s.points.length === 0) return null;
-            const d = s.points
-              .map(
-                (p, i) =>
-                  `${i === 0 ? "M" : "L"}${xFor(p.t).toFixed(2)},${yFor(p.balance).toFixed(2)}`
-              )
-              .join(" ");
+            const px = pixelPoints(s);
+            if (px.length === 0) return null;
+            const dim = active !== null && active !== s.uid;
+            const isActive = active === s.uid;
             return (
               <path
                 key={`p-${s.uid}`}
-                d={d}
+                d={monotonePath(px)}
                 fill="none"
                 stroke={s.color}
-                strokeWidth={2.5}
+                strokeWidth={isActive ? 3.25 : 2.5}
+                strokeOpacity={dim ? 0.16 : 1}
                 strokeLinejoin="round"
                 strokeLinecap="round"
+                style={{ transition: "stroke-opacity 0.15s, stroke-width 0.15s" }}
               />
             );
           })}
 
-          {visibleSeries.map((s) =>
-            s.points.map((p, i) => (
+          {/* Punto final de cada línea visible */}
+          {visibleSeries.map((s) => {
+            const last = s.points[s.points.length - 1];
+            const dim = active !== null && active !== s.uid;
+            return (
               <circle
-                key={`m-${s.uid}-${i}`}
-                cx={xFor(p.t)}
-                cy={yFor(p.balance)}
-                r={4}
+                key={`end-${s.uid}`}
+                cx={xFor(last.t)}
+                cy={yFor(last.balance)}
+                r={active === s.uid ? 5 : 3.75}
                 fill={s.color}
                 stroke="hsl(var(--card))"
                 strokeWidth={2}
+                opacity={dim ? 0.2 : 1}
+                style={{ transition: "opacity 0.15s, r 0.15s" }}
+              />
+            );
+          })}
+
+          {/* Etiqueta del total al final */}
+          {endLabels.map((e) => {
+            const dim = active !== null && active !== e.uid;
+            return (
+              <text
+                key={`lab-${e.uid}`}
+                x={e.x + 9}
+                y={e.y}
+                dominantBaseline="middle"
+                fontSize={11}
+                fontWeight={600}
+                fill={e.color}
+                opacity={dim ? 0.25 : 1}
+                style={{
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  transition: "opacity 0.15s",
+                }}
+              >
+                {formatTickCurrency(e.value)}
+              </text>
+            );
+          })}
+
+          {/* Dianas de hover invisibles (mantienen el tooltip sin ensuciar) */}
+          {visibleSeries.map((s) =>
+            s.points.map((p, i) => (
+              <circle
+                key={`hit-${s.uid}-${i}`}
+                cx={xFor(p.t)}
+                cy={yFor(p.balance)}
+                r={12}
+                fill="transparent"
                 style={{ cursor: "pointer" }}
-                onMouseEnter={() =>
+                onMouseEnter={() => {
+                  setActive(s.uid);
                   setHover({
                     sid: s.uid,
                     t: p.t,
                     balance: p.balance,
                     x: xFor(p.t),
                     y: yFor(p.balance),
-                  })
-                }
-                onMouseLeave={() => setHover(null)}
+                  });
+                }}
                 onClick={(e) => {
                   // En móvil (sin hover) el toque muestra el tooltip; en PC el
                   // hover sigue funcionando igual. stopPropagation evita que el
                   // onClick del svg lo cierre al instante.
                   e.stopPropagation();
+                  setActive(s.uid);
                   setHover({
                     sid: s.uid,
                     t: p.t,
@@ -451,7 +590,7 @@ export function RankingChart({ users, bets }: Props) {
               const tooltipW = 180;
               const tooltipH = 48;
               let tx = hover.x - tooltipW / 2;
-              let ty = hover.y - tooltipH - 12;
+              let ty = hover.y - tooltipH - 14;
               tx = Math.max(4, Math.min(W - tooltipW - 4, tx));
               if (ty < 4) ty = hover.y + 14;
               return (
@@ -462,9 +601,17 @@ export function RankingChart({ users, bets }: Props) {
                     y1={PAD_TOP}
                     y2={PAD_TOP + PLOT_H}
                     stroke={s.color}
-                    strokeOpacity={0.3}
+                    strokeOpacity={0.35}
                     strokeDasharray="3 4"
                     strokeWidth={1}
+                  />
+                  <circle
+                    cx={hover.x}
+                    cy={hover.y}
+                    r={4.5}
+                    fill={s.color}
+                    stroke="hsl(var(--card))"
+                    strokeWidth={2}
                   />
                   <rect
                     x={tx}
@@ -510,6 +657,8 @@ export function RankingChart({ users, bets }: Props) {
               key={s.uid}
               type="button"
               onClick={() => toggle(s.uid)}
+              onMouseEnter={() => !isHidden && setActive(s.uid)}
+              onMouseLeave={() => setActive(null)}
               className={cn(
                 "flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs transition-all hover:shadow-sm",
                 isHidden && "opacity-40 grayscale"
