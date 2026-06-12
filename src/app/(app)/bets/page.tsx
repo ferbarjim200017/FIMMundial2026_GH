@@ -34,7 +34,7 @@ export default function BetsPage() {
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<ScopeKey>("me");
-  const [status, setStatus] = useState<BetsFilter["status"]>("all");
+  const [status, setStatus] = useState<BetsFilter["status"] | "settled">("all");
   const [bookmaker, setBookmaker] = useState<BetsFilter["bookmaker"]>("all");
   const [query, setQuery] = useState("");
 
@@ -44,7 +44,9 @@ export default function BetsPage() {
     const unsub = subscribeToBets(
       {
         userId: scope === "me" ? appUser.uid : undefined,
-        status,
+        // "settled" (Terminadas) no es un estado único de Firestore: traemos
+        // todas y filtramos las no-pendientes en cliente.
+        status: status === "settled" ? "all" : status,
         bookmaker,
       },
       (next) => {
@@ -64,6 +66,8 @@ export default function BetsPage() {
       if (!betInGroup(b, activeGroup.id)) return false;
       if (scope === "all" && memberUids.size > 0 && !memberUids.has(b.userId))
         return false;
+      // "Terminadas" = todas las que no están pendientes.
+      if (status === "settled" && b.status === "pending") return false;
       if (normalizedQuery) {
         const haystack = [
           b.matchLabel,
@@ -79,7 +83,7 @@ export default function BetsPage() {
       }
       return true;
     });
-  }, [allBets, activeGroup, memberUids, scope, normalizedQuery]);
+  }, [allBets, activeGroup, memberUids, scope, status, normalizedQuery]);
 
   const stats = useMemo(() => summarize(bets), [bets]);
 
@@ -173,13 +177,16 @@ export default function BetsPage() {
             <label className="text-xs text-muted-foreground">Estado</label>
             <Select
               value={status ?? "all"}
-              onValueChange={(v) => setStatus(v as BetsFilter["status"])}
+              onValueChange={(v) =>
+                setStatus(v as BetsFilter["status"] | "settled")
+              }
             >
               <SelectTrigger className="h-9 w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="settled">Terminadas</SelectItem>
                 {STATUS_OPTIONS.map((s) => (
                   <SelectItem key={s.value} value={s.value}>
                     {s.label}

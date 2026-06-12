@@ -51,7 +51,9 @@ function formatKickoff(ms: number, now: number): string {
 export function LiveTvBanner() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [now, setNow] = useState(() => Date.now());
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // Partido "congelado" al abrir el popup, para que no cambie aunque el
+  // `featured` se recalcule (p. ej. si un admin pone el resultado).
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToMatches(setMatches);
@@ -89,7 +91,7 @@ export function LiveTvBanner() {
     <>
       <button
         type="button"
-        onClick={() => setDialogOpen(true)}
+        onClick={() => setSelectedMatch(featured)}
         className="block w-full text-left"
         aria-label={`Ver apuestas de ${featured.homeLabel} vs ${featured.awayLabel}`}
       >
@@ -157,9 +159,9 @@ export function LiveTvBanner() {
       </button>
 
       <MatchBetsDialog
-        match={featured}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        match={selectedMatch}
+        open={!!selectedMatch}
+        onOpenChange={(o) => !o && setSelectedMatch(null)}
       />
     </>
   );

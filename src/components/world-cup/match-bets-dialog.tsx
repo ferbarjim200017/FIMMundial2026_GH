@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, Search, X } from "lucide-react";
+import { ClipboardCheck, Eye, Search, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ import {
   BOOKMAKER_OPTIONS,
 } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
+import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { betInGroup, bookmakerLabel, round2 } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -71,9 +72,10 @@ interface Props {
 }
 
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
-  const { appUser } = useAuth();
+  const { appUser, isAdmin } = useAuth();
   const { memberUids, activeGroup } = useGroup();
   const { openBet } = useBetDetail();
+  const [resultOpen, setResultOpen] = useState(false);
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   // "all"  → comportamiento por defecto (todas las apuestas).
@@ -259,6 +261,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   if (!match) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
@@ -275,6 +278,22 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
             {match.matchday && ` · J${match.matchday}`}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Solo admins: poner/editar el resultado del partido desde aquí. */}
+        {isAdmin && (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setResultOpen(true)}
+              className="w-full gap-1.5 sm:w-auto"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              {match.result ? "Editar resultado" : "Poner resultado"}
+            </Button>
+          </div>
+        )}
 
         {appUser && (
           <div className="flex flex-wrap gap-2">
@@ -626,6 +645,15 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+
+      {isAdmin && (
+        <MatchResultDialog
+          match={match}
+          open={resultOpen}
+          onOpenChange={setResultOpen}
+        />
+      )}
+    </>
   );
 }
 
