@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  Percent,
+  Target,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
@@ -70,6 +78,29 @@ export default function DashboardPage() {
   // no desde el `appUser.stats` global (que es agregado de todos los grupos).
   const stats = useMemo(() => computeUserStats(bets), [bets]);
 
+  // Serie de beneficio acumulado (apuestas liquidadas, en orden temporal) para
+  // el mini-sparkline de la tarjeta "Beneficio total".
+  const profitSeries = useMemo(() => {
+    const settled = bets
+      .filter(
+        (b) =>
+          b.status === "won" || b.status === "lost" || b.status === "cashout"
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          (a.settledAt ?? a.createdAt).toMillis() -
+          (b.settledAt ?? b.createdAt).toMillis()
+      );
+    let acc = 0;
+    const out = [0];
+    for (const b of settled) {
+      acc += b.profit ?? 0;
+      out.push(acc);
+    }
+    return out;
+  }, [bets]);
+
   // Balance de tus apuestas de tipo superaumento en el grupo activo.
   const superaumento = useMemo(
     () => computeSuperaumentoSummary(bets),
@@ -105,20 +136,27 @@ export default function DashboardPage() {
               ? `${formatCurrency(summary.total.current)} − ${formatCurrency(summary.total.pendingStake)} en juego`
               : undefined
           }
+          icon={<Wallet className="h-4 w-4" />}
         />
         <StatCard
           label="Beneficio total"
           value={`${stats.totalProfit > 0 ? "+" : ""}${formatCurrency(stats.totalProfit)}`}
           valueClass={profitClass(stats.totalProfit)}
+          icon={<TrendingUp className="h-4 w-4" />}
+          trendValue={stats.totalProfit}
+          sparkline={profitSeries}
         />
         <StatCard
           label="ROI"
           value={formatPercent(stats.roi)}
           valueClass={profitClass(stats.roi)}
+          icon={<Percent className="h-4 w-4" />}
+          trendValue={stats.roi}
         />
         <StatCard
           label="% Acierto"
           value={formatPercent(stats.hitRate)}
+          icon={<Target className="h-4 w-4" />}
         />
       </div>
 
@@ -292,22 +330,102 @@ export default function DashboardPage() {
   );
 }
 
+/** Mini-gráfica de línea sin ejes para incrustar en una tarjeta KPI. */
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const gid = useId();
+  const w = 84;
+  const h = 30;
+  const pad = 3;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const n = values.length;
+  const x = (i: number) => pad + (i / (n - 1)) * (w - 2 * pad);
+  const y = (v: number) => pad + (1 - (v - min) / span) * (h - 2 * pad);
+  const line = values
+    .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${
+    h - pad
+  } Z`;
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} stroke="none" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function StatCard({
   label,
   value,
   valueClass,
   subtitle,
+  icon,
+  trendValue,
+  sparkline,
 }: {
   label: string;
   value: string;
   valueClass?: string;
   subtitle?: string;
+  icon?: ReactNode;
+  trendValue?: number;
+  sparkline?: number[];
 }) {
+  const sparkColor =
+    (trendValue ?? 0) >= 0 ? "hsl(var(--profit))" : "hsl(var(--loss))";
+  const dir =
+    trendValue === undefined
+      ? null
+      : trendValue > 0
+        ? "up"
+        : trendValue < 0
+          ? "down"
+          : "flat";
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 text-2xl font-bold", valueClass)}>{value}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          {icon && <span className="text-muted-foreground/60">{icon}</span>}
+        </div>
+        <div className="mt-1 flex items-end justify-between gap-2">
+          <p
+            className={cn(
+              "flex items-center gap-1 text-2xl font-bold tabular-nums",
+              valueClass
+            )}
+          >
+            {dir === "up" && <ArrowUpRight className="h-4 w-4" />}
+            {dir === "down" && <ArrowDownRight className="h-4 w-4" />}
+            {value}
+          </p>
+          {sparkline && sparkline.length > 1 && (
+            <Sparkline values={sparkline} color={sparkColor} />
+          )}
+        </div>
         {subtitle && (
           <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
         )}
