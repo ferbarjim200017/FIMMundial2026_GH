@@ -21,11 +21,13 @@ import {
   EMPTY_USER_STATS,
   type AppUser,
   type BookmakerBalances,
+  type RankMovementMap,
   type UserRole,
 } from "@/types/domain";
 import { ADMIN_EMAILS } from "@/lib/constants";
 
 const USERS = "users";
+const RANK_MOVEMENTS = "rankMovements";
 
 export function usersCol() {
   return collection(db, USERS).withConverter(userConverter);
@@ -208,23 +210,42 @@ export async function updateInitialBalances(
 }
 
 /**
- * Registra el movimiento de posición del usuario en un grupo. Lo llama el
- * propio cliente del usuario cuando, al abrir el ranking, detecta que su
- * posición ha cambiado respecto a la última guardada. `changedAt` se sella
+ * Suscripción al snapshot de movimiento de posiciones de un grupo
+ * (`rankMovements/{groupId}` → { [uid]: RankMovement }). Si las reglas aún no
+ * permiten leerlo, devuelve un mapa vacío en vez de romper (flechas en guion).
+ */
+export function subscribeToRankMovements(
+  groupId: string,
+  callback: (map: RankMovementMap) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, RANK_MOVEMENTS, groupId),
+    (snap) => callback((snap.data() as RankMovementMap) ?? {}),
+    (err) => {
+      console.error("[rankMovements] subscribe", err);
+      callback({});
+    }
+  );
+}
+
+/**
+ * Escribe (merge) las entradas de movimiento que han cambiado. Lo llama el
+ * cliente de cualquier miembro al abrir el ranking, tras recalcular la
+ * posición de TODOS y detectar quién ha subido/bajado. `changedAt` se sella
  * con la hora del cliente para medir la ventana de 24 h de visibilidad.
  */
-export async function updateRankMovement(
-  uid: string,
+export async function writeRankMovements(
   groupId: string,
-  entry: { rank: number; dir: "up" | "down" | "flat" }
+  changes: Record<string, { rank: number; dir: "up" | "down" | "flat" }>
 ): Promise<void> {
-  await updateDoc(doc(db, USERS, uid), {
-    [`rankMovement.${groupId}`]: {
-      rank: entry.rank,
-      dir: entry.dir,
-      changedAt: Timestamp.now(),
-    },
-  });
+  const uids = Object.keys(changes);
+  if (uids.length === 0) return;
+  const now = Timestamp.now();
+  const payload: RankMovementMap = {};
+  for (const uid of uids) {
+    payload[uid] = { rank: changes[uid].rank, dir: changes[uid].dir, changedAt: now };
+  }
+  await setDoc(doc(db, RANK_MOVEMENTS, groupId), payload, { merge: true });
 }
 
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {

@@ -49,6 +49,15 @@ service cloud.firestore {
     match /thirdPlaceTable/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /rankings/{id}     { allow read: if isSignedIn(); allow write: if false; }
 
+    // Movimiento de posición del ranking, por grupo. Lo mantiene el cliente de
+    // cualquier miembro que abra la clasificación (recalcula la posición de
+    // todos y registra quién sube/baja). Dato no sensible (solo posiciones),
+    // así que lectura/escritura para cualquier usuario autenticado.
+    match /rankMovements/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // ---------- Predictions ----------
     match /predictions/{userId} {
       allow read: if isSignedIn();

@@ -27,8 +27,9 @@ import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  subscribeToRankMovements,
   subscribeToRanking,
-  updateRankMovement,
+  writeRankMovements,
 } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import {
@@ -47,7 +48,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet, RankMovement } from "@/types/domain";
+import type { AppUser, Bet, RankMovement, RankMovementMap } from "@/types/domain";
 
 function medal(rank: number) {
   if (rank === 1) return "🥇";
@@ -270,37 +271,58 @@ export default function RankingPage() {
     return map;
   }, [users, groupStatsByUid]);
 
-  // Registra MI propio movimiento de posición cuando cambia. Cada usuario
-  // mantiene su propia entrada (reglas: solo puedes escribir tu doc), así que
-  // la flecha de cada jugador se refresca cuando esa persona abre el ranking.
+  // Snapshot compartido de movimiento del grupo. Lo lee cualquier miembro, así
+  // la flecha de TODOS se refresca en cuanto ALGUIEN abre el ranking (no solo
+  // cuando entra la persona que se movió).
+  const [movements, setMovements] = useState<RankMovementMap>({});
+  useEffect(() => {
+    setMovements({});
+    if (!activeGroup) return;
+    return subscribeToRankMovements(activeGroup.id, setMovements);
+  }, [activeGroup]);
+
+  // Compara la posición canónica actual de cada usuario con el snapshot y
+  // escribe (merge) solo las entradas que cambian. Optimista: marca la firma
+  // antes de escribir para no duplicar; si la escritura falla (p. ej. reglas
+  // aún sin desplegar), la resetea para reintentar.
   const lastMovementWrite = useRef<string>("");
   useEffect(() => {
-    if (!appUser || !activeGroup || !users || users.length === 0) return;
+    if (!activeGroup || !users || users.length === 0) return;
     const gid = activeGroup.id;
-    const myRank = canonicalRankByUid.get(appUser.uid);
-    if (myRank == null) return;
-    const key = `${gid}:${myRank}`;
-    if (lastMovementWrite.current === key) return;
-    const stored = appUser.rankMovement?.[gid];
-    if (!stored) {
-      // Primera vez en este grupo: fijamos la posición base, sin flecha.
-      lastMovementWrite.current = key;
-      updateRankMovement(appUser.uid, gid, { rank: myRank, dir: "flat" }).catch(
-        (e) => console.error("[rankMovement]", e)
-      );
-      return;
+    const changes: Record<
+      string,
+      { rank: number; dir: "up" | "down" | "flat" }
+    > = {};
+    for (const u of users) {
+      const current = canonicalRankByUid.get(u.uid);
+      if (current == null) continue;
+      const stored = movements[u.uid];
+      if (!stored) {
+        // Primera vez: fijamos la posición base, sin flecha.
+        changes[u.uid] = { rank: current, dir: "flat" };
+      } else if (stored.rank !== current) {
+        changes[u.uid] = {
+          rank: current,
+          dir: current < stored.rank ? "up" : "down",
+        };
+      }
     }
-    if (stored.rank !== myRank) {
-      lastMovementWrite.current = key;
-      const dir = myRank < stored.rank ? "up" : "down";
-      updateRankMovement(appUser.uid, gid, { rank: myRank, dir }).catch((e) =>
-        console.error("[rankMovement]", e)
-      );
-      return;
-    }
-    // Sin cambios: marcamos como atendido para no reintentar en cada render.
-    lastMovementWrite.current = key;
-  }, [appUser, activeGroup, users, canonicalRankByUid]);
+    const uids = Object.keys(changes);
+    if (uids.length === 0) return;
+    const sig =
+      gid +
+      "|" +
+      uids
+        .map((id) => `${id}:${changes[id].rank}`)
+        .sort()
+        .join(",");
+    if (lastMovementWrite.current === sig) return;
+    lastMovementWrite.current = sig;
+    writeRankMovements(gid, changes).catch((e) => {
+      console.error("[rankMovements]", e);
+      lastMovementWrite.current = ""; // permite reintentar
+    });
+  }, [activeGroup, users, canonicalRankByUid, movements]);
 
   // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
   const maxAbsRoi = useMemo(() => {
@@ -543,7 +565,7 @@ export default function RankingPage() {
                           <div className="flex items-center gap-1.5 text-base font-semibold">
                             <span>{medal(rank)}</span>
                             <RankMovementIndicator
-                              entry={u.rankMovement?.[activeGroup?.id ?? ""]}
+                              entry={movements[u.uid]}
                               nowMs={nowMs}
                             />
                           </div>
