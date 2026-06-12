@@ -65,6 +65,115 @@ const RESULT_TABS = [
   { value: "pending", label: "Pendientes" },
 ] as const;
 
+/** True si la apuesta es directa a este partido (su id está en `matchIds`),
+ *  frente a las apuestas a futuro/outright que aparecen solo por el equipo. */
+function isDirectMatchBet(bet: Bet, matchId: string): boolean {
+  if (bet.matchId === matchId) return true;
+  return (bet.matchIds ?? []).includes(matchId);
+}
+
+function BetRow({
+  bet,
+  user,
+  onOpen,
+}: {
+  bet: Bet;
+  user: AppUser | null;
+  onOpen: (bet: Bet, user: AppUser | null) => void;
+}) {
+  return (
+    <li className="flex items-start gap-3 px-1 py-3 text-sm">
+      <Link href={user ? ROUTES.profile(user.uid) : "#"} className="shrink-0">
+        <Avatar className="h-9 w-9">
+          {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
+          <AvatarFallback>{initials(user?.username ?? "?")}</AvatarFallback>
+        </Avatar>
+      </Link>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={user ? ROUTES.profile(user.uid) : "#"}
+            className="font-semibold hover:underline"
+          >
+            {user?.username ?? "Usuario"}
+          </Link>
+          <BetStatusBadge status={bet.status} />
+          {bet.isCombo && (
+            <span className="rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              Combo
+            </span>
+          )}
+          {bet.market === "outright" && (
+            <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-600 dark:text-sky-400">
+              Outright
+            </span>
+          )}
+          {bet.isFreebet && (
+            <span className="rounded-full bg-purple-600/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">
+              Freebet
+            </span>
+          )}
+        </div>
+        <p className="truncate text-[11px] uppercase tracking-wider text-muted-foreground">
+          {marketLabel(bet.market)}
+          {bet.market === "outright" && bet.matchLabel && (
+            <>
+              <span className="mx-1.5 text-border" aria-hidden>·</span>
+              <span className="normal-case tracking-normal text-foreground/80">
+                {bet.matchLabel}
+              </span>
+            </>
+          )}
+          {bet.market !== "outright" && bet.marketDetail && (
+            <>
+              <span className="mx-1.5 text-border" aria-hidden>·</span>
+              <span className="normal-case tracking-normal">
+                {bet.marketDetail}
+              </span>
+            </>
+          )}
+        </p>
+        <p className="truncate text-sm font-medium">{bet.selection}</p>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate">
+            Cuota {bet.odds.toFixed(2)} · Stake {formatCurrency(bet.stake)}
+          </span>
+          <span className="shrink-0">
+            <BookmakerPill
+              bookmaker={bet.bookmaker}
+              customLabel={bet.bookmakerLabel}
+              size="xs"
+            />
+          </span>
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {bet.status !== "pending" && (
+          <p
+            className={cn(
+              "font-mono text-sm font-bold",
+              profitClass(bet.profit)
+            )}
+          >
+            {bet.profit > 0 ? "+" : ""}
+            {formatCurrency(bet.profit)}
+          </p>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 px-2 text-xs"
+          onClick={() => onOpen(bet, user)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Ver
+        </Button>
+      </div>
+    </li>
+  );
+}
+
 interface Props {
   match: Match | null;
   open: boolean;
@@ -257,6 +366,18 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     const netProfit = visibleBets.reduce((a, b) => a + (b.profit ?? 0), 0);
     return { total, totalStake, pending, won, lost, netProfit };
   }, [visibleBets]);
+
+  // Separación visual: apuestas directas a ESTE partido vs apuestas a
+  // futuro/outright que aparecen solo por tener marcado uno de los equipos.
+  const directBets = useMemo(() => {
+    if (!visibleBets || !match) return [];
+    return visibleBets.filter((b) => isDirectMatchBet(b, match.id));
+  }, [visibleBets, match]);
+
+  const outrightBets = useMemo(() => {
+    if (!visibleBets || !match) return [];
+    return visibleBets.filter((b) => !isDirectMatchBet(b, match.id));
+  }, [visibleBets, match]);
 
   if (!match) return null;
 
@@ -534,113 +655,46 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                 : "Aún nadie ha registrado apuestas para este partido."}
             </p>
           ) : (
-            <ul className="divide-y">
-              {visibleBets.map((bet) => {
-                const user = usersById[bet.userId] ?? null;
-                return (
-                  <li
-                    key={bet.id}
-                    className="flex items-start gap-3 px-1 py-3 text-sm"
-                  >
-                    <Link
-                      href={user ? ROUTES.profile(user.uid) : "#"}
-                      className="shrink-0"
-                    >
-                      <Avatar className="h-9 w-9">
-                        {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
-                        <AvatarFallback>
-                          {initials(user?.username ?? "?")}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Link>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={user ? ROUTES.profile(user.uid) : "#"}
-                          className="font-semibold hover:underline"
-                        >
-                          {user?.username ?? "Usuario"}
-                        </Link>
-                        <BetStatusBadge status={bet.status} />
-                        {bet.isCombo && (
-                          <span className="rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            Combo
-                          </span>
-                        )}
-                        {bet.market === "outright" && (
-                          <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-600 dark:text-sky-400">
-                            Outright
-                          </span>
-                        )}
-                        {bet.isFreebet && (
-                          <span className="rounded-full bg-purple-600/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">
-                            Freebet
-                          </span>
-                        )}
-                      </div>
-                      <p className="truncate text-[11px] uppercase tracking-wider text-muted-foreground">
-                        {marketLabel(bet.market)}
-                        {bet.market === "outright" && bet.matchLabel && (
-                          <>
-                            <span className="mx-1.5 text-border" aria-hidden>·</span>
-                            <span className="normal-case tracking-normal text-foreground/80">
-                              {bet.matchLabel}
-                            </span>
-                          </>
-                        )}
-                        {bet.market !== "outright" && bet.marketDetail && (
-                          <>
-                            <span className="mx-1.5 text-border" aria-hidden>·</span>
-                            <span className="normal-case tracking-normal">
-                              {bet.marketDetail}
-                            </span>
-                          </>
-                        )}
-                      </p>
-                      <p className="truncate text-sm font-medium">
-                        {bet.selection}
-                      </p>
-                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="min-w-0 truncate">
-                          Cuota {bet.odds.toFixed(2)} · Stake{" "}
-                          {formatCurrency(bet.stake)}
-                        </span>
-                        <span className="shrink-0">
-                          <BookmakerPill
-                            bookmaker={bet.bookmaker}
-                            customLabel={bet.bookmakerLabel}
-                            size="xs"
-                          />
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {bet.status !== "pending" && (
-                        <p
-                          className={cn(
-                            "font-mono text-sm font-bold",
-                            profitClass(bet.profit)
-                          )}
-                        >
-                          {bet.profit > 0 ? "+" : ""}
-                          {formatCurrency(bet.profit)}
-                        </p>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1 px-2 text-xs"
-                        onClick={() => openBet(bet, user)}
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Ver
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="space-y-3">
+              {directBets.length > 0 && (
+                <div>
+                  <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Apuestas de este partido
+                  </p>
+                  <ul className="divide-y">
+                    {directBets.map((bet) => (
+                      <BetRow
+                        key={bet.id}
+                        bet={bet}
+                        user={usersById[bet.userId] ?? null}
+                        onOpen={openBet}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {outrightBets.length > 0 && (
+                <div>
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    A futuro · del equipo
+                  </p>
+                  <p className="px-1 pb-1 text-[10px] text-muted-foreground">
+                    Apuestas a futuro/outright vinculadas a {match.homeLabel} o{" "}
+                    {match.awayLabel}, no a este partido en concreto.
+                  </p>
+                  <ul className="divide-y">
+                    {outrightBets.map((bet) => (
+                      <BetRow
+                        key={bet.id}
+                        bet={bet}
+                        user={usersById[bet.userId] ?? null}
+                        onOpen={openBet}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </DialogContent>
