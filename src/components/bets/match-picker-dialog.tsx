@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Check, Star } from "lucide-react";
+import { Search, Check, Flag, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,12 +36,14 @@ export function MatchPickerDialog({
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showFinished, setShowFinished] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
     setSelected(new Set(initialSelected));
     setSearch("");
+    setShowFinished(false);
     const unsub = subscribeToMatches(
       (list) => {
         setMatches(list);
@@ -54,19 +56,22 @@ export function MatchPickerDialog({
   }, [open]);
 
   const filtered = useMemo(() => {
-    // Incluimos también partidos pasados/terminados: este tracker registra
-    // apuestas ya realizadas, así que el usuario puede querer apuntar una de
-    // un partido que ya se jugó.
+    // Por defecto ocultamos los partidos ya finalizados; con el botón
+    // "Finalizados" se incluyen (p. ej. para registrar una apuesta de un
+    // partido que ya se jugó).
+    const base = showFinished
+      ? matches
+      : matches.filter((m) => m.status !== "finished");
     const s = search.trim().toLowerCase();
-    if (!s) return matches;
-    return matches.filter(
+    if (!s) return base;
+    return base.filter(
       (m) =>
         m.homeLabel.toLowerCase().includes(s) ||
         m.awayLabel.toLowerCase().includes(s) ||
         (m.groupId ?? "").toLowerCase().includes(s) ||
         (m.city ?? "").toLowerCase().includes(s)
     );
-  }, [matches, search]);
+  }, [matches, search, showFinished]);
 
   // Agrupar por día (ordenado por kickoff asc en el servicio)
   const grouped = useMemo(() => {
@@ -115,15 +120,28 @@ export function MatchPickerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por equipo, grupo o ciudad…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            autoFocus
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por equipo, grupo o ciudad…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              autoFocus
+            />
+          </div>
+          <Button
+            type="button"
+            variant={showFinished ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowFinished((v) => !v)}
+            className="shrink-0 gap-1.5"
+            title="Mostrar también los partidos ya finalizados"
+          >
+            <Flag className="h-4 w-4" />
+            Finalizados
+          </Button>
         </div>
 
         <div className="max-h-[55vh] overflow-y-auto rounded-md border">
