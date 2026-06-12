@@ -154,6 +154,7 @@ function CompareContent() {
         setUserA(a);
         setUserB(b);
       })
+      .catch((err) => console.error("[compare] getUser", err))
       .finally(() => setLoading(false));
   }, [aUid, bUid]);
 

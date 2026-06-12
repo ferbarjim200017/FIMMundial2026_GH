@@ -58,15 +58,25 @@ export default function BetDetailPage() {
 
   useEffect(() => {
     if (!params.betId) return;
+    let cancelled = false;
     setLoading(true);
-    getBet(params.betId).then(async (b) => {
-      setBet(b);
-      if (b) {
-        const a = await getUser(b.userId);
-        setAuthor(a);
-      }
-      setLoading(false);
-    });
+    getBet(params.betId)
+      .then(async (b) => {
+        if (cancelled) return;
+        setBet(b);
+        if (b) {
+          // Si falla la lectura del autor no bloqueamos la ficha: queda null.
+          const a = await getUser(b.userId).catch(() => null);
+          if (!cancelled) setAuthor(a);
+        }
+      })
+      .catch((err) => console.error("[bet detail] getBet", err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [params.betId]);
 
   // Deep-link `?edit=1` (p.ej. desde el botón Editar del pop-up de detalle):

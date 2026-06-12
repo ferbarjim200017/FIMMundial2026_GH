@@ -122,11 +122,13 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   useEffect(() => {
     if (!values.matchIds || values.matchIds.length === 0) return;
     let cancelled = false;
-    Promise.all(values.matchIds.map((id) => getMatch(id))).then((arr) => {
-      if (cancelled) return;
-      const valid = arr.filter((m): m is Match => !!m);
-      setSelectedMatches(valid);
-    });
+    Promise.all(values.matchIds.map((id) => getMatch(id)))
+      .then((arr) => {
+        if (cancelled) return;
+        const valid = arr.filter((m): m is Match => !!m);
+        setSelectedMatches(valid);
+      })
+      .catch((err) => console.error("[bet-form] getMatch", err));
     return () => {
       cancelled = true;
     };

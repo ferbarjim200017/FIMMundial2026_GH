@@ -44,6 +44,8 @@ export default function ProfilePage() {
   const { activeGroup, memberUids } = useGroup();
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(false);
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -56,13 +58,29 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!params.userId) return;
-    getUser(params.userId).then((u) => {
-      setUser(u);
-      setUsername(u?.username ?? "");
-      setAvatarUrl(u?.avatarUrl ?? "");
-      setLoading(false);
-    });
-  }, [params.userId]);
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    getUser(params.userId)
+      .then((u) => {
+        if (cancelled) return;
+        setUser(u);
+        setUsername(u?.username ?? "");
+        setAvatarUrl(u?.avatarUrl ?? "");
+      })
+      .catch((err) => {
+        console.error("[profile] getUser", err);
+        if (!cancelled) setLoadError(true);
+      })
+      // Pase lo que pase (éxito o error) salimos de "Cargando…" para no
+      // dejar la página colgada si la lectura falla puntualmente.
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.userId, reloadKey]);
 
   // Apuestas del usuario en el grupo activo — base para stats y saldos
   // contextualizados.
@@ -132,6 +150,22 @@ export default function ProfilePage() {
   }, [user, activeGroup, groupStats.totalProfit]);
 
   if (loading) return <p className="text-sm text-muted-foreground">Cargando perfil…</p>;
+  if (loadError && !user) {
+    return (
+      <div className="rounded-lg border border-dashed p-12 text-center">
+        <p className="text-sm text-muted-foreground">
+          No se pudo cargar el perfil. Puede ser un fallo puntual de conexión.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => setReloadKey((k) => k + 1)}
+        >
+          Reintentar
+        </Button>
+      </div>
+    );
+  }
   if (!user) return <p className="text-sm text-muted-foreground">Usuario no encontrado.</p>;
 
   const isOwner = me?.uid === user.uid;

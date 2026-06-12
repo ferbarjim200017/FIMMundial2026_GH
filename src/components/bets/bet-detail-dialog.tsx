@@ -105,9 +105,11 @@ function BetDetailDialog({
     if (!open || !bet) return;
     if (author && author.uid === bet.userId) return;
     let cancelled = false;
-    getUser(bet.userId).then((u) => {
-      if (!cancelled) onAuthorResolved(u);
-    });
+    getUser(bet.userId)
+      .then((u) => {
+        if (!cancelled) onAuthorResolved(u);
+      })
+      .catch((err) => console.error("[bet-detail] getUser", err));
     return () => {
       cancelled = true;
     };
