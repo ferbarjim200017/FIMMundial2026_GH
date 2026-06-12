@@ -46,6 +46,22 @@ function medal(rank: number) {
   return `#${rank}`;
 }
 
+/** Tinte de fila para el podio (top-3): oro, plata y bronce. */
+function podiumRow(rank: number): string {
+  if (rank === 1) return "bg-amber-400/10 hover:bg-amber-400/20";
+  if (rank === 2) return "bg-zinc-400/10 hover:bg-zinc-400/20";
+  if (rank === 3) return "bg-orange-500/10 hover:bg-orange-500/20";
+  return "hover:bg-accent/30";
+}
+
+/** Aro de color del avatar para el podio. */
+function podiumRing(rank: number): string {
+  if (rank === 1) return "ring-2 ring-amber-400 ring-offset-1 ring-offset-background";
+  if (rank === 2) return "ring-2 ring-zinc-400 ring-offset-1 ring-offset-background";
+  if (rank === 3) return "ring-2 ring-orange-500 ring-offset-1 ring-offset-background";
+  return "";
+}
+
 type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "username";
 
 export default function RankingPage() {
@@ -152,6 +168,16 @@ export default function RankingPage() {
     }
     return map;
   }, [users, groupStatsByUid, activeGroup]);
+
+  // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
+  const maxAbsRoi = useMemo(() => {
+    let m = 0;
+    for (const u of users ?? []) {
+      const r = Math.abs(groupStatsByUid.get(u.uid)?.roi ?? 0);
+      if (r > m) m = r;
+    }
+    return m || 1;
+  }, [users, groupStatsByUid]);
 
   // Lista ordenada según la columna elegida (por defecto ROI desc). Desempate
   // estable por beneficio.
@@ -338,14 +364,19 @@ export default function RankingPage() {
                     const hitRate = s?.hitRate ?? 0;
                     const balance = balanceByUid.get(u.uid) ?? 0;
                     return (
-                      <tr key={u.uid} className="hover:bg-accent/30">
-                        <td className="px-4 py-3 font-semibold">{medal(rank)}</td>
+                      <tr
+                        key={u.uid}
+                        className={`transition-colors ${podiumRow(rank)}`}
+                      >
+                        <td className="px-4 py-3 text-base font-semibold">
+                          {medal(rank)}
+                        </td>
                         <td className="px-2 py-3">
                           <Link
                             href={ROUTES.profile(u.uid)}
                             className="flex items-center gap-3 hover:underline"
                           >
-                            <Avatar className="h-8 w-8">
+                            <Avatar className={`h-8 w-8 ${podiumRing(rank)}`}>
                               {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
                               <AvatarFallback>{initials(u.username)}</AvatarFallback>
                             </Avatar>
@@ -357,13 +388,33 @@ export default function RankingPage() {
                             </div>
                           </Link>
                         </td>
-                        <td
-                          className={`px-2 py-3 text-right font-mono font-bold ${profitClass(
-                            roi
-                          )}`}
-                        >
-                          {roi > 0 ? "+" : ""}
-                          {formatPercent(roi)}
+                        <td className="px-2 py-3">
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={`font-mono font-bold tabular-nums ${profitClass(
+                                roi
+                              )}`}
+                            >
+                              {roi > 0 ? "+" : ""}
+                              {formatPercent(roi)}
+                            </span>
+                            <span className="block h-1 w-16 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className="block h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    (Math.abs(roi) / maxAbsRoi) * 100
+                                  )}%`,
+                                  marginLeft: roi < 0 ? "auto" : undefined,
+                                  backgroundColor:
+                                    roi >= 0
+                                      ? "hsl(var(--profit))"
+                                      : "hsl(var(--loss))",
+                                }}
+                              />
+                            </span>
+                          </div>
                         </td>
                         <td
                           className={`px-2 py-3 text-right font-mono ${profitClass(
