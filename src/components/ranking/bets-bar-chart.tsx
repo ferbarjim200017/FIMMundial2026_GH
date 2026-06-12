@@ -38,6 +38,21 @@ function formatDayLong(ms: number): string {
   });
 }
 
+/** Path de una barra con solo las esquinas SUPERIORES redondeadas, para que
+ *  apoye limpia sobre la línea base sin redondear el pie. */
+function roundedTopBar(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): string {
+  const rr = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y + h} L${x},${y + rr} Q${x},${y} ${x + rr},${y} L${
+    x + w - rr
+  },${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`;
+}
+
 /** Tick values enteros para el eje Y. */
 function integerYTicks(max: number): number[] {
   const top = Math.max(1, max);
@@ -197,23 +212,14 @@ export function BetsBarChart({ users, bets }: Props) {
                 y2={y}
                 stroke="currentColor"
                 className="text-border"
-                strokeOpacity={0.55}
-                strokeDasharray="2 4"
+                strokeOpacity={0.4}
+                strokeDasharray="2 5"
                 strokeWidth={1}
               />
             );
           })}
 
-          {/* Ejes */}
-          <line
-            x1={PAD_LEFT}
-            x2={PAD_LEFT}
-            y1={PAD_TOP}
-            y2={PAD_TOP + PLOT_H}
-            stroke="currentColor"
-            className="text-border"
-            strokeWidth={1.25}
-          />
+          {/* Línea base — discreta, sin eje vertical pesado */}
           <line
             x1={PAD_LEFT}
             x2={PAD_LEFT + PLOT_W}
@@ -221,41 +227,47 @@ export function BetsBarChart({ users, bets }: Props) {
             y2={PAD_TOP + PLOT_H}
             stroke="currentColor"
             className="text-border"
-            strokeWidth={1.25}
+            strokeWidth={1}
           />
 
           {/* Labels Y */}
           {yTicks.map((v) => {
             const y = yFor(v);
             return (
-              <g key={`yt-${v}`}>
-                <line
-                  x1={PAD_LEFT - 4}
-                  x2={PAD_LEFT}
-                  y1={y}
-                  y2={y}
-                  stroke="currentColor"
-                  className="text-muted-foreground"
-                  strokeOpacity={0.7}
-                  strokeWidth={1}
-                />
-                <text
-                  x={PAD_LEFT - 8}
-                  y={y}
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                  fontSize={11}
-                  className="fill-muted-foreground"
-                  style={{
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  }}
-                >
-                  {v}
-                </text>
-              </g>
+              <text
+                key={`yt-${v}`}
+                x={PAD_LEFT - 8}
+                y={y}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={11}
+                className="fill-muted-foreground"
+                style={{
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                }}
+              >
+                {v}
+              </text>
             );
           })}
+
+          {/* Degradado vertical por barra (mismo color, más vivo arriba) */}
+          <defs>
+            {data.map((d) => (
+              <linearGradient
+                key={`grad-${d.uid}`}
+                id={`bar-grad-${d.uid}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={d.color} stopOpacity={1} />
+                <stop offset="100%" stopColor={d.color} stopOpacity={0.6} />
+              </linearGradient>
+            ))}
+          </defs>
 
           {/* Barras por jugador */}
           {data.map((d, idx) => {
@@ -263,16 +275,13 @@ export function BetsBarChart({ users, bets }: Props) {
             const bx = cx - barW / 2;
             const h = (d.count / Math.max(1, yTop)) * PLOT_H;
             const by = PAD_TOP + PLOT_H - h;
+            const r = Math.min(6, barW / 2);
             return (
               <g key={`bar-${d.uid}`}>
                 {d.count > 0 && (
-                  <rect
-                    x={bx}
-                    y={by}
-                    width={barW}
-                    height={Math.max(2, h)}
-                    fill={d.color}
-                    rx={4}
+                  <path
+                    d={roundedTopBar(bx, by, barW, Math.max(2, h), r)}
+                    fill={`url(#bar-grad-${d.uid})`}
                     style={{ cursor: "pointer" }}
                     onMouseEnter={() =>
                       setHover({
@@ -286,7 +295,7 @@ export function BetsBarChart({ users, bets }: Props) {
                     onClick={() => navigateToFeedFor(d.uid)}
                   >
                     <title>{`Ver apuestas de ${d.username} en el feed`}</title>
-                  </rect>
+                  </path>
                 )}
                 {d.count === 0 && (
                   <rect
