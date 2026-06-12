@@ -176,6 +176,26 @@ export default function RankingPage() {
     return map;
   }, [users, groupStatsByUid, activeGroup]);
 
+  // Auténtico "último de la clasificación": peor ROI (desempate por menor
+  // beneficio), independiente de cómo esté ordenada la tabla en pantalla.
+  const lastPlaceUid = useMemo(() => {
+    if (!users || users.length < 2) return null;
+    let worstUid: string | null = null;
+    let worstRoi = Infinity;
+    let worstProfit = Infinity;
+    for (const u of users) {
+      const st = groupStatsByUid.get(u.uid);
+      const roi = st?.roi ?? 0;
+      const profit = st?.totalProfit ?? 0;
+      if (roi < worstRoi || (roi === worstRoi && profit < worstProfit)) {
+        worstRoi = roi;
+        worstProfit = profit;
+        worstUid = u.uid;
+      }
+    }
+    return worstUid;
+  }, [users, groupStatsByUid]);
+
   // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
   const maxAbsRoi = useMemo(() => {
     let m = 0;
@@ -397,7 +417,7 @@ export default function RankingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y [&_td]:whitespace-nowrap">
-                  {(rankedUsers ?? users).map((u, idx, ranked) => {
+                  {(rankedUsers ?? users).map((u, idx) => {
                     const rank = idx + 1;
                     const s = groupStatsByUid.get(u.uid);
                     const roi = s?.roi ?? 0;
@@ -405,9 +425,9 @@ export default function RankingPage() {
                     const hitRate = s?.hitRate ?? 0;
                     const balance = balanceByUid.get(u.uid) ?? 0;
                     const isMe = appUser?.uid === u.uid;
-                    // Farolillo rojo: el último de la lista mostrada (con la
-                    // ordenación por defecto, el de peor ROI). Requiere ≥2.
-                    const isLast = ranked.length > 1 && idx === ranked.length - 1;
+                    // Farolillo rojo: el auténtico último por ROI, da igual
+                    // cómo esté ordenada la tabla.
+                    const isLast = u.uid === lastPlaceUid;
                     return (
                       <tr
                         key={u.uid}
