@@ -8,6 +8,10 @@ import {
   ArrowUpDown,
   BarChart3,
   LineChart,
+  Star,
+  Ticket,
+  TrendingDown,
+  Trophy,
   Zap,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,6 +34,7 @@ import {
   getInitialBalances,
 } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
+import { useAuth } from "@/features/auth/auth.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -69,6 +74,7 @@ export default function RankingPage() {
   const [allUsers, setAllUsers] = useState<AppUser[] | null>(null);
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const { memberUids, activeGroup } = useGroup();
+  const { appUser } = useAuth();
 
   // Columna por la que se ordena el ranking (por defecto ROI descendente).
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -240,25 +246,40 @@ export default function RankingPage() {
                   superaumento.profit
                 )}`,
                 accent: profitClass(superaumento.profit),
+                icon: <Zap className="h-4 w-4" />,
               },
-              { label: "Total", value: String(superaumento.count) },
+              {
+                label: "Total",
+                value: String(superaumento.count),
+                icon: <Ticket className="h-4 w-4" />,
+              },
               {
                 label: "Ganadas",
                 value: String(superaumento.won),
                 accent: "text-profit",
+                icon: <Trophy className="h-4 w-4" />,
               },
               {
                 label: "Perdidas",
                 value: String(superaumento.lost),
                 accent: "text-loss",
+                icon: <TrendingDown className="h-4 w-4" />,
               },
             ].map((s) => (
-              <div key={s.label} className="rounded-md border bg-card p-3">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {s.label}
-                </p>
+              <div
+                key={s.label}
+                className="rounded-md border bg-card p-3 transition-shadow hover:shadow-md"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {s.label}
+                  </p>
+                  <span className="text-muted-foreground/60">{s.icon}</span>
+                </div>
                 <p
-                  className={`mt-1 font-mono text-lg font-bold ${s.accent ?? ""}`}
+                  className={`mt-1 font-mono text-lg font-bold tabular-nums ${
+                    s.accent ?? ""
+                  }`}
                 >
                   {s.value}
                 </p>
@@ -376,13 +397,17 @@ export default function RankingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y [&_td]:whitespace-nowrap">
-                  {(rankedUsers ?? users).map((u, idx) => {
+                  {(rankedUsers ?? users).map((u, idx, ranked) => {
                     const rank = idx + 1;
                     const s = groupStatsByUid.get(u.uid);
                     const roi = s?.roi ?? 0;
                     const profit = s?.totalProfit ?? 0;
                     const hitRate = s?.hitRate ?? 0;
                     const balance = balanceByUid.get(u.uid) ?? 0;
+                    const isMe = appUser?.uid === u.uid;
+                    // Farolillo rojo: el último de la lista mostrada (con la
+                    // ordenación por defecto, el de peor ROI). Requiere ≥2.
+                    const isLast = ranked.length > 1 && idx === ranked.length - 1;
                     return (
                       <tr
                         key={u.uid}
@@ -401,7 +426,27 @@ export default function RankingPage() {
                               <AvatarFallback>{initials(u.username)}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <p className="truncate font-medium">{u.username}</p>
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-medium">
+                                  {u.username}
+                                </span>
+                                {isMe && (
+                                  <Star
+                                    className="h-4 w-4 shrink-0 fill-primary text-primary"
+                                    aria-label="Eres tú"
+                                  />
+                                )}
+                                {isLast && (
+                                  <span
+                                    className="shrink-0 text-xl leading-none"
+                                    role="img"
+                                    aria-label="Farolillo rojo: último de la clasificación"
+                                    title="Farolillo rojo: último de la clasificación"
+                                  >
+                                    🤡
+                                  </span>
+                                )}
+                              </div>
                               <p className="truncate text-xs text-muted-foreground">
                                 @{u.username}
                               </p>
