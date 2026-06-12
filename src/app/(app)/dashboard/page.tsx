@@ -6,10 +6,21 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  Award,
+  Ban,
+  Calculator,
+  Clock,
+  Coins,
+  Flame,
+  Gauge,
   Percent,
   Target,
+  Ticket,
+  TrendingDown,
   TrendingUp,
+  Trophy,
   Wallet,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
@@ -207,14 +218,14 @@ export default function DashboardPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Desglose de apuestas</h2>
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-          <MiniStat label="Total" value={stats.betsCount} />
-          <MiniStat label="Ganadas" value={stats.betsWon} accent="text-profit" />
-          <MiniStat label="Perdidas" value={stats.betsLost} accent="text-loss" />
-          <MiniStat label="Pendientes" value={stats.betsPending} />
-          <MiniStat label="Anuladas" value={stats.betsVoid} />
-          <MiniStat label="Racha actual" value={stats.currentStreak} accent={profitClass(stats.currentStreak)} />
-          <MiniStat label="Mejor racha" value={stats.bestStreak} />
-          <MiniStat label="Yield" value={formatPercent(stats.yield)} accent={profitClass(stats.yield)} />
+          <MiniStat label="Total" value={stats.betsCount} icon={<Ticket className="h-4 w-4" />} />
+          <MiniStat label="Ganadas" value={stats.betsWon} accent="text-profit" icon={<Trophy className="h-4 w-4" />} />
+          <MiniStat label="Perdidas" value={stats.betsLost} accent="text-loss" icon={<TrendingDown className="h-4 w-4" />} />
+          <MiniStat label="Pendientes" value={stats.betsPending} icon={<Clock className="h-4 w-4" />} />
+          <MiniStat label="Anuladas" value={stats.betsVoid} icon={<Ban className="h-4 w-4" />} />
+          <MiniStat label="Racha actual" value={stats.currentStreak} accent={profitClass(stats.currentStreak)} icon={<Flame className="h-4 w-4" />} />
+          <MiniStat label="Mejor racha" value={stats.bestStreak} icon={<Award className="h-4 w-4" />} />
+          <MiniStat label="Yield" value={formatPercent(stats.yield)} accent={profitClass(stats.yield)} icon={<Gauge className="h-4 w-4" />} />
         </div>
       </section>
 
@@ -222,12 +233,13 @@ export default function DashboardPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Promedios</h2>
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-          <MiniStat label="Total apostado" value={formatCurrency(stats.totalStaked)} />
-          <MiniStat label="Cuota media" value={stats.avgOdds.toFixed(2)} />
-          <MiniStat label="Stake medio" value={formatCurrency(stats.avgStake)} />
+          <MiniStat label="Total apostado" value={formatCurrency(stats.totalStaked)} icon={<Coins className="h-4 w-4" />} />
+          <MiniStat label="Cuota media" value={stats.avgOdds.toFixed(2)} icon={<Calculator className="h-4 w-4" />} />
+          <MiniStat label="Stake medio" value={formatCurrency(stats.avgStake)} icon={<Coins className="h-4 w-4" />} />
           <MiniStat
             label="Saldo inicial total"
             value={formatCurrency(summary.total.initial)}
+            icon={<Wallet className="h-4 w-4" />}
           />
         </div>
       </section>
@@ -247,17 +259,24 @@ export default function DashboardPage() {
               superaumento.profit
             )}`}
             accent={profitClass(superaumento.profit)}
+            icon={<Zap className="h-4 w-4" />}
           />
-          <MiniStat label="Total" value={superaumento.count} />
+          <MiniStat
+            label="Total"
+            value={superaumento.count}
+            icon={<Ticket className="h-4 w-4" />}
+          />
           <MiniStat
             label="Ganadas"
             value={superaumento.won}
             accent="text-profit"
+            icon={<Trophy className="h-4 w-4" />}
           />
           <MiniStat
             label="Perdidas"
             value={superaumento.lost}
             accent="text-loss"
+            icon={<TrendingDown className="h-4 w-4" />}
           />
         </div>
       </section>
@@ -438,18 +457,25 @@ function MiniStat({
   label,
   value,
   accent,
+  icon,
 }: {
   label: string;
   value: string | number;
   accent?: string;
+  icon?: ReactNode;
 }) {
   return (
     <Card>
       <CardContent className="p-3">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          {label}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          {icon && <span className="text-muted-foreground/60">{icon}</span>}
+        </div>
+        <p className={cn("mt-1 font-mono text-lg font-bold tabular-nums", accent)}>
+          {value}
         </p>
-        <p className={cn("mt-1 text-lg font-bold font-mono", accent)}>{value}</p>
       </CardContent>
     </Card>
   );

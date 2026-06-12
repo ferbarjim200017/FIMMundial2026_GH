@@ -1,9 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Search, Swords, X } from "lucide-react";
+import {
+  Award,
+  Calculator,
+  Clock,
+  Coins,
+  Flame,
+  Gauge,
+  Percent,
+  Search,
+  Swords,
+  Ticket,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  Wallet,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -281,16 +297,22 @@ export default function ProfilePage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatBox label="Saldo inicial" value={formatCurrency(groupBalances.initial)} />
+        <StatBox
+          label="Saldo inicial"
+          value={formatCurrency(groupBalances.initial)}
+          icon={<Coins className="h-4 w-4" />}
+        />
         <StatBox
           label="Saldo actual"
           value={formatCurrency(groupBalances.current)}
           tone="primary"
+          icon={<Wallet className="h-4 w-4" />}
         />
         <StatBox
           label="Dinero en juego"
           value={formatCurrency(inPlay.amount)}
           tone={inPlay.amount > 0 ? "amber" : "neutral"}
+          icon={<Clock className="h-4 w-4" />}
           subtitle={
             inPlay.count === 0
               ? "Sin apuestas pendientes"
@@ -301,44 +323,60 @@ export default function ProfilePage() {
           label="Beneficio total"
           value={formatCurrency(groupStats.totalProfit)}
           tone={signTone(groupStats.totalProfit)}
+          icon={<TrendingUp className="h-4 w-4" />}
         />
         <StatBox
           label="ROI"
           value={formatPercent(groupStats.roi)}
           tone={signTone(groupStats.roi)}
+          icon={<Percent className="h-4 w-4" />}
         />
         <StatBox
           label="Yield"
           value={formatPercent(groupStats.yield)}
           tone={signTone(groupStats.yield)}
+          icon={<Gauge className="h-4 w-4" />}
         />
         <StatBox
           label="Apuestas"
           value={String(groupStats.betsCount)}
           tone="primary"
+          icon={<Ticket className="h-4 w-4" />}
         />
         <StatBox
           label="Ganadas"
           value={String(groupStats.betsWon)}
           tone="profit"
+          icon={<Trophy className="h-4 w-4" />}
         />
         <StatBox
           label="Perdidas"
           value={String(groupStats.betsLost)}
           tone="loss"
+          icon={<TrendingDown className="h-4 w-4" />}
         />
         <StatBox
           label="Racha actual"
           value={String(groupStats.currentStreak)}
           tone={signTone(groupStats.currentStreak)}
+          icon={<Flame className="h-4 w-4" />}
         />
         <StatBox
           label="Mejor racha"
           value={String(groupStats.bestStreak)}
           tone={groupStats.bestStreak > 0 ? "profit" : "neutral"}
+          icon={<Award className="h-4 w-4" />}
         />
-        <StatBox label="Cuota media" value={groupStats.avgOdds.toFixed(2)} />
-        <StatBox label="Stake medio" value={formatCurrency(groupStats.avgStake)} />
+        <StatBox
+          label="Cuota media"
+          value={groupStats.avgOdds.toFixed(2)}
+          icon={<Calculator className="h-4 w-4" />}
+        />
+        <StatBox
+          label="Stake medio"
+          value={formatCurrency(groupStats.avgStake)}
+          icon={<Coins className="h-4 w-4" />}
+        />
       </div>
 
       {/* ─── Listado de apuestas del usuario, con filtros ─── */}
@@ -451,19 +489,28 @@ function StatBox({
   tone = "neutral",
   valueClass,
   subtitle,
+  icon,
 }: {
   label: string;
   value: string;
   tone?: Tone;
   valueClass?: string;
   subtitle?: string;
+  icon?: ReactNode;
 }) {
   const t = TONE[tone];
   return (
     <Card className={t.border}>
       <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 text-xl font-bold", t.value, valueClass)}>{value}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          {icon && <span className="text-muted-foreground/60">{icon}</span>}
+        </div>
+        <p className={cn("mt-1 text-xl font-bold tabular-nums", t.value, valueClass)}>
+          {value}
+        </p>
         {subtitle && (
           <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
         )}
