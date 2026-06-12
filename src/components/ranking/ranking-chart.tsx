@@ -138,14 +138,23 @@ export function RankingChart({ users, bets }: Props) {
   const nowMs = useMemo(() => Date.now(), []);
 
   // Inicio del periodo:
-  //  - "all": el inicio del Mundial (11 de junio) — acumulado de todos los días
-  //    desde que empezaron los partidos.
+  //  - "all": desde la PRIMERA apuesta liquidada del torneo (>= 11 jun), para
+  //    que la línea no arranque con un tramo plano largo. Suelo en el 11 de
+  //    junio para ignorar apuestas previas al Mundial.
   //  - "30"/"7": ventana móvil de los últimos N días, sin bajar del 11 de junio.
   const startMs = useMemo(() => {
     if (range === "7") return Math.max(nowMs - 7 * DAY_MS, TOURNAMENT_START_MS);
     if (range === "30") return Math.max(nowMs - 30 * DAY_MS, TOURNAMENT_START_MS);
-    return TOURNAMENT_START_MS;
-  }, [range, nowMs]);
+    let earliest = Infinity;
+    for (const b of bets) {
+      if (b.status !== "won" && b.status !== "lost" && b.status !== "cashout") {
+        continue;
+      }
+      const ms = (b.settledAt ?? b.createdAt).toMillis();
+      if (ms >= TOURNAMENT_START_MS && ms < earliest) earliest = ms;
+    }
+    return Number.isFinite(earliest) ? earliest : TOURNAMENT_START_MS;
+  }, [range, nowMs, bets]);
 
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
