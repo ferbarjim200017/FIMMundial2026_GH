@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowDown,
@@ -8,6 +8,7 @@ import {
   ArrowUpDown,
   BarChart3,
   LineChart,
+  Minus,
   Star,
   Ticket,
   TrendingDown,
@@ -25,7 +26,10 @@ import {
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { subscribeToRanking } from "@/features/users/users.service";
+import {
+  subscribeToRanking,
+  updateRankMovement,
+} from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import {
   betInGroup,
@@ -43,7 +47,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, RankMovement } from "@/types/domain";
 
 function medal(rank: number) {
   if (rank === 1) return "🥇";
@@ -68,6 +72,49 @@ function podiumRing(rank: number): string {
   return "";
 }
 
+// La flecha de movimiento solo se muestra durante 24 h desde el cambio.
+const MOVEMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Indicador de movimiento de posición: flecha verde si subió de puesto,
+ *  roja si bajó (solo durante 24 h desde el cambio); guion gris si no hay
+ *  cambio reciente. */
+function RankMovementIndicator({
+  entry,
+  nowMs,
+}: {
+  entry: RankMovement | undefined;
+  nowMs: number;
+}) {
+  if (
+    entry &&
+    entry.dir !== "flat" &&
+    entry.changedAt != null &&
+    nowMs - entry.changedAt.toMillis() < MOVEMENT_WINDOW_MS
+  ) {
+    if (entry.dir === "up") {
+      return (
+        <span title="Ha subido puestos (últimas 24 h)" aria-label="Ha subido puestos">
+          <ArrowUp className="h-4 w-4 text-profit" strokeWidth={2.75} />
+        </span>
+      );
+    }
+    return (
+      <span title="Ha bajado puestos (últimas 24 h)" aria-label="Ha bajado puestos">
+        <ArrowDown className="h-4 w-4 text-loss" strokeWidth={2.75} />
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Sin cambios de posición"
+      aria-label="Sin cambios de posición"
+      className="text-muted-foreground/50"
+    >
+      <Minus className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
 type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "username";
 
 export default function RankingPage() {
@@ -75,6 +122,15 @@ export default function RankingPage() {
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const { memberUids, activeGroup } = useGroup();
   const { appUser } = useAuth();
+
+  // "Ahora" para la ventana de 24 h de las flechas de movimiento. Se refresca
+  // cada minuto para que la flecha desaparezca al cumplirse el plazo aunque la
+  // página siga abierta.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Columna por la que se ordena el ranking (por defecto ROI descendente).
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -195,6 +251,56 @@ export default function RankingPage() {
     }
     return worstUid;
   }, [users, groupStatsByUid]);
+
+  // Posición canónica (1 = primero) por ROI desc, desempate por beneficio.
+  // Independiente de cómo esté ordenada la tabla en pantalla: es la posición
+  // "real" en la clasificación, que es la que cuenta para el movimiento.
+  const canonicalRankByUid = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!users) return map;
+    const ordered = [...users].sort((a, b) => {
+      const sa = groupStatsByUid.get(a.uid);
+      const sb = groupStatsByUid.get(b.uid);
+      const ra = sa?.roi ?? 0;
+      const rb = sb?.roi ?? 0;
+      if (rb !== ra) return rb - ra;
+      return (sb?.totalProfit ?? 0) - (sa?.totalProfit ?? 0);
+    });
+    ordered.forEach((u, i) => map.set(u.uid, i + 1));
+    return map;
+  }, [users, groupStatsByUid]);
+
+  // Registra MI propio movimiento de posición cuando cambia. Cada usuario
+  // mantiene su propia entrada (reglas: solo puedes escribir tu doc), así que
+  // la flecha de cada jugador se refresca cuando esa persona abre el ranking.
+  const lastMovementWrite = useRef<string>("");
+  useEffect(() => {
+    if (!appUser || !activeGroup || !users || users.length === 0) return;
+    const gid = activeGroup.id;
+    const myRank = canonicalRankByUid.get(appUser.uid);
+    if (myRank == null) return;
+    const key = `${gid}:${myRank}`;
+    if (lastMovementWrite.current === key) return;
+    const stored = appUser.rankMovement?.[gid];
+    if (!stored) {
+      // Primera vez en este grupo: fijamos la posición base, sin flecha.
+      lastMovementWrite.current = key;
+      updateRankMovement(appUser.uid, gid, { rank: myRank, dir: "flat" }).catch(
+        (e) => console.error("[rankMovement]", e)
+      );
+      return;
+    }
+    if (stored.rank !== myRank) {
+      lastMovementWrite.current = key;
+      const dir = myRank < stored.rank ? "up" : "down";
+      updateRankMovement(appUser.uid, gid, { rank: myRank, dir }).catch((e) =>
+        console.error("[rankMovement]", e)
+      );
+      return;
+    }
+    // Sin cambios: marcamos como atendido para no reintentar en cada render.
+    lastMovementWrite.current = key;
+  }, [appUser, activeGroup, users, canonicalRankByUid]);
 
   // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
   const maxAbsRoi = useMemo(() => {
@@ -407,7 +513,7 @@ export default function RankingPage() {
               <table className="w-full min-w-[640px] text-sm">
                 <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground [&_th]:whitespace-nowrap">
                   <tr>
-                    <th className="px-4 py-3 w-16">#</th>
+                    <th className="px-3 py-3 w-20">#</th>
                     {sortTh("username", "Usuario", "px-2 py-3")}
                     {sortTh("roi", "ROI", "px-2 py-3 text-right")}
                     {sortTh("profit", "Beneficio", "px-2 py-3 text-right")}
@@ -433,8 +539,14 @@ export default function RankingPage() {
                         key={u.uid}
                         className={`transition-colors ${podiumRow(rank)}`}
                       >
-                        <td className="px-4 py-3 text-base font-semibold">
-                          {medal(rank)}
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5 text-base font-semibold">
+                            <span>{medal(rank)}</span>
+                            <RankMovementIndicator
+                              entry={u.rankMovement?.[activeGroup?.id ?? ""]}
+                              nowMs={nowMs}
+                            />
+                          </div>
                         </td>
                         <td className="px-2 py-3">
                           <Link

@@ -60,6 +60,22 @@ export interface AppUser {
    *  alternar desde el topbar. Persistido en Firestore para sincronizar entre
    *  dispositivos. */
   activeGroupId?: string | null;
+  /** Movimiento de posición en el ranking, por grupo. Cada usuario mantiene
+   *  su PROPIA entrada (su cliente la actualiza al abrir la clasificación):
+   *  por eso la flecha de cada jugador se refresca cuando esa persona entra
+   *  al ranking. La flecha solo se muestra durante 24 h desde el cambio. */
+  rankMovement?: Record<string, RankMovement>;
+}
+
+/** Última posición conocida de un usuario en un grupo + dirección del último
+ *  cambio y cuándo ocurrió (para la ventana de visibilidad de 24 h). */
+export interface RankMovement {
+  /** Posición conocida la última vez (1 = primero). */
+  rank: number;
+  /** Dirección del último cambio respecto a la posición previa. */
+  dir: "up" | "down" | "flat";
+  /** Momento del último cambio de posición. */
+  changedAt: Timestamp;
 }
 
 // ============================================================

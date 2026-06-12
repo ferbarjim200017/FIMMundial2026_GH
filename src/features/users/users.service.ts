@@ -10,6 +10,7 @@ import {
   query,
   limit as limitTo,
   serverTimestamp,
+  Timestamp,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -204,6 +205,26 @@ export async function updateInitialBalances(
       currentBalance: round2(initialBalance + totalProfit),
     });
   }
+}
+
+/**
+ * Registra el movimiento de posición del usuario en un grupo. Lo llama el
+ * propio cliente del usuario cuando, al abrir el ranking, detecta que su
+ * posición ha cambiado respecto a la última guardada. `changedAt` se sella
+ * con la hora del cliente para medir la ventana de 24 h de visibilidad.
+ */
+export async function updateRankMovement(
+  uid: string,
+  groupId: string,
+  entry: { rank: number; dir: "up" | "down" | "flat" }
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    [`rankMovement.${groupId}`]: {
+      rank: entry.rank,
+      dir: entry.dir,
+      changedAt: Timestamp.now(),
+    },
+  });
 }
 
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {
