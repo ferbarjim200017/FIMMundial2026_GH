@@ -30,11 +30,11 @@ import {
 import { STATUS_OPTIONS, BOOKMAKER_OPTIONS } from "@/features/bets/bets.schema";
 import { ROUTES } from "@/lib/constants";
 import {
+  cn,
   formatCurrency,
   formatDate,
   formatPercent,
   initials,
-  profitClass,
 } from "@/lib/utils";
 import type { AppUser, Bet, BetStatus, Bookmaker } from "@/types/domain";
 
@@ -282,11 +282,15 @@ export default function ProfilePage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatBox label="Saldo inicial" value={formatCurrency(groupBalances.initial)} />
-        <StatBox label="Saldo actual" value={formatCurrency(groupBalances.current)} />
+        <StatBox
+          label="Saldo actual"
+          value={formatCurrency(groupBalances.current)}
+          tone="primary"
+        />
         <StatBox
           label="Dinero en juego"
           value={formatCurrency(inPlay.amount)}
-          valueClass={inPlay.amount > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
+          tone={inPlay.amount > 0 ? "amber" : "neutral"}
           subtitle={
             inPlay.count === 0
               ? "Sin apuestas pendientes"
@@ -296,19 +300,43 @@ export default function ProfilePage() {
         <StatBox
           label="Beneficio total"
           value={formatCurrency(groupStats.totalProfit)}
-          valueClass={profitClass(groupStats.totalProfit)}
+          tone={signTone(groupStats.totalProfit)}
         />
         <StatBox
           label="ROI"
           value={formatPercent(groupStats.roi)}
-          valueClass={profitClass(groupStats.roi)}
+          tone={signTone(groupStats.roi)}
         />
-        <StatBox label="Yield" value={formatPercent(groupStats.yield)} />
-        <StatBox label="Apuestas" value={String(groupStats.betsCount)} />
-        <StatBox label="Ganadas" value={String(groupStats.betsWon)} />
-        <StatBox label="Perdidas" value={String(groupStats.betsLost)} />
-        <StatBox label="Racha actual" value={String(groupStats.currentStreak)} />
-        <StatBox label="Mejor racha" value={String(groupStats.bestStreak)} />
+        <StatBox
+          label="Yield"
+          value={formatPercent(groupStats.yield)}
+          tone={signTone(groupStats.yield)}
+        />
+        <StatBox
+          label="Apuestas"
+          value={String(groupStats.betsCount)}
+          tone="primary"
+        />
+        <StatBox
+          label="Ganadas"
+          value={String(groupStats.betsWon)}
+          tone="profit"
+        />
+        <StatBox
+          label="Perdidas"
+          value={String(groupStats.betsLost)}
+          tone="loss"
+        />
+        <StatBox
+          label="Racha actual"
+          value={String(groupStats.currentStreak)}
+          tone={signTone(groupStats.currentStreak)}
+        />
+        <StatBox
+          label="Mejor racha"
+          value={String(groupStats.bestStreak)}
+          tone={groupStats.bestStreak > 0 ? "profit" : "neutral"}
+        />
         <StatBox label="Cuota media" value={groupStats.avgOdds.toFixed(2)} />
         <StatBox label="Stake medio" value={formatCurrency(groupStats.avgStake)} />
       </div>
@@ -399,22 +427,43 @@ export default function ProfilePage() {
   );
 }
 
+type Tone = "profit" | "loss" | "amber" | "primary" | "neutral";
+
+const TONE: Record<Tone, { border: string; value: string }> = {
+  profit: { border: "border-l-4 border-l-profit bg-profit/5", value: "text-profit" },
+  loss: { border: "border-l-4 border-l-loss bg-loss/5", value: "text-loss" },
+  amber: {
+    border: "border-l-4 border-l-amber-500 bg-amber-500/5",
+    value: "text-amber-600 dark:text-amber-400",
+  },
+  primary: { border: "border-l-4 border-l-primary bg-primary/5", value: "" },
+  neutral: { border: "", value: "" },
+};
+
+/** Tono según el signo del valor (verde si >0, rojo si <0, neutro si 0). */
+function signTone(n: number): Tone {
+  return n > 0 ? "profit" : n < 0 ? "loss" : "neutral";
+}
+
 function StatBox({
   label,
   value,
+  tone = "neutral",
   valueClass,
   subtitle,
 }: {
   label: string;
   value: string;
+  tone?: Tone;
   valueClass?: string;
   subtitle?: string;
 }) {
+  const t = TONE[tone];
   return (
-    <Card>
+    <Card className={t.border}>
       <CardContent className="p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-xl font-bold ${valueClass ?? ""}`}>{value}</p>
+        <p className={cn("mt-1 text-xl font-bold", t.value, valueClass)}>{value}</p>
         {subtitle && (
           <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
         )}
