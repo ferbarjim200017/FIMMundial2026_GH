@@ -12,11 +12,15 @@ import {
 import {
   DAY_MS,
   pickChartColor,
-  todayStartMs,
 } from "@/components/ranking/chart-palette";
 import type { AppUser, Bet } from "@/types/domain";
 
 type RangeKey = "all" | "30" | "7";
+
+// El Mundial 2026 arranca el 11 de junio. La gráfica de "todo el historial"
+// empieza ese día (no antes), aunque existan apuestas previas (p. ej. de
+// pruebas). Las ventanas de 7/30 días tampoco bajan de esta fecha.
+const TOURNAMENT_START_MS = new Date(2026, 5, 11, 0, 0, 0, 0).getTime();
 
 interface Props {
   users: AppUser[];
@@ -87,12 +91,6 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
   return points;
 }
 
-function startOfDayMs(ms: number): number {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
 function formatTickCurrency(v: number): string {
   const sign = v > 0 ? "+" : "";
   if (Math.abs(v) >= 1000) {
@@ -140,22 +138,14 @@ export function RankingChart({ users, bets }: Props) {
   const nowMs = useMemo(() => Date.now(), []);
 
   // Inicio del periodo:
-  //  - "all": desde la primera apuesta liquidada (acumulado de todos los días);
-  //    si no hay ninguna, desde hoy.
-  //  - "30"/"7": ventana móvil de los últimos N días.
+  //  - "all": el inicio del Mundial (11 de junio) — acumulado de todos los días
+  //    desde que empezaron los partidos.
+  //  - "30"/"7": ventana móvil de los últimos N días, sin bajar del 11 de junio.
   const startMs = useMemo(() => {
-    if (range === "7") return nowMs - 7 * DAY_MS;
-    if (range === "30") return nowMs - 30 * DAY_MS;
-    let earliest = Infinity;
-    for (const b of bets) {
-      if (b.status !== "won" && b.status !== "lost" && b.status !== "cashout") {
-        continue;
-      }
-      const ms = (b.settledAt ?? b.createdAt).toMillis();
-      if (ms < earliest) earliest = ms;
-    }
-    return Number.isFinite(earliest) ? startOfDayMs(earliest) : todayStartMs();
-  }, [range, nowMs, bets]);
+    if (range === "7") return Math.max(nowMs - 7 * DAY_MS, TOURNAMENT_START_MS);
+    if (range === "30") return Math.max(nowMs - 30 * DAY_MS, TOURNAMENT_START_MS);
+    return TOURNAMENT_START_MS;
+  }, [range, nowMs]);
 
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
