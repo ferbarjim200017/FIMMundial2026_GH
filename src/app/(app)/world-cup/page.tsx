@@ -27,7 +27,9 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<StageFilter>("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  // Por defecto solo los partidos no jugados; con el filtro Estado se pueden
+  // mostrar los finalizados ("Finalizados" o "Todos").
+  const [status, setStatus] = useState<StatusFilter>("upcoming");
   const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   useEffect(() => {

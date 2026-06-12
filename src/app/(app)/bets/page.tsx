@@ -103,9 +103,10 @@ export default function BetsPage() {
         return false;
       // "Terminadas" = todas las que no están pendientes.
       if (status === "settled" && b.status === "pending") return false;
-      // "Juegan pronto": la apuesta engloba un partido o equipo que juega
+      // "Juegan pronto": solo apuestas PENDIENTES cuyo partido o equipo juega
       // hoy o mañana hasta las 10:00.
       if (soonOnly) {
+        if (b.status !== "pending") return false;
         const inWindow =
           (b.matchId ? soonSets.matchIds.has(b.matchId) : false) ||
           (b.matchIds ?? []).some((id) => soonSets.matchIds.has(id)) ||
