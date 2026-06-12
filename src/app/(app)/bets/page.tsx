@@ -270,7 +270,6 @@ export default function BetsPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Próximos</label>
             <Button
               type="button"
               variant={soonOnly ? "default" : "outline"}
