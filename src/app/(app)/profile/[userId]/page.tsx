@@ -3,17 +3,31 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Swords } from "lucide-react";
+import { Search, Swords, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { BetsTable } from "@/components/bets/bets-table";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
-import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  bookmakerLabel,
+  computeUserStats,
+  getInitialBalances,
+} from "@/features/bets/bets.utils";
+import { STATUS_OPTIONS, BOOKMAKER_OPTIONS } from "@/features/bets/bets.schema";
 import { ROUTES } from "@/lib/constants";
 import {
   formatCurrency,
@@ -22,11 +36,11 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, BetStatus, Bookmaker } from "@/types/domain";
 
 export default function ProfilePage() {
   const params = useParams<{ userId: string }>();
-  const { appUser: me } = useAuth();
+  const { appUser: me, isAdmin } = useAuth();
   const { activeGroup, memberUids } = useGroup();
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +49,10 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [bets, setBets] = useState<Bet[]>([]);
+  // Filtros del listado de apuestas del usuario.
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BetStatus | "all" | "settled">("all");
+  const [bookmakerFilter, setBookmakerFilter] = useState<Bookmaker | "all">("all");
 
   useEffect(() => {
     if (!params.userId) return;
@@ -60,6 +78,35 @@ export default function ProfilePage() {
   }, [bets, activeGroup]);
 
   const groupStats = useMemo(() => computeUserStats(groupBets), [groupBets]);
+
+  // Listado de apuestas del usuario, filtrado por búsqueda + estado + casa.
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredBets = useMemo(() => {
+    return groupBets.filter((b) => {
+      if (statusFilter === "settled") {
+        if (b.status === "pending") return false;
+      } else if (statusFilter !== "all" && b.status !== statusFilter) {
+        return false;
+      }
+      if (bookmakerFilter !== "all" && b.bookmaker !== bookmakerFilter) {
+        return false;
+      }
+      if (normalizedQuery) {
+        const haystack = [
+          b.matchLabel,
+          b.selection,
+          b.marketDetail ?? "",
+          b.bookmakerLabel ?? "",
+          bookmakerLabel(b.bookmaker, b.bookmakerLabel),
+          b.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
+      return true;
+    });
+  }, [groupBets, statusFilter, bookmakerFilter, normalizedQuery]);
 
   // Cuánto dinero tiene "en juego" ahora mismo: suma de stakes de las
   // apuestas pendientes que NO sean freebet (las freebets no inmovilizan
@@ -231,6 +278,89 @@ export default function ProfilePage() {
         <StatBox label="Cuota media" value={groupStats.avgOdds.toFixed(2)} />
         <StatBox label="Stake medio" value={formatCurrency(groupStats.avgStake)} />
       </div>
+
+      {/* ─── Listado de apuestas del usuario, con filtros ─── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Apuestas de {user.username}
+          </CardTitle>
+          <CardDescription>
+            {groupBets.length} apuesta{groupBets.length === 1 ? "" : "s"}
+            {activeGroup ? ` en ${activeGroup.name}` : ""}. Usa los filtros para
+            acotar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por partido, selección, casa, notas…"
+                className="pl-9 pr-9"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) =>
+                  setStatusFilter(v as BetStatus | "all" | "settled")
+                }
+              >
+                <SelectTrigger className="h-9 w-full sm:w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="settled">Terminadas</SelectItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Casa</Label>
+              <Select
+                value={bookmakerFilter}
+                onValueChange={(v) => setBookmakerFilter(v as Bookmaker | "all")}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {BOOKMAKER_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <BetsTable
+            bets={filteredBets}
+            ownerUid={me?.uid ?? ""}
+            isAdmin={isAdmin}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
