@@ -3,11 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DAY_MS,
   pickChartColor,
   todayStartMs,
 } from "@/components/ranking/chart-palette";
 import type { AppUser, Bet } from "@/types/domain";
+
+type RangeKey = "all" | "30" | "7";
 
 interface Props {
   users: AppUser[];
@@ -38,15 +47,14 @@ function niceTicks(min: number, max: number, count: number): number[] {
 }
 
 /**
- * Serie temporal de beneficio/pérdida acumulado de un usuario partiendo
- * de hoy. NO incluye el saldo de la banca: solo el delta acumulado por
- * apuestas liquidadas desde hoy.
+ * Serie temporal de beneficio/pérdida acumulado de un usuario dentro del
+ * periodo seleccionado. NO incluye el saldo de la banca: solo el delta
+ * acumulado por apuestas liquidadas en ese periodo.
  *
- * - Punto inicial: (hoy 00:00, 0) — todos los usuarios arrancan en 0.
- * - Puntos siguientes: cada apuesta liquidada (won/lost/cashout) desde
- *   hoy en adelante, acumulando profit.
- * - Si no hay apuestas desde hoy, añadimos un punto en "ahora" para que
- *   la línea sea visible (plana).
+ * - Punto inicial: (startMs, 0) — todos arrancan en 0 al inicio del periodo.
+ * - Puntos siguientes: cada apuesta liquidada (won/lost/cashout) dentro del
+ *   periodo, acumulando profit.
+ * - Se prolonga hasta "ahora" con el balance acumulado para reflejar el total.
  */
 function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number): Series["points"] {
   const settled = bets
@@ -70,10 +78,19 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
     acc += s.profit;
     points.push({ t: s.ms, balance: acc });
   }
-  if (points.length === 1) {
-    points.push({ t: Math.max(nowMs, startMs + DAY_MS), balance: acc });
-  }
+  // Prolongamos la línea hasta "ahora" con el balance acumulado, para que
+  // refleje el total aunque la última apuesta del periodo sea antigua (o no
+  // haya ninguna: línea plana en 0).
+  const endT = Math.max(nowMs, startMs + DAY_MS);
+  const lastT = points[points.length - 1].t;
+  if (lastT < endT) points.push({ t: endT, balance: acc });
   return points;
+}
+
+function startOfDayMs(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
 function formatTickCurrency(v: number): string {
@@ -113,12 +130,32 @@ export function RankingChart({ users, bets }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const startMs = useMemo(() => todayStartMs(), []);
+  // Periodo mostrado. Por defecto "all" = acumulado de TODO el historial.
+  const [range, setRange] = useState<RangeKey>("all");
+
   // Fijamos "ahora" al montar el componente. Antes era `Date.now()` a nivel de
   // render, lo que invalidaba el useMemo de `series` en cada repintado y
   // recalculaba todas las series sin necesidad. Memoizarlo da una gráfica
   // estable (idéntica en pantalla) y evita ese recálculo.
   const nowMs = useMemo(() => Date.now(), []);
+
+  // Inicio del periodo:
+  //  - "all": desde la primera apuesta liquidada (acumulado de todos los días);
+  //    si no hay ninguna, desde hoy.
+  //  - "30"/"7": ventana móvil de los últimos N días.
+  const startMs = useMemo(() => {
+    if (range === "7") return nowMs - 7 * DAY_MS;
+    if (range === "30") return nowMs - 30 * DAY_MS;
+    let earliest = Infinity;
+    for (const b of bets) {
+      if (b.status !== "won" && b.status !== "lost" && b.status !== "cashout") {
+        continue;
+      }
+      const ms = (b.settledAt ?? b.createdAt).toMillis();
+      if (ms < earliest) earliest = ms;
+    }
+    return Number.isFinite(earliest) ? startOfDayMs(earliest) : todayStartMs();
+  }, [range, nowMs, bets]);
 
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
@@ -215,6 +252,21 @@ export function RankingChart({ users, bets }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* Selector de periodo */}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Periodo:</span>
+        <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
+          <SelectTrigger className="h-8 w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo el historial</SelectItem>
+            <SelectItem value="30">Últimos 30 días</SelectItem>
+            <SelectItem value="7">Últimos 7 días</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div ref={containerRef} className="relative w-full">
         <svg
           width={W}

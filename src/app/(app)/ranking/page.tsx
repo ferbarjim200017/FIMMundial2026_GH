@@ -181,10 +181,10 @@ export default function RankingPage() {
               Evolución del beneficio
             </CardTitle>
             <CardDescription>
-              Todos arrancan hoy en 0 €. La línea sube o baja con cada
-              apuesta liquidada — solo refleja ganancias y pérdidas, no
-              el saldo de la banca. Click en un nombre para ocultar/mostrar
-              su línea.
+              Beneficio/pérdida acumulado a lo largo del periodo elegido (por
+              defecto, todo el historial). Cada línea arranca en 0 € al inicio
+              del periodo — solo refleja ganancias y pérdidas, no el saldo de la
+              banca. Click en un nombre para ocultar/mostrar su línea.
             </CardDescription>
           </CardHeader>
           <CardContent>
