@@ -3,6 +3,7 @@
 import {
   createUserWithEmailAndPassword,
   getRedirectResult,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -73,6 +74,16 @@ export async function registerWithEmail(
 
 export async function signOutUser() {
   await signOut(auth);
+}
+
+/**
+ * Envía a `email` el correo de restablecimiento de contraseña de Firebase.
+ * El correo contiene un enlace seguro (con un código de un solo uso) que abre
+ * la página de Firebase donde el usuario escribe su nueva contraseña. No
+ * almacenamos ni verificamos códigos por nuestra cuenta.
+ */
+export async function sendPasswordReset(email: string) {
+  await sendPasswordResetEmail(auth, email);
 }
 
 export type { FirebaseUser };

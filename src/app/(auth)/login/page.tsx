@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FirebaseError } from "firebase/app";
@@ -8,7 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { signInWithEmail, signInWithGoogle } from "@/features/auth/auth.service";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  sendPasswordReset,
+  signInWithEmail,
+  signInWithGoogle,
+} from "@/features/auth/auth.service";
 import { ROUTES } from "@/lib/constants";
 
 export default function LoginPage() {
@@ -17,6 +28,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   async function handleEmailLogin(e: FormEvent) {
     e.preventDefault();
@@ -85,12 +97,27 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResetOpen(true)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                ¿Has olvidado tu contraseña?
+              </button>
+            </div>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Entrando…" : "Entrar"}
           </Button>
         </form>
+
+        <ForgotPasswordDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          initialEmail={email}
+        />
       </CardContent>
       <CardFooter className="justify-center text-sm text-muted-foreground">
         ¿No tienes cuenta?&nbsp;
@@ -100,6 +127,120 @@ export default function LoginPage() {
       </CardFooter>
     </Card>
   );
+}
+
+/** Diálogo de "He olvidado mi contraseña": pide el email y dispara el correo
+ *  de restablecimiento de Firebase (enlace seguro con código de un solo uso). */
+function ForgotPasswordDialog({
+  open,
+  onOpenChange,
+  initialEmail,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  initialEmail: string;
+}) {
+  const [email, setEmail] = useState(initialEmail);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  // Cada vez que se abre, precargamos el email del formulario de login y
+  // reseteamos el estado.
+  useEffect(() => {
+    if (open) {
+      setEmail(initialEmail);
+      setStatus("idle");
+      setError(null);
+    }
+  }, [open, initialEmail]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setStatus("sending");
+    try {
+      await sendPasswordReset(email.trim());
+      setStatus("sent");
+    } catch (err) {
+      console.error("[reset password]", err);
+      // No revelamos si la cuenta existe: user-not-found se trata como éxito.
+      if (err instanceof FirebaseError && err.code === "auth/user-not-found") {
+        setStatus("sent");
+        return;
+      }
+      setStatus("idle");
+      setError(formatResetError(err));
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Restablecer contraseña</DialogTitle>
+          <DialogDescription>
+            Te enviaremos un correo con un enlace seguro para crear una
+            contraseña nueva.
+          </DialogDescription>
+        </DialogHeader>
+
+        {status === "sent" ? (
+          <div className="space-y-3 text-sm">
+            <p className="rounded-md bg-profit/10 p-3 leading-relaxed">
+              Si existe una cuenta con <strong>{email}</strong>, recibirás un
+              correo con un enlace para restablecer tu contraseña. Revisa
+              también la carpeta de spam.
+            </p>
+            <Button className="w-full" onClick={() => onOpenChange(false)}>
+              Entendido
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                autoFocus
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={status === "sending"}
+            >
+              {status === "sending" ? "Enviando…" : "Enviar enlace"}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatResetError(err: unknown): string {
+  if (err instanceof FirebaseError) {
+    switch (err.code) {
+      case "auth/invalid-email":
+        return "Ese email no es válido.";
+      case "auth/missing-email":
+        return "Introduce tu email.";
+      case "auth/too-many-requests":
+        return "Demasiados intentos. Prueba de nuevo más tarde.";
+      case "auth/network-request-failed":
+        return "Sin conexión con Firebase. Inténtalo de nuevo.";
+      default:
+        return `No se pudo enviar el correo (${err.code}).`;
+    }
+  }
+  return "No se pudo enviar el correo. Inténtalo de nuevo.";
 }
 
 function translateAuthError(code: string): string {
