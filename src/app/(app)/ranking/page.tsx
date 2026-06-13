@@ -26,6 +26,7 @@ import {
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CountUp } from "@/components/ui/count-up";
 import {
   subscribeToRankMovements,
   subscribeToRanking,
@@ -75,6 +76,9 @@ function podiumRing(rank: number): string {
 
 // La flecha de movimiento solo se muestra durante 24 h desde el cambio.
 const MOVEMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Formateador entero para el count-up de los tiles.
+const asInt = (n: number) => String(Math.round(n));
 
 /** Indicador de movimiento de posición: flecha verde si subió de puesto,
  *  roja si bajó (solo durante 24 h desde el cambio); guion gris si no hay
@@ -390,26 +394,29 @@ export default function RankingPage() {
             {[
               {
                 label: "Balance",
-                value: `${superaumento.profit > 0 ? "+" : ""}${formatCurrency(
-                  superaumento.profit
-                )}`,
+                value: (
+                  <CountUp
+                    end={superaumento.profit}
+                    format={(n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`}
+                  />
+                ),
                 accent: profitClass(superaumento.profit),
                 icon: <Zap className="h-4 w-4" />,
               },
               {
                 label: "Total",
-                value: String(superaumento.count),
+                value: <CountUp end={superaumento.count} format={asInt} />,
                 icon: <Ticket className="h-4 w-4" />,
               },
               {
                 label: "Ganadas",
-                value: String(superaumento.won),
+                value: <CountUp end={superaumento.won} format={asInt} />,
                 accent: "text-profit",
                 icon: <Trophy className="h-4 w-4" />,
               },
               {
                 label: "Perdidas",
-                value: String(superaumento.lost),
+                value: <CountUp end={superaumento.lost} format={asInt} />,
                 accent: "text-loss",
                 icon: <TrendingDown className="h-4 w-4" />,
               },

@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -54,6 +47,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CountUp } from "@/components/ui/count-up";
 import {
   cn,
   formatCurrency,
@@ -63,6 +57,10 @@ import {
 import { ROUTES } from "@/lib/constants";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import type { Bet } from "@/types/domain";
+
+// Formateadores para el count-up de las tarjetas (enteros y cuotas).
+const asInt = (n: number) => String(Math.round(n));
+const asOdds = (n: number) => n.toFixed(2);
 
 export default function DashboardPage() {
   const { appUser } = useAuth();
@@ -233,14 +231,14 @@ export default function DashboardPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Desglose de apuestas</h2>
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-          <MiniStat label="Total" value={stats.betsCount} icon={<Ticket className="h-4 w-4" />} />
-          <MiniStat label="Ganadas" value={stats.betsWon} accent="text-profit" icon={<Trophy className="h-4 w-4" />} />
-          <MiniStat label="Perdidas" value={stats.betsLost} accent="text-loss" icon={<TrendingDown className="h-4 w-4" />} />
-          <MiniStat label="Pendientes" value={stats.betsPending} icon={<Clock className="h-4 w-4" />} />
-          <MiniStat label="Anuladas" value={stats.betsVoid} icon={<Ban className="h-4 w-4" />} />
-          <MiniStat label="Racha actual" value={stats.currentStreak} accent={profitClass(stats.currentStreak)} icon={<Flame className="h-4 w-4" />} />
-          <MiniStat label="Mejor racha" value={stats.bestStreak} icon={<Award className="h-4 w-4" />} />
-          <MiniStat label="Yield" value={formatPercent(stats.yield)} accent={profitClass(stats.yield)} icon={<Gauge className="h-4 w-4" />} />
+          <MiniStat label="Total" value={<CountUp end={stats.betsCount} format={asInt} />} icon={<Ticket className="h-4 w-4" />} />
+          <MiniStat label="Ganadas" value={<CountUp end={stats.betsWon} format={asInt} />} accent="text-profit" icon={<Trophy className="h-4 w-4" />} />
+          <MiniStat label="Perdidas" value={<CountUp end={stats.betsLost} format={asInt} />} accent="text-loss" icon={<TrendingDown className="h-4 w-4" />} />
+          <MiniStat label="Pendientes" value={<CountUp end={stats.betsPending} format={asInt} />} icon={<Clock className="h-4 w-4" />} />
+          <MiniStat label="Anuladas" value={<CountUp end={stats.betsVoid} format={asInt} />} icon={<Ban className="h-4 w-4" />} />
+          <MiniStat label="Racha actual" value={<CountUp end={stats.currentStreak} format={asInt} />} accent={profitClass(stats.currentStreak)} icon={<Flame className="h-4 w-4" />} />
+          <MiniStat label="Mejor racha" value={<CountUp end={stats.bestStreak} format={asInt} />} icon={<Award className="h-4 w-4" />} />
+          <MiniStat label="Yield" value={<CountUp end={stats.yield} format={formatPercent} />} accent={profitClass(stats.yield)} icon={<Gauge className="h-4 w-4" />} />
         </div>
       </section>
 
@@ -248,12 +246,12 @@ export default function DashboardPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Promedios</h2>
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-          <MiniStat label="Total apostado" value={formatCurrency(stats.totalStaked)} icon={<Coins className="h-4 w-4" />} />
-          <MiniStat label="Cuota media" value={stats.avgOdds.toFixed(2)} icon={<Calculator className="h-4 w-4" />} />
-          <MiniStat label="Stake medio" value={formatCurrency(stats.avgStake)} icon={<Coins className="h-4 w-4" />} />
+          <MiniStat label="Total apostado" value={<CountUp end={stats.totalStaked} format={formatCurrency} />} icon={<Coins className="h-4 w-4" />} />
+          <MiniStat label="Cuota media" value={<CountUp end={stats.avgOdds} format={asOdds} />} icon={<Calculator className="h-4 w-4" />} />
+          <MiniStat label="Stake medio" value={<CountUp end={stats.avgStake} format={formatCurrency} />} icon={<Coins className="h-4 w-4" />} />
           <MiniStat
             label="Saldo inicial total"
-            value={formatCurrency(summary.total.initial)}
+            value={<CountUp end={summary.total.initial} format={formatCurrency} />}
             icon={<Wallet className="h-4 w-4" />}
           />
         </div>
@@ -270,26 +268,29 @@ export default function DashboardPage() {
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
           <MiniStat
             label="Balance"
-            value={`${superaumento.profit > 0 ? "+" : ""}${formatCurrency(
-              superaumento.profit
-            )}`}
+            value={
+              <CountUp
+                end={superaumento.profit}
+                format={(n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`}
+              />
+            }
             accent={profitClass(superaumento.profit)}
             icon={<Zap className="h-4 w-4" />}
           />
           <MiniStat
             label="Total"
-            value={superaumento.count}
+            value={<CountUp end={superaumento.count} format={asInt} />}
             icon={<Ticket className="h-4 w-4" />}
           />
           <MiniStat
             label="Ganadas"
-            value={superaumento.won}
+            value={<CountUp end={superaumento.won} format={asInt} />}
             accent="text-profit"
             icon={<Trophy className="h-4 w-4" />}
           />
           <MiniStat
             label="Perdidas"
-            value={superaumento.lost}
+            value={<CountUp end={superaumento.lost} format={asInt} />}
             accent="text-loss"
             icon={<TrendingDown className="h-4 w-4" />}
           />
@@ -409,56 +410,6 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-/** Anima un número de 0 (o del valor previo) hasta `target` con easeOutCubic.
- *  Respeta prefers-reduced-motion (salta directo al valor final). */
-function useCountUp(target: number, durationMs = 700): number {
-  const [value, setValue] = useState(0);
-  const valueRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce || durationMs <= 0) {
-      valueRef.current = target;
-      setValue(target);
-      return;
-    }
-    const from = valueRef.current;
-    const startedAt = performance.now();
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / durationMs);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const current = from + (target - from) * eased;
-      valueRef.current = current;
-      setValue(current);
-      if (t < 1) rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [target, durationMs]);
-
-  return value;
-}
-
-/** Muestra un número animado (count-up) formateado. */
-function CountUp({
-  end,
-  format,
-  durationMs,
-}: {
-  end: number;
-  format: (n: number) => string;
-  durationMs?: number;
-}) {
-  const v = useCountUp(end, durationMs);
-  return <>{format(v)}</>;
-}
-
 function StatCard({
   label,
   value,
@@ -525,7 +476,7 @@ function MiniStat({
   icon,
 }: {
   label: string;
-  value: string | number;
+  value: ReactNode;
   accent?: string;
   icon?: ReactNode;
 }) {

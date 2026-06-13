@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CountUp } from "@/components/ui/count-up";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -300,18 +301,18 @@ export default function ProfilePage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatBox
           label="Saldo inicial"
-          value={formatCurrency(groupBalances.initial)}
+          value={<CountUp end={groupBalances.initial} format={formatCurrency} />}
           icon={<Coins className="h-4 w-4" />}
         />
         <StatBox
           label="Saldo actual"
-          value={formatCurrency(groupBalances.current)}
+          value={<CountUp end={groupBalances.current} format={formatCurrency} />}
           tone="primary"
           icon={<Wallet className="h-4 w-4" />}
         />
         <StatBox
           label="Dinero en juego"
-          value={formatCurrency(inPlay.amount)}
+          value={<CountUp end={inPlay.amount} format={formatCurrency} />}
           tone={inPlay.amount > 0 ? "amber" : "neutral"}
           icon={<Clock className="h-4 w-4" />}
           subtitle={
@@ -322,60 +323,60 @@ export default function ProfilePage() {
         />
         <StatBox
           label="Beneficio total"
-          value={formatCurrency(groupStats.totalProfit)}
+          value={<CountUp end={groupStats.totalProfit} format={formatCurrency} />}
           tone={signTone(groupStats.totalProfit)}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <StatBox
           label="ROI"
-          value={formatPercent(groupStats.roi)}
+          value={<CountUp end={groupStats.roi} format={formatPercent} />}
           tone={signTone(groupStats.roi)}
           icon={<Percent className="h-4 w-4" />}
         />
         <StatBox
           label="Yield"
-          value={formatPercent(groupStats.yield)}
+          value={<CountUp end={groupStats.yield} format={formatPercent} />}
           tone={signTone(groupStats.yield)}
           icon={<Gauge className="h-4 w-4" />}
         />
         <StatBox
           label="Apuestas"
-          value={String(groupStats.betsCount)}
+          value={<CountUp end={groupStats.betsCount} format={asInt} />}
           tone="primary"
           icon={<Ticket className="h-4 w-4" />}
         />
         <StatBox
           label="Ganadas"
-          value={String(groupStats.betsWon)}
+          value={<CountUp end={groupStats.betsWon} format={asInt} />}
           tone="profit"
           icon={<Trophy className="h-4 w-4" />}
         />
         <StatBox
           label="Perdidas"
-          value={String(groupStats.betsLost)}
+          value={<CountUp end={groupStats.betsLost} format={asInt} />}
           tone="loss"
           icon={<TrendingDown className="h-4 w-4" />}
         />
         <StatBox
           label="Racha actual"
-          value={String(groupStats.currentStreak)}
+          value={<CountUp end={groupStats.currentStreak} format={asInt} />}
           tone={signTone(groupStats.currentStreak)}
           icon={<Flame className="h-4 w-4" />}
         />
         <StatBox
           label="Mejor racha"
-          value={String(groupStats.bestStreak)}
+          value={<CountUp end={groupStats.bestStreak} format={asInt} />}
           tone={groupStats.bestStreak > 0 ? "profit" : "neutral"}
           icon={<Award className="h-4 w-4" />}
         />
         <StatBox
           label="Cuota media"
-          value={groupStats.avgOdds.toFixed(2)}
+          value={<CountUp end={groupStats.avgOdds} format={asOdds} />}
           icon={<Calculator className="h-4 w-4" />}
         />
         <StatBox
           label="Stake medio"
-          value={formatCurrency(groupStats.avgStake)}
+          value={<CountUp end={groupStats.avgStake} format={formatCurrency} />}
           icon={<Coins className="h-4 w-4" />}
         />
       </div>
@@ -466,6 +467,10 @@ export default function ProfilePage() {
   );
 }
 
+// Formateadores para el count-up de las tarjetas (enteros y cuotas).
+const asInt = (n: number) => String(Math.round(n));
+const asOdds = (n: number) => n.toFixed(2);
+
 /** Esqueleto de carga del perfil: cabecera + rejilla de stats + listado. */
 function ProfileSkeleton() {
   return (
@@ -528,7 +533,7 @@ function StatBox({
   icon,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   tone?: Tone;
   valueClass?: string;
   subtitle?: string;
