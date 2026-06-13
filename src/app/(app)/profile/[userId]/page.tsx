@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,7 +166,7 @@ export default function ProfilePage() {
     };
   }, [user, activeGroup, groupStats.totalProfit]);
 
-  if (loading) return <p className="text-sm text-muted-foreground">Cargando perfil…</p>;
+  if (loading) return <ProfileSkeleton />;
   if (loadError && !user) {
     return (
       <div className="rounded-lg border border-dashed p-12 text-center">
@@ -459,6 +460,41 @@ export default function ProfilePage() {
             ownerUid={me?.uid ?? ""}
             isAdmin={isAdmin}
           />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/** Esqueleto de carga del perfil: cabecera + rejilla de stats + listado. */
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-7 w-44" />
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="space-y-2 p-4">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-6 w-24" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardContent className="space-y-2 p-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
         </CardContent>
       </Card>
     </div>

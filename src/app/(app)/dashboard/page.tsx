@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -139,9 +146,12 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label={summary.total.pendingStake > 0 ? "Disponible total" : "Saldo total"}
-          value={formatCurrency(
-            summary.total.current - summary.total.pendingStake
-          )}
+          value={
+            <CountUp
+              end={summary.total.current - summary.total.pendingStake}
+              format={formatCurrency}
+            />
+          }
           subtitle={
             summary.total.pendingStake > 0
               ? `${formatCurrency(summary.total.current)} − ${formatCurrency(summary.total.pendingStake)} en juego`
@@ -151,7 +161,12 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Beneficio total"
-          value={`${stats.totalProfit > 0 ? "+" : ""}${formatCurrency(stats.totalProfit)}`}
+          value={
+            <CountUp
+              end={stats.totalProfit}
+              format={(n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`}
+            />
+          }
           valueClass={profitClass(stats.totalProfit)}
           icon={<TrendingUp className="h-4 w-4" />}
           trendValue={stats.totalProfit}
@@ -159,14 +174,14 @@ export default function DashboardPage() {
         />
         <StatCard
           label="ROI"
-          value={formatPercent(stats.roi)}
+          value={<CountUp end={stats.roi} format={formatPercent} />}
           valueClass={profitClass(stats.roi)}
           icon={<Percent className="h-4 w-4" />}
           trendValue={stats.roi}
         />
         <StatCard
           label="% Acierto"
-          value={formatPercent(stats.hitRate)}
+          value={<CountUp end={stats.hitRate} format={formatPercent} />}
           icon={<Target className="h-4 w-4" />}
         />
       </div>
@@ -394,6 +409,56 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
+/** Anima un número de 0 (o del valor previo) hasta `target` con easeOutCubic.
+ *  Respeta prefers-reduced-motion (salta directo al valor final). */
+function useCountUp(target: number, durationMs = 700): number {
+  const [value, setValue] = useState(0);
+  const valueRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || durationMs <= 0) {
+      valueRef.current = target;
+      setValue(target);
+      return;
+    }
+    const from = valueRef.current;
+    const startedAt = performance.now();
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = from + (target - from) * eased;
+      valueRef.current = current;
+      setValue(current);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, durationMs]);
+
+  return value;
+}
+
+/** Muestra un número animado (count-up) formateado. */
+function CountUp({
+  end,
+  format,
+  durationMs,
+}: {
+  end: number;
+  format: (n: number) => string;
+  durationMs?: number;
+}) {
+  const v = useCountUp(end, durationMs);
+  return <>{format(v)}</>;
+}
+
 function StatCard({
   label,
   value,
@@ -404,7 +469,7 @@ function StatCard({
   sparkline,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   valueClass?: string;
   subtitle?: string;
   icon?: ReactNode;
