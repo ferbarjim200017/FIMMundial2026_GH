@@ -69,6 +69,12 @@ export function betOutcome(b: Bet): "won" | "lost" | "void" | "pending" {
   return "void";
 }
 
+/** Cuota máxima para que una apuesta cuente en las estadísticas. Las apuestas
+ *  con cuota POR ENCIMA de esto ("lotería") solo suman a beneficio/pérdida en
+ *  euros; quedan fuera de cuota media, ROI, yield, % acierto, conteos, rachas
+ *  y stake medio para no distorsionar las métricas. */
+export const MAX_STATS_ODDS = 100;
+
 /**
  * Recalcula TODAS las estadísticas del usuario a partir de su lista completa
  * de apuestas. Es O(n) pero para un grupo de amigos con cientos de apuestas
@@ -78,15 +84,26 @@ export function computeUserStats(bets: Bet[]): UserStats {
   const stats: UserStats = { ...EMPTY_USER_STATS };
   if (bets.length === 0) return stats;
 
-  const settled = bets.filter((b) => b.status !== "pending");
+  // Beneficio/pérdida en euros: cuentan TODAS las apuestas liquidadas
+  // (incluidas las de cuota > 100). Es el ÚNICO cálculo en el que entran,
+  // porque es dinero real.
+  const totalProfit = bets
+    .filter((b) => b.status !== "pending")
+    .reduce((acc, b) => acc + b.profit, 0);
+  stats.totalProfit = round2(totalProfit);
 
-  stats.betsCount = bets.length;
-  stats.betsPending = bets.filter((b) => b.status === "pending").length;
+  // El resto de métricas se calcula SOLO con las apuestas "elegibles"
+  // (cuota <= MAX_STATS_ODDS). Las de cuota > 100 se ignoran por completo aquí.
+  const eligible = bets.filter((b) => b.odds <= MAX_STATS_ODDS);
+  const settled = eligible.filter((b) => b.status !== "pending");
+
+  stats.betsCount = eligible.length;
+  stats.betsPending = eligible.filter((b) => b.status === "pending").length;
   // Los cashout cuentan como ganada/perdida según su beneficio (cashout vs
   // stake), no como una categoría aparte.
-  stats.betsWon = bets.filter((b) => betOutcome(b) === "won").length;
-  stats.betsLost = bets.filter((b) => betOutcome(b) === "lost").length;
-  stats.betsVoid = bets.filter((b) => b.status === "void").length;
+  stats.betsWon = eligible.filter((b) => betOutcome(b) === "won").length;
+  stats.betsLost = eligible.filter((b) => betOutcome(b) === "lost").length;
+  stats.betsVoid = eligible.filter((b) => b.status === "void").length;
 
   // Para ROI/Yield: solo cuentan las apuestas decididas (no pending, no void)
   // Y excluimos freebets: el stake no era dinero del usuario, así que no
@@ -95,11 +112,13 @@ export function computeUserStats(bets: Bet[]): UserStats {
   const totalStaked = decided
     .filter((b) => !b.isFreebet)
     .reduce((acc, b) => acc + b.stake, 0);
-  const totalProfit = settled.reduce((acc, b) => acc + b.profit, 0);
+  // Beneficio SOLO de las elegibles, para que el ROI no incluya las de cuota
+  // > 100 (ni en numerador ni en denominador).
+  const eligibleProfit = settled.reduce((acc, b) => acc + b.profit, 0);
 
   stats.totalStaked = round2(totalStaked);
-  stats.totalProfit = round2(totalProfit);
-  stats.roi = totalStaked > 0 ? round2((totalProfit / totalStaked) * 100) : 0;
+  stats.roi =
+    totalStaked > 0 ? round2((eligibleProfit / totalStaked) * 100) : 0;
   stats.yield = stats.roi; // mismo concepto en este modelo
   // % acierto = ganadas / (ganadas + perdidas), contando cashouts según su
   // resultado. Las "a la par" y nulas no entran.
@@ -109,12 +128,12 @@ export function computeUserStats(bets: Bet[]): UserStats {
       ? round2((stats.betsWon / decidedByOutcome) * 100)
       : 0;
   stats.avgOdds =
-    bets.length > 0
-      ? round2(bets.reduce((acc, b) => acc + b.odds, 0) / bets.length)
+    eligible.length > 0
+      ? round2(eligible.reduce((acc, b) => acc + b.odds, 0) / eligible.length)
       : 0;
   stats.avgStake =
-    bets.length > 0
-      ? round2(bets.reduce((acc, b) => acc + b.stake, 0) / bets.length)
+    eligible.length > 0
+      ? round2(eligible.reduce((acc, b) => acc + b.stake, 0) / eligible.length)
       : 0;
 
   // Streaks: secuencia consecutiva más reciente de ganadas (positivo)
