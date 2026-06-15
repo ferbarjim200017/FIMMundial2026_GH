@@ -33,6 +33,7 @@ import {
 } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
+import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { subscribeToRanking } from "@/features/users/users.service";
 import {
   betInGroup,
@@ -84,11 +85,17 @@ function BetRow({
   bet,
   user,
   onOpen,
+  currentUid,
+  onSettle,
 }: {
   bet: Bet;
   user: AppUser | null;
   onOpen: (bet: Bet, user: AppUser | null) => void;
+  currentUid?: string;
+  onSettle?: (bet: Bet) => void;
 }) {
+  const canSettle =
+    !!currentUid && bet.userId === currentUid && bet.status === "pending";
   return (
     <li className="flex items-start gap-3 px-1 py-3 text-sm">
       <Link href={user ? ROUTES.profile(user.uid) : "#"} className="shrink-0">
@@ -192,6 +199,17 @@ function BetRow({
           <Eye className="h-3.5 w-3.5" />
           Ver
         </Button>
+        {canSettle && onSettle && (
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => onSettle(bet)}
+          >
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Liquidar
+          </Button>
+        )}
       </div>
     </li>
   );
@@ -204,12 +222,16 @@ function BetGroup({
   bets,
   usersById,
   onOpen,
+  currentUid,
+  onSettle,
 }: {
   title: string;
   subtitle?: string;
   bets: Bet[];
   usersById: Record<string, AppUser>;
   onOpen: (bet: Bet, user: AppUser | null) => void;
+  currentUid?: string;
+  onSettle?: (bet: Bet) => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -249,6 +271,8 @@ function BetGroup({
               bet={bet}
               user={usersById[bet.userId] ?? null}
               onOpen={onOpen}
+              currentUid={currentUid}
+              onSettle={onSettle}
             />
           ))}
         </ul>
@@ -268,6 +292,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { memberUids, activeGroup } = useGroup();
   const { openBet } = useBetDetail();
   const [resultOpen, setResultOpen] = useState(false);
+  // Apuesta que se está liquidando desde el propio popup (solo las mías).
+  const [betToSettle, setBetToSettle] = useState<Bet | null>(null);
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   // "all"  → comportamiento por defecto (todas las apuestas).
@@ -751,6 +777,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                   bets={directBets}
                   usersById={usersById}
                   onOpen={openBet}
+                  currentUid={appUser?.uid}
+                  onSettle={setBetToSettle}
                 />
               )}
               {outrightBets.length > 0 && (
@@ -760,6 +788,8 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
                   bets={outrightBets}
                   usersById={usersById}
                   onOpen={openBet}
+                  currentUid={appUser?.uid}
+                  onSettle={setBetToSettle}
                 />
               )}
             </div>
@@ -773,6 +803,18 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
           match={match}
           open={resultOpen}
           onOpenChange={setResultOpen}
+        />
+      )}
+
+      {/* Liquidar una de mis apuestas sin salir del popup del partido. */}
+      {betToSettle && (
+        <SettleBetDialog
+          bet={betToSettle}
+          open={!!betToSettle}
+          onOpenChange={(o) => {
+            if (!o) setBetToSettle(null);
+          }}
+          onSettled={() => setBetToSettle(null)}
         />
       )}
     </>
