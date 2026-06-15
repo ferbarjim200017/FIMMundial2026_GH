@@ -37,7 +37,10 @@ import { subscribeToRanking } from "@/features/users/users.service";
 import {
   betInGroup,
   betOutcome,
+  betShareBasis,
+  betShareCount,
   bookmakerLabel,
+  matchShareProfit,
   round2,
 } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -153,17 +156,32 @@ function BetRow({
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        {bet.status !== "pending" && (
-          <p
-            className={cn(
-              "font-mono text-sm font-bold",
-              profitClass(bet.profit)
-            )}
-          >
-            {bet.profit > 0 ? "+" : ""}
-            {formatCurrency(bet.profit)}
-          </p>
-        )}
+        {bet.status !== "pending" &&
+          (() => {
+            const parts = betShareCount(bet);
+            const share = matchShareProfit(bet);
+            const basis = betShareBasis(bet);
+            return (
+              <div className="text-right">
+                <p
+                  className={cn(
+                    "font-mono text-sm font-bold",
+                    profitClass(share)
+                  )}
+                >
+                  {share > 0 ? "+" : ""}
+                  {formatCurrency(share)}
+                </p>
+                {parts > 1 && (
+                  <p className="text-[10px] leading-tight text-muted-foreground">
+                    de {bet.profit > 0 ? "+" : ""}
+                    {formatCurrency(bet.profit)} · {parts}{" "}
+                    {basis === "match" ? "partidos" : "equipos"}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         <Button
           type="button"
           size="sm"
@@ -401,7 +419,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     >();
     for (const b of groupBets) {
       const cur = byUser.get(b.userId) ?? { profit: 0, count: 0, pending: 0 };
-      cur.profit += b.profit ?? 0;
+      cur.profit += matchShareProfit(b);
       cur.count += 1;
       if (b.status === "pending") cur.pending += 1;
       byUser.set(b.userId, cur);
@@ -434,7 +452,7 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     const pending = visibleBets.filter((b) => b.status === "pending").length;
     const won = visibleBets.filter((b) => b.status === "won").length;
     const lost = visibleBets.filter((b) => b.status === "lost").length;
-    const netProfit = visibleBets.reduce((a, b) => a + (b.profit ?? 0), 0);
+    const netProfit = visibleBets.reduce((a, b) => a + matchShareProfit(b), 0);
     return { total, totalStake, pending, won, lost, netProfit };
   }, [visibleBets]);
 

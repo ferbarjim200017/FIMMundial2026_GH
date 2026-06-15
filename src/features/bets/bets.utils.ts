@@ -196,6 +196,49 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Nº de "partes" entre las que se reparte el resultado de una apuesta al
+ * imputarlo a UN partido (o equipo) concreto:
+ *  - Si está atada a partidos concretos (matchId / matchIds / legs) → nº de
+ *    PARTIDOS distintos que cubre (un combo de varios mercados en el MISMO
+ *    partido cuenta como 1, no se divide).
+ *  - Si es una apuesta a futuro/outright sin partidos → nº de EQUIPOS que
+ *    menciona.
+ *  - En cualquier otro caso → 1.
+ * Mínimo siempre 1 (nunca divide por cero).
+ */
+export function betShareCount(bet: Bet): number {
+  const matchIds = new Set<string>();
+  if (bet.matchId) matchIds.add(bet.matchId);
+  for (const id of bet.matchIds ?? []) if (id) matchIds.add(id);
+  for (const leg of bet.legs ?? []) if (leg.matchId) matchIds.add(leg.matchId);
+  if (matchIds.size > 0) return matchIds.size;
+  if (bet.market === "outright") {
+    const teams = (bet.teams ?? []).filter(Boolean);
+    if (teams.length > 0) return teams.length;
+  }
+  return 1;
+}
+
+/** Sobre qué se reparte una apuesta: "match" (partidos) o "team" (outright). */
+export function betShareBasis(bet: Bet): "match" | "team" {
+  const hasMatch =
+    !!bet.matchId ||
+    (bet.matchIds?.some(Boolean) ?? false) ||
+    (bet.legs?.some((l) => l.matchId) ?? false);
+  return hasMatch ? "match" : "team";
+}
+
+/**
+ * Parte del beneficio/pérdida de una apuesta que corresponde a UN partido (o
+ * equipo): reparte el profit total entre `betShareCount`. Solo se usa para
+ * atribuir el resultado a cada partido en el popup del Mundial; el profit
+ * total de la apuesta (stats globales, ROI, ranking general) NO cambia.
+ */
+export function matchShareProfit(bet: Bet): number {
+  return (bet.profit ?? 0) / betShareCount(bet);
+}
+
 export function bookmakerLabel(
   bookmaker: Bet["bookmaker"],
   custom?: string
