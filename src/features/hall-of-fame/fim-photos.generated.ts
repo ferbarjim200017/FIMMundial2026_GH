@@ -10,14 +10,14 @@ export interface FimPhotoEntry {
 }
 
 export const FIM_PHOTOS: FimPhotoEntry[] = [
-  { key: "alberto", members: ["alberto"], nickname: null, images: ["/hall-of-fame/alberto-1.png","/hall-of-fame/alberto-2.jpeg","/hall-of-fame/alberto-3.jpeg","/hall-of-fame/alberto-4.jpeg","/hall-of-fame/alberto-5.jpeg","/hall-of-fame/alberto-6.jpeg","/hall-of-fame/alberto-7.jpeg","/hall-of-fame/alberto-8.jpeg","/hall-of-fame/alberto-9.jpeg"] },
-  { key: "alexandru", members: ["alexandru"], nickname: null, images: ["/hall-of-fame/alexandru-1.jpeg","/hall-of-fame/alexandru-2.jpeg","/hall-of-fame/alexandru-3.jpeg","/hall-of-fame/alexandru-4.jpeg","/hall-of-fame/alexandru-5.jpeg","/hall-of-fame/alexandru-6.jpeg","/hall-of-fame/alexandru-7.jpeg"] },
-  { key: "alexis", members: ["alexis"], nickname: null, images: ["/hall-of-fame/alexis-1.jpeg","/hall-of-fame/alexis-2.jpeg","/hall-of-fame/alexis-3.jpeg","/hall-of-fame/alexis-4.jpeg","/hall-of-fame/alexis-5.jpeg","/hall-of-fame/alexis-6.jpeg"] },
-  { key: "danib", members: ["danib"], nickname: null, images: ["/hall-of-fame/danib-1.jpeg","/hall-of-fame/danib-2.jpeg","/hall-of-fame/danib-3.jpeg","/hall-of-fame/danib-4.jpeg","/hall-of-fame/danib-5.jpeg"] },
-  { key: "daniro", members: ["daniro"], nickname: null, images: ["/hall-of-fame/daniro-1.jpeg","/hall-of-fame/daniro-2.jpeg","/hall-of-fame/daniro-3.jpeg","/hall-of-fame/daniro-4.jpeg","/hall-of-fame/daniro-5.jpeg","/hall-of-fame/daniro-6.jpeg","/hall-of-fame/daniro-7.jpeg"] },
-  { key: "fernando", members: ["fernando"], nickname: null, images: ["/hall-of-fame/fernando-1.jpeg","/hall-of-fame/fernando-2.jpeg","/hall-of-fame/fernando-3.jpeg","/hall-of-fame/fernando-4.jpeg","/hall-of-fame/fernando-5.jpeg","/hall-of-fame/fernando-6.jpeg","/hall-of-fame/fernando-7.jpeg","/hall-of-fame/fernando-8.jpeg","/hall-of-fame/fernando-9.jpeg"] },
+  { key: "alberto", members: ["alberto"], nickname: null, images: ["/hall-of-fame/alberto-1.jpeg","/hall-of-fame/alberto-2.jpeg"] },
+  { key: "alexandru", members: ["alexandru"], nickname: null, images: ["/hall-of-fame/alexandru-1.jpeg","/hall-of-fame/alexandru-2.jpeg"] },
+  { key: "alexis", members: ["alexis"], nickname: null, images: ["/hall-of-fame/alexis-1.jpeg","/hall-of-fame/alexis-2.jpeg"] },
+  { key: "danib", members: ["danib"], nickname: null, images: ["/hall-of-fame/danib-1.jpeg","/hall-of-fame/danib-2.jpeg"] },
+  { key: "daniro", members: ["daniro"], nickname: null, images: ["/hall-of-fame/daniro-1.jpeg","/hall-of-fame/daniro-2.jpeg"] },
+  { key: "fernando", members: ["fernando"], nickname: null, images: ["/hall-of-fame/fernando-1.jpeg","/hall-of-fame/fernando-2.jpeg","/hall-of-fame/fernando-3.jpeg"] },
   { key: "montero", members: ["montero"], nickname: null, images: ["/hall-of-fame/montero-1.jpeg","/hall-of-fame/montero-2.jpeg"] },
-  { key: "sergio", members: ["sergio"], nickname: null, images: ["/hall-of-fame/sergio-1.jpeg","/hall-of-fame/sergio-2.jpeg","/hall-of-fame/sergio-3.jpeg","/hall-of-fame/sergio-4.jpeg","/hall-of-fame/sergio-5.jpeg","/hall-of-fame/sergio-6.jpeg","/hall-of-fame/sergio-7.jpeg","/hall-of-fame/sergio-8.jpeg","/hall-of-fame/sergio-9.jpeg","/hall-of-fame/sergio-10.jpeg","/hall-of-fame/sergio-11.jpeg","/hall-of-fame/sergio-12.jpeg","/hall-of-fame/sergio-13.jpeg","/hall-of-fame/sergio-14.jpeg","/hall-of-fame/sergio-15.jpeg","/hall-of-fame/sergio-16.jpeg"] },
+  { key: "sergio", members: ["sergio"], nickname: null, images: ["/hall-of-fame/sergio-1.jpeg","/hall-of-fame/sergio-2.jpeg","/hall-of-fame/sergio-3.jpeg"] },
   { key: "alberto-alexandru", members: ["alberto","alexandru"], nickname: null, images: ["/hall-of-fame/alberto-alexandru-1.jpeg"] },
   { key: "alberto-alexis", members: ["alberto","alexis"], nickname: null, images: ["/hall-of-fame/alberto-alexis-1.jpeg"] },
   { key: "alberto-danib", members: ["alberto","danib"], nickname: null, images: ["/hall-of-fame/alberto-danib-1.jpeg"] },
