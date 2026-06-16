@@ -45,7 +45,7 @@ export default function CalendarPage() {
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return matches.filter((m) => {
+    const list = matches.filter((m) => {
       if (stage !== "all" && m.stage !== stage) return false;
       if (status === "upcoming" && m.status === "finished") return false;
       if (status === "finished" && m.status !== "finished") return false;
@@ -58,6 +58,14 @@ export default function CalendarPage() {
         (m.venue ?? "").toLowerCase().includes(s)
       );
     });
+    // Orden cronológico: ascendente por defecto (los próximos primero). Cuando
+    // se filtra por "Finalizados" invertimos para que los partidos más
+    // recientes aparezcan arriba del todo.
+    list.sort((a, b) => {
+      const diff = a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis();
+      return status === "finished" ? -diff : diff;
+    });
+    return list;
   }, [matches, search, stage, status]);
 
   const grouped = useMemo(() => {
