@@ -22,24 +22,35 @@ import type { Bet, Match } from "@/types/domain";
 
 /* ── Imagen que rota entre las fotos (ratio fijo → sin distorsión) ── */
 function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
+  // Orden ALEATORIO por card: ni la primera foto ni la secuencia son siempre
+  // las mismas (se baraja una vez al montar).
+  const shuffled = useMemo(() => {
+    const a = [...images];
+    for (let k = a.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [a[k], a[j]] = [a[j], a[k]];
+    }
+    return a;
+  }, [images]);
+
   const [i, setI] = useState(0);
   useEffect(() => {
-    if (images.length <= 1) return;
+    if (shuffled.length <= 1) return;
     const id = setInterval(
-      () => setI((p) => (p + 1) % images.length),
+      () => setI((p) => (p + 1) % shuffled.length),
       3200 + Math.random() * 2200
     );
     return () => clearInterval(id);
-  }, [images.length]);
+  }, [shuffled.length]);
 
-  if (images.length === 0) {
+  if (shuffled.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-xs text-muted-foreground">
         Sin foto
       </div>
     );
   }
-  const src = images[i % images.length];
+  const src = shuffled[i % shuffled.length];
   return (
     <AnimatePresence initial={false}>
       <motion.img
