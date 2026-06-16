@@ -5,7 +5,7 @@ import {
   fimMemberByUsername,
   fimNameByKey,
 } from "./fim-members";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, Match } from "@/types/domain";
 
 export interface FimMemberStat {
   key: string;
@@ -118,4 +118,71 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
   tagExtremes(quads, "Cuarteto");
 
   return { members, duos, trios, quads };
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Tops de PARTIDOS (sin foto → se pintan con banderas). Los datos son GLOBALES
+ * por partido: suman TODAS las apuestas del grupo que tocan ese partido (sin
+ * dividir combos), para ver el interés total que ha movido cada partido.
+ * ──────────────────────────────────────────────────────────────────────── */
+export interface FimMatchStat {
+  matchId: string;
+  home: string;
+  away: string;
+  profit: number;
+  staked: number;
+  count: number;
+}
+
+export interface FimMatchTops {
+  gains: FimMatchStat[];
+  losses: FimMatchStat[];
+  mostBets: FimMatchStat[];
+  mostStaked: FimMatchStat[];
+}
+
+export function computeFimMatchTops(
+  bets: Bet[],
+  matches: Match[]
+): FimMatchTops {
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+  const byId = new Map<string, FimMatchStat>();
+
+  for (const b of bets) {
+    const ids = new Set<string>();
+    if (b.matchId) ids.add(b.matchId);
+    for (const x of b.matchIds ?? []) if (x) ids.add(x);
+    for (const leg of b.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
+    for (const id of ids) {
+      const m = matchById.get(id);
+      if (!m) continue;
+      const cur =
+        byId.get(id) ??
+        ({
+          matchId: id,
+          home: m.homeLabel,
+          away: m.awayLabel,
+          profit: 0,
+          staked: 0,
+          count: 0,
+        } as FimMatchStat);
+      cur.profit += b.profit ?? 0;
+      if (!b.isFreebet) cur.staked += b.stake;
+      cur.count += 1;
+      byId.set(id, cur);
+    }
+  }
+
+  const all = [...byId.values()].map((m) => ({
+    ...m,
+    profit: Math.round(m.profit * 100) / 100,
+    staked: Math.round(m.staked * 100) / 100,
+  }));
+
+  return {
+    gains: all.filter((m) => m.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 3),
+    losses: all.filter((m) => m.profit < 0).sort((a, b) => a.profit - b.profit).slice(0, 3),
+    mostBets: all.filter((m) => m.count > 0).sort((a, b) => b.count - a.count).slice(0, 3),
+    mostStaked: all.filter((m) => m.staked > 0).sort((a, b) => b.staked - a.staked).slice(0, 3),
+  };
 }

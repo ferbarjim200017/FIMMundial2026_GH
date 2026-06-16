@@ -2,29 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Crown, Skull, Sparkles, Trophy } from "lucide-react";
+import { Coins, Crown, Receipt, Skull, Sparkles, Trophy } from "lucide-react";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
 import { betInGroup } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   computeFimHall,
+  computeFimMatchTops,
   type FimComboStat,
+  type FimMatchStat,
   type FimMemberStat,
 } from "@/features/hall-of-fame/fim-hall.utils";
-import { cn, formatCurrency, formatPercent, profitClass } from "@/lib/utils";
-import type { Bet } from "@/types/domain";
+import { TeamFlag } from "@/components/matches/team-flag";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
+import { cn, formatCurrency, profitClass } from "@/lib/utils";
+import type { Bet, Match } from "@/types/domain";
 
-/* ── Imagen que rota entre las fotos con fundido cinematográfico ── */
-function RotatingImage({
-  images,
-  alt,
-  className,
-}: {
-  images: string[];
-  alt: string;
-  className?: string;
-}) {
+/* ── Imagen que rota entre las fotos (ratio fijo → sin distorsión) ── */
+function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (images.length <= 1) return;
@@ -49,14 +46,26 @@ function RotatingImage({
         key={src}
         src={src}
         alt={alt}
-        initial={{ opacity: 0, scale: 1.12 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 1.1, ease: "easeInOut" }}
-        className={cn("absolute inset-0 h-full w-full object-cover", className)}
+        transition={{ duration: 1 }}
+        className="absolute inset-0 h-full w-full object-cover"
         draggable={false}
       />
     </AnimatePresence>
+  );
+}
+
+function FlagBox({ home, away }: { home: string; away: string }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-zinc-600 via-zinc-800 to-black">
+      <div className="flex items-center gap-2">
+        <TeamFlag name={home} className="h-9 w-14 rounded shadow-md" />
+        <span className="text-xs font-bold text-white/60">VS</span>
+        <TeamFlag name={away} className="h-9 w-14 rounded shadow-md" />
+      </div>
+    </div>
   );
 }
 
@@ -65,90 +74,110 @@ const container: Variants = {
   show: { transition: { staggerChildren: 0.07 } },
 };
 const item: Variants = {
-  hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 26 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-/* ── Póster de una persona (sirve para destacados y para el roster) ── */
-function PosterCard({
-  m,
+type Badge = { text: string; tone?: string };
+
+/* ── Card uniforme (persona, combo o partido). Hover = se amplía. ── */
+function GalleryCard({
+  images,
+  flags,
   rank,
-  metricLabel,
-  metricValue,
-  metricTone,
-  big,
-  className,
+  eyebrow,
+  title,
+  badge,
+  corner,
+  cornerBad,
+  accent,
+  onClick,
+  mtClass,
 }: {
-  m: FimMemberStat;
+  images?: string[];
+  flags?: [string, string];
   rank?: number;
-  metricLabel?: string;
-  metricValue?: string;
-  metricTone?: string;
-  big?: boolean;
-  className?: string;
+  eyebrow?: string;
+  title: string;
+  badge?: Badge;
+  corner?: string;
+  cornerBad?: boolean;
+  accent?: string;
+  onClick?: () => void;
+  mtClass?: string;
 }) {
-  return (
-    <motion.div
-      variants={item}
-      whileHover={{ scale: 1.015 }}
-      transition={{ type: "spring", stiffness: 300, damping: 22 }}
-      className={cn(
-        "group relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-lg",
-        className
-      )}
-    >
-      <RotatingImage
-        images={m.images}
-        alt={m.name}
-        className="transition-transform duration-700 group-hover:scale-110"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-
-      {rank !== undefined && (
-        <span
-          className={cn(
-            "absolute left-3 top-3 flex items-center justify-center rounded-full bg-black/60 font-black text-white backdrop-blur",
-            big ? "h-10 w-10 text-lg" : "h-7 w-7 text-sm"
-          )}
-        >
-          {rank}
-        </span>
-      )}
-
-      <div className="absolute inset-x-0 bottom-0 space-y-0.5 p-4">
-        {metricValue && (
-          <p
+  const inner = (
+    <>
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-zinc-800">
+        {images ? (
+          <RotatingImage images={images} alt={title} />
+        ) : flags ? (
+          <FlagBox home={flags[0]} away={flags[1]} />
+        ) : null}
+        {rank !== undefined && (
+          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-sm font-black text-white backdrop-blur">
+            {rank}
+          </span>
+        )}
+        {corner && (
+          <span
             className={cn(
-              "font-black leading-none",
-              big ? "text-4xl md:text-5xl" : "text-2xl",
-              metricTone ?? "text-white"
+              "absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow",
+              cornerBad ? "bg-loss" : "bg-profit"
             )}
           >
-            {metricValue}
-          </p>
+            {cornerBad ? (
+              <Skull className="h-2.5 w-2.5" />
+            ) : (
+              <Trophy className="h-2.5 w-2.5" />
+            )}
+            {corner}
+          </span>
         )}
-        {metricLabel && (
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/55">
-            {metricLabel}
-          </p>
-        )}
-        <p
-          className={cn(
-            "pt-1 font-bold uppercase tracking-widest text-primary drop-shadow",
-            big ? "text-sm" : "text-[11px]"
-          )}
-        >
-          {m.mote}
-        </p>
-        <h3
-          className={cn(
-            "font-black leading-none text-white drop-shadow",
-            big ? "text-3xl md:text-4xl" : "text-lg"
-          )}
-        >
-          {m.name}
-        </h3>
       </div>
+      <div className="px-1 pt-2.5 text-center">
+        {eyebrow && (
+          <p className="truncate text-[10px] font-bold uppercase tracking-widest text-primary">
+            {eyebrow}
+          </p>
+        )}
+        <h3 className="truncate text-base font-black leading-tight">{title}</h3>
+        {badge && (
+          <span
+            className={cn(
+              "mt-1.5 inline-block rounded-full border border-white/15 px-2.5 py-0.5 font-mono text-xs font-bold",
+              badge.tone
+            )}
+          >
+            {badge.text}
+          </span>
+        )}
+      </div>
+    </>
+  );
+
+  const cls = cn(
+    "group relative flex flex-col rounded-2xl border bg-zinc-900/50 p-2.5 shadow-lg transition-shadow hover:z-20 hover:shadow-2xl",
+    accent ?? "border-white/10",
+    mtClass
+  );
+
+  const motionProps = {
+    variants: item,
+    whileHover: { scale: 1.06 },
+    transition: { type: "spring" as const, stiffness: 300, damping: 20 },
+  };
+
+  if (onClick) {
+    return (
+      <motion.button type="button" onClick={onClick} {...motionProps} className={cls}>
+        {inner}
+      </motion.button>
+    );
+  }
+  return (
+    <motion.div {...motionProps} className={cls}>
+      {inner}
     </motion.div>
   );
 }
@@ -169,7 +198,7 @@ function BigTitle({
       viewport={{ once: true, amount: 0.6 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="flex items-center gap-2 text-primary">{icon}</div>
+      {icon && <div className="mb-1 text-primary">{icon}</div>}
       <h2 className="text-3xl font-black uppercase leading-[0.9] tracking-tighter md:text-5xl">
         {children}
       </h2>
@@ -180,28 +209,22 @@ function BigTitle({
   );
 }
 
-/* ── Bloque destacado: top 3 con el 1.º grande y los otros pequeños ── */
-function FeatureBlock({
+// Escalonado tipo "muro" para las filas de 3.
+const STAGGER3 = ["md:mt-0", "md:mt-12", "md:mt-5"];
+
+function Section({
   title,
   subtitle,
   icon,
-  top,
-  metricLabel,
-  metricValue,
-  metricTone,
-  flip,
+  children,
+  cols = "grid-cols-1 sm:grid-cols-3",
 }: {
   title: string;
   subtitle?: string;
   icon?: React.ReactNode;
-  top: FimMemberStat[];
-  metricLabel: string;
-  metricValue: (m: FimMemberStat) => string;
-  metricTone?: (m: FimMemberStat) => string;
-  flip?: boolean;
+  children: React.ReactNode;
+  cols?: string;
 }) {
-  if (top.length === 0) return null;
-  const [first, ...rest] = top;
   return (
     <section className="space-y-5">
       <BigTitle subtitle={subtitle} icon={icon}>
@@ -212,132 +235,9 @@ function FeatureBlock({
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, amount: 0.15 }}
-        className="grid gap-4 md:h-[460px] md:grid-cols-2"
+        className={cn("grid gap-4", cols)}
       >
-        <PosterCard
-          m={first}
-          rank={1}
-          big
-          metricLabel={metricLabel}
-          metricValue={metricValue(first)}
-          metricTone={metricTone?.(first)}
-          className={cn("h-72 md:h-full", flip && "md:order-2")}
-        />
-        <div className={cn("grid gap-4 md:grid-rows-2", flip && "md:order-1")}>
-          {rest.map((m, i) => (
-            <PosterCard
-              key={m.key}
-              m={m}
-              rank={i + 2}
-              metricLabel={metricLabel}
-              metricValue={metricValue(m)}
-              metricTone={metricTone?.(m)}
-              className="h-48 md:h-full"
-            />
-          ))}
-        </div>
-      </motion.div>
-    </section>
-  );
-}
-
-/* ── Tarjeta de combo (dúo/trío/cuarteto) ── */
-function ComboCard({ c, wide }: { c: FimComboStat; wide?: boolean }) {
-  const badgeBad = c.badge?.includes("perdedor");
-  return (
-    <motion.div
-      variants={item}
-      whileHover={{ scale: 1.015 }}
-      transition={{ type: "spring", stiffness: 300, damping: 22 }}
-      className={cn(
-        "group relative overflow-hidden rounded-2xl border bg-black shadow-lg",
-        wide ? "aspect-[16/10] sm:col-span-2" : "aspect-[4/3]",
-        c.badge
-          ? badgeBad
-            ? "border-loss/70"
-            : "border-profit/70"
-          : "border-white/10"
-      )}
-    >
-      <RotatingImage
-        images={c.images}
-        alt={c.names.join(" y ")}
-        className="transition-transform duration-700 group-hover:scale-110"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-
-      {c.badge && (
-        <span
-          className={cn(
-            "absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow",
-            badgeBad ? "bg-loss" : "bg-profit"
-          )}
-        >
-          {badgeBad ? <Skull className="h-3 w-3" /> : <Trophy className="h-3 w-3" />}
-          {c.badge}
-        </span>
-      )}
-
-      <div className="absolute inset-x-0 bottom-0 space-y-1 p-4">
-        {c.nickname && (
-          <p className="text-[11px] font-bold uppercase tracking-widest text-primary drop-shadow">
-            «{c.nickname}»
-          </p>
-        )}
-        <h3
-          className={cn(
-            "font-black leading-tight text-white drop-shadow",
-            wide ? "text-2xl md:text-3xl" : "text-lg"
-          )}
-        >
-          {c.names.join(" · ")}
-        </h3>
-        <div className="flex items-center gap-2 text-xs text-white/90">
-          <span>
-            Combinado{" "}
-            <span className={cn("font-bold", profitClass(c.profit))}>
-              {c.profit > 0 ? "+" : ""}
-              {formatCurrency(c.profit)}
-            </span>
-          </span>
-          <span className="text-white/55">· {c.betsCount} ap.</span>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function ComboSection({
-  title,
-  subtitle,
-  icon,
-  combos,
-}: {
-  title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
-  combos: FimComboStat[];
-}) {
-  if (combos.length === 0) return null;
-  // Los que tienen badge (extremos) salen grandes; el resto, normales.
-  const sorted = [...combos].sort(
-    (a, b) => (b.badge ? 1 : 0) - (a.badge ? 1 : 0)
-  );
-  return (
-    <section className="space-y-5">
-      <BigTitle subtitle={subtitle} icon={icon}>
-        {title}
-      </BigTitle>
-      <motion.div
-        variants={container}
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, amount: 0.12 }}
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {sorted.map((c) => (
-          <ComboCard key={c.key} c={c} wide={!!c.badge} />
-        ))}
+        {children}
       </motion.div>
     </section>
   );
@@ -347,35 +247,41 @@ function HeroBackdrop({ images }: { images: string[] }) {
   if (images.length === 0) return null;
   return (
     <div className="absolute inset-0 opacity-25">
-      <RotatingImage images={images} alt="" className="blur-[2px]" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/30" />
+      <RotatingImage images={images} alt="" />
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/30 backdrop-blur-[2px]" />
     </div>
   );
 }
 
-// Tamaños variados para el roster (bento desordenado) — 8 personas.
-const ROSTER_SPANS = [
-  "col-span-2 row-span-2",
-  "",
-  "row-span-2",
-  "",
-  "col-span-2",
-  "",
-  "row-span-2",
-  "",
-];
+const profitBadge = (v: number): Badge => ({
+  text: `${v > 0 ? "+" : ""}${formatCurrency(v)}`,
+  tone: profitClass(v),
+});
 
 export function FimHall() {
   const { memberUids, activeGroup, groupMembers } = useGroup();
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setAllBets([]);
       return;
     }
-    return subscribeToAllBets(setAllBets);
+    const unsubBets = subscribeToAllBets(setAllBets);
+    const unsubMatches = subscribeToMatches(setMatches, () => setMatches([]));
+    return () => {
+      unsubBets();
+      unsubMatches();
+    };
   }, []);
+
+  const matchById = useMemo(() => {
+    const m = new Map<string, Match>();
+    for (const x of matches) m.set(x.id, x);
+    return m;
+  }, [matches]);
 
   const bets = useMemo(() => {
     if (allBets === null) return null;
@@ -389,6 +295,21 @@ export function FimHall() {
     () => (bets ? computeFimHall(bets, groupMembers) : null),
     [bets, groupMembers]
   );
+  const matchTops = useMemo(
+    () => (bets ? computeFimMatchTops(bets, matches) : null),
+    [bets, matches]
+  );
+
+  const rankings = useMemo(() => {
+    if (!data) return null;
+    const ms = data.members;
+    return {
+      byProfit: [...ms].sort((a, b) => b.profit - a.profit).slice(0, 3),
+      byWon: [...ms].sort((a, b) => b.won - a.won).slice(0, 3),
+      byLoss: [...ms].sort((a, b) => a.profit - b.profit).slice(0, 3),
+      byBets: [...ms].sort((a, b) => b.betsCount - a.betsCount).slice(0, 3),
+    };
+  }, [data]);
 
   const heroImages = useMemo(() => {
     if (!data) return [];
@@ -398,23 +319,66 @@ export function FimHall() {
       .slice(0, 12);
   }, [data]);
 
-  const rankings = useMemo(() => {
-    if (!data) return null;
-    const ms = data.members;
-    return {
-      byWon: [...ms].sort((a, b) => b.won - a.won).slice(0, 3),
-      byProfit: [...ms].sort((a, b) => b.profit - a.profit).slice(0, 3),
-      byLoss: [...ms].sort((a, b) => a.profit - b.profit).slice(0, 3),
-    };
-  }, [data]);
-
-  if (!data || !rankings) {
+  if (!data || !rankings || !matchTops) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
         Cargando el Salón de la Fama…
       </div>
     );
   }
+
+  const openMatch = (id: string) => setSelectedMatch(matchById.get(id) ?? null);
+
+  // Helpers de construcción de tarjetas.
+  const peopleCards = (list: FimMemberStat[], badge: (m: FimMemberStat) => Badge) =>
+    list.map((m, i) => (
+      <GalleryCard
+        key={m.key}
+        images={m.images}
+        rank={i + 1}
+        eyebrow={m.mote}
+        title={m.name}
+        badge={badge(m)}
+        mtClass={STAGGER3[i]}
+      />
+    ));
+
+  const matchCards = (
+    list: FimMatchStat[],
+    badge: (m: FimMatchStat) => Badge
+  ) =>
+    list.map((mt, i) => (
+      <GalleryCard
+        key={mt.matchId}
+        flags={[mt.home, mt.away]}
+        rank={i + 1}
+        title={`${mt.home} · ${mt.away}`}
+        badge={badge(mt)}
+        onClick={() => openMatch(mt.matchId)}
+        mtClass={STAGGER3[i]}
+      />
+    ));
+
+  const comboCards = (list: FimComboStat[]) =>
+    list.map((c, i) => (
+      <GalleryCard
+        key={c.key}
+        images={c.images}
+        eyebrow={c.nickname ? `«${c.nickname}»` : undefined}
+        title={c.names.join(" · ")}
+        badge={profitBadge(c.profit)}
+        corner={c.badge ?? undefined}
+        cornerBad={c.badge?.includes("perdedor")}
+        accent={
+          c.badge
+            ? c.badge.includes("perdedor")
+              ? "border-loss/60"
+              : "border-profit/60"
+            : undefined
+        }
+        mtClass={i % 2 ? "sm:mt-8" : ""}
+      />
+    ));
 
   return (
     <div className="space-y-14 pb-10">
@@ -449,92 +413,138 @@ export function FimHall() {
         </motion.div>
       </motion.section>
 
-      {/* Top 3 más ganadoras (el 1.º grande) */}
-      <FeatureBlock
-        title="Las más ganadoras"
-        subtitle="Top 3 por apuestas acertadas"
-        icon={<Trophy className="h-6 w-6" />}
-        top={rankings.byWon}
-        metricLabel="Apuestas ganadas"
-        metricValue={(m) => String(m.won)}
-        metricTone={() => "text-profit"}
-      />
-
-      {/* Roster completo, bento desordenado */}
-      <section className="space-y-5">
-        <BigTitle subtitle="Los 8 magníficos" icon={<Crown className="h-6 w-6" />}>
-          Los inducidos
-        </BigTitle>
-        <motion.div
-          variants={container}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.1 }}
-          className="grid auto-rows-[150px] grid-cols-2 gap-3 [grid-auto-flow:dense] md:auto-rows-[185px] md:grid-cols-4"
-        >
-          {data.members.map((m, i) => {
-            const span = ROSTER_SPANS[i % ROSTER_SPANS.length];
-            const big = span === "col-span-2 row-span-2";
-            return (
-              <PosterCard
-                key={m.key}
-                m={m}
-                big={big}
-                metricLabel="Beneficio"
-                metricValue={`${m.profit > 0 ? "+" : ""}${formatCurrency(m.profit)}`}
-                metricTone={profitClass(m.profit)}
-                className={span}
-              />
-            );
-          })}
-        </motion.div>
-      </section>
-
-      {/* Reyes del beneficio (el 1.º grande, lado contrario) */}
-      <FeatureBlock
+      {/* Reyes del beneficio */}
+      <Section
         title="Reyes del beneficio"
         subtitle="Top 3 con más beneficio total"
         icon={<Crown className="h-6 w-6" />}
-        top={rankings.byProfit}
-        metricLabel="Beneficio"
-        metricValue={(m) => `${m.profit > 0 ? "+" : ""}${formatCurrency(m.profit)}`}
-        metricTone={(m) => profitClass(m.profit)}
-        flip
-      />
+      >
+        {peopleCards(rankings.byProfit, (m) => profitBadge(m.profit))}
+      </Section>
+
+      {/* Partidos con más ganancias */}
+      {matchTops.gains.length > 0 && (
+        <Section
+          title="Partidos más rentables"
+          subtitle="Datos globales del grupo · pulsa para ver las apuestas"
+          icon={<Trophy className="h-6 w-6" />}
+        >
+          {matchCards(matchTops.gains, (m) => profitBadge(m.profit))}
+        </Section>
+      )}
+
+      {/* Las más ganadoras */}
+      <Section
+        title="Las más ganadoras"
+        subtitle="Top 3 por apuestas acertadas"
+        icon={<Trophy className="h-6 w-6" />}
+      >
+        {peopleCards(rankings.byWon, (m) => ({
+          text: `${m.won} ganadas`,
+          tone: "text-profit",
+        }))}
+      </Section>
 
       {/* Dúos */}
-      <ComboSection
-        title="Dúos"
-        subtitle="Las parejas de hecho del grupo"
-        icon={<Sparkles className="h-6 w-6" />}
-        combos={data.duos}
-      />
+      {data.duos.length > 0 && (
+        <Section
+          title="Dúos"
+          subtitle="Las parejas de hecho del grupo"
+          icon={<Sparkles className="h-6 w-6" />}
+          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          {comboCards(data.duos)}
+        </Section>
+      )}
 
-      {/* Los más mancos (el 1.º grande) */}
-      <FeatureBlock
+      {/* Los más mancos */}
+      <Section
         title="Los más mancos"
         subtitle="Top 3 que más palos se han comido"
         icon={<Skull className="h-6 w-6" />}
-        top={rankings.byLoss}
-        metricLabel="Beneficio"
-        metricValue={(m) => `${m.profit > 0 ? "+" : ""}${formatCurrency(m.profit)}`}
-        metricTone={(m) => profitClass(m.profit)}
-      />
+      >
+        {peopleCards(rankings.byLoss, (m) => profitBadge(m.profit))}
+      </Section>
+
+      {/* Partidos con más pérdidas */}
+      {matchTops.losses.length > 0 && (
+        <Section
+          title="Partidos malditos"
+          subtitle="Donde el grupo más ha palmado · pulsa para abrir"
+          icon={<Skull className="h-6 w-6" />}
+        >
+          {matchCards(matchTops.losses, (m) => profitBadge(m.profit))}
+        </Section>
+      )}
+
+      {/* Los más viciados */}
+      <Section
+        title="Los más viciados"
+        subtitle="Top 3 que más apuestan"
+        icon={<Receipt className="h-6 w-6" />}
+      >
+        {peopleCards(rankings.byBets, (m) => ({
+          text: `${m.betsCount} ap.`,
+          tone: "text-white",
+        }))}
+      </Section>
 
       {/* Tríos */}
-      <ComboSection
-        title="Tríos"
-        subtitle="Cuando se juntan tres"
-        icon={<Sparkles className="h-6 w-6" />}
-        combos={data.trios}
-      />
+      {data.trios.length > 0 && (
+        <Section
+          title="Tríos"
+          subtitle="Cuando se juntan tres"
+          icon={<Sparkles className="h-6 w-6" />}
+          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          {comboCards(data.trios)}
+        </Section>
+      )}
+
+      {/* Partidos con más apuestas */}
+      {matchTops.mostBets.length > 0 && (
+        <Section
+          title="Partidos más calientes"
+          subtitle="Los que más apuestas han movido · pulsa para abrir"
+          icon={<Receipt className="h-6 w-6" />}
+        >
+          {matchCards(matchTops.mostBets, (m) => ({
+            text: `${m.count} ap.`,
+            tone: "text-white",
+          }))}
+        </Section>
+      )}
+
+      {/* Partidos con más dinero */}
+      {matchTops.mostStaked.length > 0 && (
+        <Section
+          title="Partidos de billetes"
+          subtitle="Donde más dinero se ha jugado · pulsa para abrir"
+          icon={<Coins className="h-6 w-6" />}
+        >
+          {matchCards(matchTops.mostStaked, (m) => ({
+            text: formatCurrency(m.staked),
+            tone: "text-gold",
+          }))}
+        </Section>
+      )}
 
       {/* Cuarteto */}
-      <ComboSection
-        title="La banda al completo"
-        subtitle="Los cuartetos legendarios"
-        icon={<Trophy className="h-6 w-6" />}
-        combos={data.quads}
+      {data.quads.length > 0 && (
+        <Section
+          title="La banda al completo"
+          subtitle="Los cuartetos legendarios"
+          icon={<Crown className="h-6 w-6" />}
+          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          {comboCards(data.quads)}
+        </Section>
+      )}
+
+      <MatchBetsDialog
+        match={selectedMatch}
+        open={!!selectedMatch}
+        onOpenChange={(o) => !o && setSelectedMatch(null)}
       />
     </div>
   );
