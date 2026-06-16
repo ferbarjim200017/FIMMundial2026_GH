@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromCache,
   onSnapshot,
   orderBy,
   query,
@@ -71,6 +72,27 @@ function buildConstraints(f: BetsFilter): QueryConstraint[] {
 
 export async function listBets(filter: BetsFilter = {}): Promise<Bet[]> {
   const snap = await getDocs(query(betsCol(), ...buildConstraints(filter)));
+  return snap.docs.map((d) => d.data());
+}
+
+/**
+ * Igual que `listBets`, pero intenta servirse de la CACHÉ local primero (esas
+ * lecturas no se facturan en Firestore). Como la app mantiene un listener
+ * global de apuestas (carrusel + provider del salón de la fama), la caché está
+ * sincronizada y devuelve datos correctos. Si la caché está vacía/fría (p. ej.
+ * recién abierta), cae al servidor. Se usa en el recálculo de stats, que se
+ * lanza tras cada acción y antes leía TODAS las apuestas del usuario del
+ * servidor en cada una.
+ */
+async function listBetsCacheFirst(filter: BetsFilter = {}): Promise<Bet[]> {
+  const q = query(betsCol(), ...buildConstraints(filter));
+  try {
+    const cached = await getDocsFromCache(q);
+    if (!cached.empty) return cached.docs.map((d) => d.data());
+  } catch {
+    // Sin caché disponible (offline frío, etc.): caemos al servidor.
+  }
+  const snap = await getDocs(q);
   return snap.docs.map((d) => d.data());
 }
 
@@ -474,7 +496,7 @@ export async function unsettleBet(betId: string): Promise<void> {
  * cualquier mutación de apuestas (settle, unsettle, edit, delete).
  */
 export async function recomputeAndPersistStats(userId: string): Promise<void> {
-  const userBets = await listBets({ userId });
+  const userBets = await listBetsCacheFirst({ userId });
   const stats = computeUserStats(userBets);
 
   const userSnap = await getDoc(doc(db, USERS, userId).withConverter(userConverter));

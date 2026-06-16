@@ -46,15 +46,46 @@ export async function listMatches(): Promise<Match[]> {
   return snap.docs.map((d) => d.data());
 }
 
+// Suscripción COMPARTIDA a los partidos: muchas pantallas la usan a la vez
+// (Mundial, apuestas, feed, ranking, salón de la fama…). Con un único listener
+// con conteo de referencias evitamos releer la colección por cada una.
+type MatchesCb = (matches: Match[]) => void;
+let matchesUnsub: Unsubscribe | null = null;
+let matchesLatest: Match[] | null = null;
+const matchesSubscribers = new Set<{
+  cb: MatchesCb;
+  onError?: (err: Error) => void;
+}>();
+
 export function subscribeToMatches(
-  cb: (matches: Match[]) => void,
+  cb: MatchesCb,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  return onSnapshot(
-    query(matchesCol(), orderBy("kickoffUtc", "asc")),
-    (snap) => cb(snap.docs.map((d) => d.data())),
-    (err) => onError?.(err)
-  );
+  const entry = { cb, onError };
+  matchesSubscribers.add(entry);
+  if (matchesLatest) cb(matchesLatest);
+
+  if (!matchesUnsub) {
+    matchesUnsub = onSnapshot(
+      query(matchesCol(), orderBy("kickoffUtc", "asc")),
+      (snap) => {
+        matchesLatest = snap.docs.map((d) => d.data());
+        for (const s of matchesSubscribers) s.cb(matchesLatest);
+      },
+      (err) => {
+        for (const s of matchesSubscribers) s.onError?.(err);
+      }
+    );
+  }
+
+  return () => {
+    matchesSubscribers.delete(entry);
+    if (matchesSubscribers.size === 0 && matchesUnsub) {
+      matchesUnsub();
+      matchesUnsub = null;
+      matchesLatest = null;
+    }
+  };
 }
 
 export async function getMatch(id: string): Promise<Match | null> {

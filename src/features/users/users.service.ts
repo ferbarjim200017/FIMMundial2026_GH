@@ -62,18 +62,46 @@ export function compareUsersForRanking(a: AppUser, b: AppUser): number {
   return (b.currentBalance ?? 0) - (a.currentBalance ?? 0);
 }
 
+// Suscripción COMPARTIDA al ranking de usuarios. Como el carrusel (montado en
+// todas las páginas) la mantiene viva, el resto de pantallas reutilizan el
+// mismo listener y no vuelven a leer la colección al navegar.
+let rankUnsub: Unsubscribe | null = null;
+let rankLatest: AppUser[] | null = null;
+const rankSubscribers = new Set<(users: AppUser[]) => void>();
+
 export function subscribeToRanking(
   callback: (users: AppUser[]) => void,
   max?: number
-) {
-  // Ordenamos cliente-side por ROI (campo anidado en stats). Evita pedir
-  // un índice compuesto en Firestore y nos da control sobre el desempate.
-  const q = max ? query(usersCol(), limitTo(max)) : usersCol();
-  return onSnapshot(q, (snap) => {
-    const users = snap.docs.map((d) => d.data());
-    users.sort(compareUsersForRanking);
-    callback(users);
-  });
+): Unsubscribe {
+  // Caso con límite (poco habitual): listener propio sin compartir.
+  if (max) {
+    return onSnapshot(query(usersCol(), limitTo(max)), (snap) => {
+      const users = snap.docs.map((d) => d.data());
+      users.sort(compareUsersForRanking);
+      callback(users);
+    });
+  }
+
+  rankSubscribers.add(callback);
+  if (rankLatest) callback(rankLatest);
+
+  if (!rankUnsub) {
+    rankUnsub = onSnapshot(usersCol(), (snap) => {
+      const users = snap.docs.map((d) => d.data());
+      users.sort(compareUsersForRanking);
+      rankLatest = users;
+      for (const cb of rankSubscribers) cb(users);
+    });
+  }
+
+  return () => {
+    rankSubscribers.delete(callback);
+    if (rankSubscribers.size === 0 && rankUnsub) {
+      rankUnsub();
+      rankUnsub = null;
+      rankLatest = null;
+    }
+  };
 }
 
 /**
