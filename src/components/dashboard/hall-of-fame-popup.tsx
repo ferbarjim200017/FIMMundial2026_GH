@@ -45,24 +45,25 @@ export function HallOfFamePopup() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={dismiss}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-black/85 backdrop-blur-sm"
         >
-          <motion.div
-            onClick={(e) => e.stopPropagation()}
-            initial={{ scale: 0.85, y: 30, opacity: 0, rotate: -1 }}
-            animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
-            exit={{ scale: 0.85, opacity: 0 }}
-            transition={{ type: "spring", damping: 16, stiffness: 220 }}
-            className="relative w-full max-w-lg overflow-hidden rounded-2xl border-2 border-loss/70 bg-gradient-to-b from-zinc-900 to-black p-6 shadow-2xl"
-          >
-            <button
-              type="button"
-              onClick={dismiss}
-              aria-label="Cerrar"
-              className="absolute right-3 top-3 rounded-md p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          <div className="flex min-h-full items-center justify-center p-4">
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.85, y: 30, opacity: 0, rotate: -1 }}
+              animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", damping: 16, stiffness: 220 }}
+              className="relative my-4 w-full max-w-lg rounded-2xl border-2 border-loss/70 bg-gradient-to-b from-zinc-900 to-black p-6 shadow-2xl"
             >
-              <X className="h-5 w-5" />
-            </button>
+              <button
+                type="button"
+                onClick={dismiss}
+                aria-label="Cerrar"
+                className="absolute right-2 top-2 z-10 rounded-lg bg-black/40 p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
 
             <motion.div
               initial={{ scale: 0.6, opacity: 0 }}
@@ -109,7 +110,8 @@ export function HallOfFamePopup() {
                 Ver el Salón de la Fama →
               </Link>
             </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
