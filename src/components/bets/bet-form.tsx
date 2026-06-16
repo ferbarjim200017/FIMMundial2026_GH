@@ -31,7 +31,7 @@ import {
 import { TEAMS_2026 } from "@/features/matches/teams-2026";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useGroup } from "@/features/groups/groups.context";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, TimeoutError, withTimeout } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
 
@@ -202,28 +202,28 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       return;
     }
 
+    if (!initial && (parsed.data.groupIds ?? []).length === 0) {
+      setServerError("Selecciona al menos un grupo al que asignar la apuesta.");
+      return;
+    }
+
     setSubmitting(true);
     setServerError(null);
+    const finish = () => (onDone ? onDone() : router.push(ROUTES.bets));
     try {
-      if (initial) {
-        await updateBet({ ...parsed.data, betId: initial.id });
-      } else {
-        if ((parsed.data.groupIds ?? []).length === 0) {
-          setServerError(
-            "Selecciona al menos un grupo al que asignar la apuesta."
-          );
-          setSubmitting(false);
-          return;
-        }
-        await createBet({
-          ...parsed.data,
-          userId,
-        });
-      }
-      if (onDone) onDone();
-      else router.push(ROUTES.bets);
+      const op: Promise<unknown> = initial
+        ? updateBet({ ...parsed.data, betId: initial.id })
+        : createBet({ ...parsed.data, userId });
+      await withTimeout(op, 9000);
+      finish();
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : "Error al guardar");
+      if (err instanceof TimeoutError) {
+        // Red lenta: se guarda y sincroniza en segundo plano. Continuamos
+        // para no dejar el botón en "Guardando…" eternamente.
+        finish();
+      } else {
+        setServerError(err instanceof Error ? err.message : "Error al guardar");
+      }
     } finally {
       setSubmitting(false);
     }

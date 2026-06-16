@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { settleBet } from "@/features/bets/bets.service";
 import { calcProfit } from "@/features/bets/bets.utils";
-import { formatCurrency, profitClass } from "@/lib/utils";
+import { formatCurrency, profitClass, TimeoutError, withTimeout } from "@/lib/utils";
 import type { Bet, BetStatus } from "@/types/domain";
 
 interface Props {
@@ -72,15 +72,25 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await settleBet(
-        bet.id,
-        choice,
-        choice === "cashout" ? cashoutProfit : undefined
+      await withTimeout(
+        settleBet(
+          bet.id,
+          choice,
+          choice === "cashout" ? cashoutProfit : undefined
+        ),
+        9000
       );
       onOpenChange(false);
       onSettled?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al liquidar");
+      if (err instanceof TimeoutError) {
+        // Tarda por red lenta: el cambio se guarda y se sincroniza en segundo
+        // plano. Cerramos igualmente para no dejar la UI colgada.
+        onOpenChange(false);
+        onSettled?.();
+      } else {
+        setError(err instanceof Error ? err.message : "Error al liquidar");
+      }
     } finally {
       setSubmitting(false);
     }

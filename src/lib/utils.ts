@@ -50,3 +50,35 @@ export function initials(name: string): string {
     .join("")
     .toUpperCase();
 }
+
+/** Error lanzado por `withTimeout` cuando la promesa tarda demasiado. */
+export class TimeoutError extends Error {
+  constructor() {
+    super("timeout");
+    this.name = "TimeoutError";
+  }
+}
+
+/**
+ * Carrera con límite de tiempo. Si `p` no resuelve en `ms`, lanza
+ * `TimeoutError` — pero la promesa original SIGUE en segundo plano (no se
+ * cancela; además se le adjunta un manejador para que un rechazo tardío no
+ * quede sin gestionar). Se usa para que las escrituras de Firestore no dejen
+ * la UI colgada en redes lentas/intermitentes: el listener en tiempo real
+ * reflejará el cambio igualmente cuando sincronice.
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new TimeoutError()), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}

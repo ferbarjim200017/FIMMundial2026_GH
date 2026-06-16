@@ -54,6 +54,8 @@ import {
   formatCurrency,
   formatPercent,
   profitClass,
+  TimeoutError,
+  withTimeout,
 } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
@@ -540,18 +542,26 @@ function BookmakerCard({
     }
     setSaving(true);
     try {
-      await updateInitialBalances(uid, { [bookmaker]: parsed }, groupId);
+      await withTimeout(
+        updateInitialBalances(uid, { [bookmaker]: parsed }, groupId),
+        9000
+      );
       setEditing(false);
     } catch (err) {
-      console.error("[updateInitialBalances]", err);
-      const msg = err instanceof Error ? err.message : "Error guardando";
-      const friendly =
-        msg.includes("permission-denied") || msg.includes("PERMISSION_DENIED")
-          ? "Firebase ha rechazado el cambio por reglas de seguridad. " +
-            "Si eres el admin, ejecuta `firebase deploy --only firestore:rules` " +
-            "para subir las reglas actuales (las viejas no permitían editar el saldo a usuarios normales)."
-          : `No se pudo guardar: ${msg}`;
-      window.alert(friendly);
+      if (err instanceof TimeoutError) {
+        // Red lenta: se guarda y sincroniza en segundo plano.
+        setEditing(false);
+      } else {
+        console.error("[updateInitialBalances]", err);
+        const msg = err instanceof Error ? err.message : "Error guardando";
+        const friendly =
+          msg.includes("permission-denied") || msg.includes("PERMISSION_DENIED")
+            ? "Firebase ha rechazado el cambio por reglas de seguridad. " +
+              "Si eres el admin, ejecuta `firebase deploy --only firestore:rules` " +
+              "para subir las reglas actuales (las viejas no permitían editar el saldo a usuarios normales)."
+            : `No se pudo guardar: ${msg}`;
+        window.alert(friendly);
+      }
     } finally {
       setSaving(false);
     }
