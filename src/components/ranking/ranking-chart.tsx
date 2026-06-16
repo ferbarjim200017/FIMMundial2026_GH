@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,9 +14,18 @@ import {
   DAY_MS,
   pickChartColor,
 } from "@/components/ranking/chart-palette";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, Match } from "@/types/domain";
 
-type RangeKey = "all" | "30" | "7";
+type RangeKey = "all" | "30" | "7" | "custom";
+
+/** ms → valor para un <input type="datetime-local"> en hora local. */
+function toLocalInput(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
 
 // El Mundial 2026 arranca el 11 de junio. La gráfica de "todo el historial"
 // empieza ese día (no antes), aunque existan apuestas previas (p. ej. de
@@ -25,6 +35,14 @@ const TOURNAMENT_START_MS = new Date(2026, 5, 11, 0, 0, 0, 0).getTime();
 interface Props {
   users: AppUser[];
   bets: Bet[];
+  /** Partidos del torneo, para marcar con puntos los del periodo elegido. */
+  matches?: Match[];
+}
+
+interface MatchMarker {
+  id: string;
+  t: number;
+  label: string;
 }
 
 interface Series {
@@ -60,7 +78,12 @@ function niceTicks(min: number, max: number, count: number): number[] {
  *   periodo, acumulando profit.
  * - Se prolonga hasta "ahora" con el balance acumulado para reflejar el total.
  */
-function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number): Series["points"] {
+function buildSeries(
+  user: AppUser,
+  bets: Bet[],
+  startMs: number,
+  endMs: number
+): Series["points"] {
   const settled = bets
     .filter((b) => b.userId === user.uid)
     .filter(
@@ -73,7 +96,7 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
       ms: (b.settledAt ?? b.createdAt).toMillis(),
       profit: b.profit ?? 0,
     }))
-    .filter((b) => b.ms >= startMs)
+    .filter((b) => b.ms >= startMs && b.ms <= endMs)
     .sort((a, b) => a.ms - b.ms);
 
   const points: Series["points"] = [{ t: startMs, balance: 0 }];
@@ -82,10 +105,10 @@ function buildSeries(user: AppUser, bets: Bet[], startMs: number, nowMs: number)
     acc += s.profit;
     points.push({ t: s.ms, balance: acc });
   }
-  // Prolongamos la línea hasta "ahora" con el balance acumulado, para que
-  // refleje el total aunque la última apuesta del periodo sea antigua (o no
-  // haya ninguna: línea plana en 0).
-  const endT = Math.max(nowMs, startMs + DAY_MS);
+  // Prolongamos la línea hasta el fin de la ventana con el balance acumulado,
+  // para que refleje el total aunque la última apuesta del periodo sea antigua
+  // (o no haya ninguna: línea plana en 0).
+  const endT = Math.max(endMs, startMs + DAY_MS);
   const lastT = points[points.length - 1].t;
   if (lastT < endT) points.push({ t: endT, balance: acc });
   return points;
@@ -151,7 +174,16 @@ function formatDateShort(ms: number): string {
   });
 }
 
-export function RankingChart({ users, bets }: Props) {
+function formatMarkerDateTime(ms: number): string {
+  return new Date(ms).toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function RankingChart({ users, bets, matches = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(500);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -178,18 +210,36 @@ export function RankingChart({ users, bets }: Props) {
   // Periodo mostrado. Por defecto "all" = acumulado de TODO el historial.
   const [range, setRange] = useState<RangeKey>("all");
 
+  // Rango personalizado (range === "custom"): el usuario elige fecha-hora de
+  // inicio y fin con precisión de minutos.
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
   // Fijamos "ahora" al montar el componente. Antes era `Date.now()` a nivel de
   // render, lo que invalidaba el useMemo de `series` en cada repintado y
   // recalculaba todas las series sin necesidad. Memoizarlo da una gráfica
   // estable (idéntica en pantalla) y evita ese recálculo.
   const nowMs = useMemo(() => Date.now(), []);
 
+  // Al pasar a "personalizado" por primera vez, precargamos una ventana de las
+  // últimas 24 h como punto de partida cómodo.
+  useEffect(() => {
+    if (range === "custom" && !customStart && !customEnd) {
+      setCustomStart(toLocalInput(nowMs - DAY_MS));
+      setCustomEnd(toLocalInput(nowMs));
+    }
+  }, [range, customStart, customEnd, nowMs]);
+
   // Inicio del periodo:
   //  - "all": desde la PRIMERA apuesta liquidada del torneo (>= 11 jun), para
   //    que la línea no arranque con un tramo plano largo. Suelo en el 11 de
   //    junio para ignorar apuestas previas al Mundial.
   //  - "30"/"7": ventana móvil de los últimos N días, sin bajar del 11 de junio.
+  //  - "custom": exactamente la fecha-hora de inicio elegida.
   const startMs = useMemo(() => {
+    if (range === "custom") {
+      return customStart ? new Date(customStart).getTime() : nowMs - DAY_MS;
+    }
     if (range === "7") return Math.max(nowMs - 7 * DAY_MS, TOURNAMENT_START_MS);
     if (range === "30") return Math.max(nowMs - 30 * DAY_MS, TOURNAMENT_START_MS);
     let earliest = Infinity;
@@ -201,16 +251,25 @@ export function RankingChart({ users, bets }: Props) {
       if (ms >= TOURNAMENT_START_MS && ms < earliest) earliest = ms;
     }
     return Number.isFinite(earliest) ? earliest : TOURNAMENT_START_MS;
-  }, [range, nowMs, bets]);
+  }, [range, nowMs, bets, customStart]);
+
+  // Fin del periodo: "ahora" salvo en "custom", donde es la fecha-hora elegida.
+  const endMs = useMemo(() => {
+    if (range === "custom" && customEnd) {
+      const e = new Date(customEnd).getTime();
+      return e > startMs ? e : startMs + DAY_MS;
+    }
+    return nowMs;
+  }, [range, customEnd, nowMs, startMs]);
 
   const series: Series[] = useMemo(() => {
     return users.map((u, i) => ({
       uid: u.uid,
       username: u.username,
       color: pickChartColor(i),
-      points: buildSeries(u, bets, startMs, nowMs),
+      points: buildSeries(u, bets, startMs, endMs),
     }));
-  }, [users, bets, startMs, nowMs]);
+  }, [users, bets, startMs, endMs]);
 
   const visibleSeries = series.filter((s) => !hidden.has(s.uid));
 
@@ -242,6 +301,21 @@ export function RankingChart({ users, bets }: Props) {
       maxY: maxY + pad,
     };
   }, [series, startMs]);
+
+  // Partidos a marcar con un punto en el eje temporal. Solo en ventanas
+  // acotadas ("7 días" y "personalizado") para no saturar la gráfica de "todo
+  // el historial". Se muestran los que caen dentro del periodo visible.
+  const matchMarkers = useMemo<MatchMarker[]>(() => {
+    if (range !== "custom" && range !== "7") return [];
+    return matches
+      .map((m) => ({
+        id: m.id,
+        t: m.kickoffUtc.toMillis(),
+        label: `${m.homeLabel} vs ${m.awayLabel}`,
+      }))
+      .filter((m) => m.t >= bounds.minT && m.t <= bounds.maxT)
+      .sort((a, b) => a.t - b.t);
+  }, [matches, range, bounds]);
 
   const W = width;
   const H = 360;
@@ -351,18 +425,55 @@ export function RankingChart({ users, bets }: Props) {
   return (
     <div className="space-y-3">
       {/* Selector de periodo */}
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Periodo:</span>
-        <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
-          <SelectTrigger className="h-8 w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todo el historial</SelectItem>
-            <SelectItem value="30">Últimos 30 días</SelectItem>
-            <SelectItem value="7">Últimos 7 días</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Periodo:</span>
+          <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
+            <SelectTrigger className="h-8 w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo el historial</SelectItem>
+              <SelectItem value="30">Últimos 30 días</SelectItem>
+              <SelectItem value="7">Últimos 7 días</SelectItem>
+              <SelectItem value="custom">Personalizado…</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {range === "custom" && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label htmlFor="rc-start" className="text-muted-foreground">
+              Desde
+            </label>
+            <Input
+              id="rc-start"
+              type="datetime-local"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="h-8 w-[210px]"
+            />
+            <label htmlFor="rc-end" className="text-muted-foreground">
+              Hasta
+            </label>
+            <Input
+              id="rc-end"
+              type="datetime-local"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="h-8 w-[210px]"
+            />
+          </div>
+        )}
+
+        {matchMarkers.length > 0 && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />
+            {matchMarkers.length}{" "}
+            {matchMarkers.length === 1 ? "partido" : "partidos"} en el periodo
+            (pasa el ratón por cada punto para ver cuál)
+          </p>
+        )}
       </div>
 
       <div ref={containerRef} className="relative w-full">
@@ -466,6 +577,34 @@ export function RankingChart({ users, bets }: Props) {
               >
                 {formatDateShort(t)}
               </text>
+            );
+          })}
+
+          {/* Puntos de los partidos del periodo (línea guía tenue + punto en el
+              eje, con tooltip nativo al pasar el ratón). */}
+          {matchMarkers.map((mk) => {
+            const x = xFor(mk.t);
+            return (
+              <g key={`mk-${mk.id}`} className="text-primary">
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={PAD_TOP}
+                  y2={baseY}
+                  stroke="currentColor"
+                  strokeOpacity={0.12}
+                  strokeWidth={1}
+                />
+                <circle
+                  cx={x}
+                  cy={baseY}
+                  r={3.5}
+                  className="fill-primary"
+                  stroke="hsl(var(--card))"
+                  strokeWidth={1.5}
+                />
+                <title>{`${mk.label} · ${formatMarkerDateTime(mk.t)}`}</title>
+              </g>
             );
           })}
 

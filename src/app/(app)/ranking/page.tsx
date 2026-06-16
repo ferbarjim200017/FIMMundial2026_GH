@@ -33,6 +33,7 @@ import {
   writeRankMovements,
 } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   betInGroup,
   computeSuperaumentoSummary,
@@ -49,7 +50,13 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet, RankMovement, RankMovementMap } from "@/types/domain";
+import type {
+  AppUser,
+  Bet,
+  Match,
+  RankMovement,
+  RankMovementMap,
+} from "@/types/domain";
 
 function medal(rank: number) {
   if (rank === 1) return "🥇";
@@ -125,6 +132,7 @@ type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "usernam
 export default function RankingPage() {
   const [allUsers, setAllUsers] = useState<AppUser[] | null>(null);
   const [allBets, setAllBets] = useState<Bet[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const { memberUids, activeGroup } = useGroup();
   const { appUser } = useAuth();
 
@@ -183,9 +191,11 @@ export default function RankingPage() {
     }
     const unsubUsers = subscribeToRanking(setAllUsers);
     const unsubBets = subscribeToAllBets(setAllBets);
+    const unsubMatches = subscribeToMatches(setMatches, () => setMatches([]));
     return () => {
       unsubUsers();
       unsubBets();
+      unsubMatches();
     };
   }, []);
 
@@ -473,7 +483,7 @@ export default function RankingPage() {
                 </div>
               </div>
             ) : (
-              <RankingChart users={users} bets={bets} />
+              <RankingChart users={users} bets={bets} matches={matches} />
             )}
           </CardContent>
         </Card>
