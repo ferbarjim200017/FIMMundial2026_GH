@@ -10,7 +10,6 @@ import {
   Receipt,
   Skull,
   Sparkles,
-  Star,
   Target,
   Trophy,
 } from "lucide-react";
@@ -74,24 +73,6 @@ function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
         draggable={false}
       />
     </AnimatePresence>
-  );
-}
-
-/** Miniatura estática (una foto al azar), para listas compactas. */
-function Thumb({ images, alt }: { images: string[]; alt: string }) {
-  const src = useMemo(
-    () => (images.length ? images[Math.floor(Math.random() * images.length)] : null),
-    [images]
-  );
-  if (!src)
-    return <div className="h-10 w-10 shrink-0 rounded-md bg-zinc-800" />;
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className="h-10 w-10 shrink-0 rounded-md object-cover"
-      draggable={false}
-    />
   );
 }
 
@@ -197,45 +178,6 @@ function GalleryCard({
           </p>
         )}
       </div>
-    </motion.div>
-  );
-}
-
-/* ── Fila compacta para la "Mención especial" ── */
-function RankRow({
-  rank,
-  images,
-  eyebrow,
-  title,
-  profit,
-}: {
-  rank: number;
-  images: string[];
-  eyebrow?: string;
-  title: string;
-  profit: number;
-}) {
-  return (
-    <motion.div
-      variants={item}
-      className="flex items-center gap-3 rounded-lg border border-white/10 bg-zinc-900/40 p-2"
-    >
-      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">
-        {rank}
-      </span>
-      <Thumb images={images} alt={title} />
-      <div className="min-w-0 flex-1">
-        {eyebrow && (
-          <p className="truncate text-[10px] font-bold uppercase tracking-widest text-primary">
-            {eyebrow}
-          </p>
-        )}
-        <p className="truncate text-sm font-bold">{title}</p>
-      </div>
-      <span className={cn("shrink-0 font-mono text-sm font-black", profitClass(profit))}>
-        {profit > 0 ? "+" : ""}
-        {formatCurrency(profit)}
-      </span>
     </motion.div>
   );
 }
@@ -727,64 +669,6 @@ export function FimHall() {
           }))}
         </section>
       )}
-
-      {/* ─────────── MENCIÓN ESPECIAL: todos ordenados por beneficio ─────────── */}
-      <section className="space-y-5">
-        <BigTitle
-          subtitle="Todos los individuales y dúos, ordenados por beneficio"
-          icon={<Star className="h-6 w-6" />}
-        >
-          Mención especial
-        </BigTitle>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">
-              Individuales
-            </h3>
-            <motion.div
-              variants={container}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, amount: 0.05 }}
-              className="space-y-2"
-            >
-              {indByProfit.map((m, i) => (
-                <RankRow
-                  key={m.key}
-                  rank={i + 1}
-                  images={m.images}
-                  eyebrow={m.mote}
-                  title={m.name}
-                  profit={m.profit}
-                />
-              ))}
-            </motion.div>
-          </div>
-          <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">
-              Dúos
-            </h3>
-            <motion.div
-              variants={container}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, amount: 0.05 }}
-              className="space-y-2"
-            >
-              {duosByProfit.map((c, i) => (
-                <RankRow
-                  key={c.key}
-                  rank={i + 1}
-                  images={c.images}
-                  eyebrow={c.nickname ? `«${c.nickname}»` : undefined}
-                  title={c.names.join(" · ")}
-                  profit={c.profit}
-                />
-              ))}
-            </motion.div>
-          </div>
-        </div>
-      </section>
 
       <MatchBetsDialog
         match={selectedMatch}
