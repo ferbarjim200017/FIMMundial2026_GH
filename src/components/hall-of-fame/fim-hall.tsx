@@ -57,18 +57,6 @@ function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
   );
 }
 
-function FlagBox({ home, away }: { home: string; away: string }) {
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-zinc-600 via-zinc-800 to-black">
-      <div className="flex items-center gap-2">
-        <TeamFlag name={home} className="h-9 w-14 rounded shadow-md" />
-        <span className="text-xs font-bold text-white/60">VS</span>
-        <TeamFlag name={away} className="h-9 w-14 rounded shadow-md" />
-      </div>
-    </div>
-  );
-}
-
 const container: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.07 } },
@@ -78,47 +66,42 @@ const item: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-type Badge = { text: string; tone?: string };
+// La métrica es la protagonista: un valor grande + una etiqueta pequeña.
+type Metric = { value: string; label?: string; tone?: string };
 
-/* ── Card uniforme (persona, combo o partido). Hover = se amplía. ── */
+/* ── Card de persona/combo. El dato (métrica) manda; el puesto da igual. ── */
 function GalleryCard({
   images,
-  flags,
-  rank,
   eyebrow,
   title,
-  badge,
+  metric,
   corner,
   cornerBad,
   accent,
-  onClick,
   mtClass,
 }: {
-  images?: string[];
-  flags?: [string, string];
-  rank?: number;
+  images: string[];
   eyebrow?: string;
   title: string;
-  badge?: Badge;
+  metric: Metric;
   corner?: string;
   cornerBad?: boolean;
   accent?: string;
-  onClick?: () => void;
   mtClass?: string;
 }) {
-  const inner = (
-    <>
+  return (
+    <motion.div
+      variants={item}
+      whileHover={{ scale: 1.06 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      className={cn(
+        "group relative flex flex-col rounded-2xl border bg-zinc-900/50 p-2.5 shadow-lg transition-shadow hover:z-20 hover:shadow-2xl",
+        accent ?? "border-white/10",
+        mtClass
+      )}
+    >
       <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-zinc-800">
-        {images ? (
-          <RotatingImage images={images} alt={title} />
-        ) : flags ? (
-          <FlagBox home={flags[0]} away={flags[1]} />
-        ) : null}
-        {rank !== undefined && (
-          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-sm font-black text-white backdrop-blur">
-            {rank}
-          </span>
-        )}
+        <RotatingImage images={images} alt={title} />
         {corner && (
           <span
             className={cn(
@@ -135,50 +118,66 @@ function GalleryCard({
           </span>
         )}
       </div>
-      <div className="px-1 pt-2.5 text-center">
+      <div className="px-1 pt-2 text-center">
         {eyebrow && (
           <p className="truncate text-[10px] font-bold uppercase tracking-widest text-primary">
             {eyebrow}
           </p>
         )}
-        <h3 className="truncate text-base font-black leading-tight">{title}</h3>
-        {badge && (
-          <span
-            className={cn(
-              "mt-1.5 inline-block rounded-full border border-white/15 px-2.5 py-0.5 font-mono text-xs font-bold",
-              badge.tone
-            )}
-          >
-            {badge.text}
-          </span>
+        <h3 className="truncate text-sm font-black leading-tight">{title}</h3>
+        <p
+          className={cn(
+            "mt-1 text-2xl font-black leading-none md:text-3xl",
+            metric.tone ?? "text-white"
+          )}
+        >
+          {metric.value}
+        </p>
+        {metric.label && (
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-white/45">
+            {metric.label}
+          </p>
         )}
       </div>
-    </>
-  );
-
-  const cls = cn(
-    "group relative flex flex-col rounded-2xl border bg-zinc-900/50 p-2.5 shadow-lg transition-shadow hover:z-20 hover:shadow-2xl",
-    accent ?? "border-white/10",
-    mtClass
-  );
-
-  const motionProps = {
-    variants: item,
-    whileHover: { scale: 1.06 },
-    transition: { type: "spring" as const, stiffness: 300, damping: 20 },
-  };
-
-  if (onClick) {
-    return (
-      <motion.button type="button" onClick={onClick} {...motionProps} className={cls}>
-        {inner}
-      </motion.button>
-    );
-  }
-  return (
-    <motion.div {...motionProps} className={cls}>
-      {inner}
     </motion.div>
+  );
+}
+
+/* ── Card compacta de partido (abajo del todo, con banderas) ── */
+function MatchCard({
+  mt,
+  metric,
+  onClick,
+}: {
+  mt: FimMatchStat;
+  metric: Metric;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      variants={item}
+      whileHover={{ scale: 1.02 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      className="flex items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-left transition-colors hover:bg-zinc-800/60"
+    >
+      <div className="flex shrink-0 items-center gap-1">
+        <TeamFlag name={mt.home} className="h-6 w-9 rounded" />
+        <TeamFlag name={mt.away} className="h-6 w-9 rounded" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-bold">
+          {mt.home} · {mt.away}
+        </p>
+        {metric.label && (
+          <p className="text-[11px] text-muted-foreground">{metric.label}</p>
+        )}
+      </div>
+      <span className={cn("shrink-0 font-mono text-lg font-black", metric.tone)}>
+        {metric.value}
+      </span>
+    </motion.button>
   );
 }
 
@@ -209,7 +208,6 @@ function BigTitle({
   );
 }
 
-// Escalonado tipo "muro" para las filas de 3.
 const STAGGER3 = ["md:mt-0", "md:mt-12", "md:mt-5"];
 
 function Section({
@@ -253,8 +251,9 @@ function HeroBackdrop({ images }: { images: string[] }) {
   );
 }
 
-const profitBadge = (v: number): Badge => ({
-  text: `${v > 0 ? "+" : ""}${formatCurrency(v)}`,
+const profitMetric = (v: number, label = "beneficio"): Metric => ({
+  value: `${v > 0 ? "+" : ""}${formatCurrency(v)}`,
+  label,
   tone: profitClass(v),
 });
 
@@ -329,32 +328,14 @@ export function FimHall() {
 
   const openMatch = (id: string) => setSelectedMatch(matchById.get(id) ?? null);
 
-  // Helpers de construcción de tarjetas.
-  const peopleCards = (list: FimMemberStat[], badge: (m: FimMemberStat) => Badge) =>
+  const peopleCards = (list: FimMemberStat[], metric: (m: FimMemberStat) => Metric) =>
     list.map((m, i) => (
       <GalleryCard
         key={m.key}
         images={m.images}
-        rank={i + 1}
         eyebrow={m.mote}
         title={m.name}
-        badge={badge(m)}
-        mtClass={STAGGER3[i]}
-      />
-    ));
-
-  const matchCards = (
-    list: FimMatchStat[],
-    badge: (m: FimMatchStat) => Badge
-  ) =>
-    list.map((mt, i) => (
-      <GalleryCard
-        key={mt.matchId}
-        flags={[mt.home, mt.away]}
-        rank={i + 1}
-        title={`${mt.home} · ${mt.away}`}
-        badge={badge(mt)}
-        onClick={() => openMatch(mt.matchId)}
+        metric={metric(m)}
         mtClass={STAGGER3[i]}
       />
     ));
@@ -366,7 +347,7 @@ export function FimHall() {
         images={c.images}
         eyebrow={c.nickname ? `«${c.nickname}»` : undefined}
         title={c.names.join(" · ")}
-        badge={profitBadge(c.profit)}
+        metric={profitMetric(c.profit, "combinado")}
         corner={c.badge ?? undefined}
         cornerBad={c.badge?.includes("perdedor")}
         accent={
@@ -379,6 +360,42 @@ export function FimHall() {
         mtClass={i % 2 ? "sm:mt-8" : ""}
       />
     ));
+
+  const matchBlock = (
+    title: string,
+    list: FimMatchStat[],
+    metric: (m: FimMatchStat) => Metric
+  ) =>
+    list.length > 0 ? (
+      <div className="space-y-3">
+        <h3 className="text-lg font-black uppercase tracking-tight text-muted-foreground">
+          {title}
+        </h3>
+        <motion.div
+          variants={container}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {list.map((mt) => (
+            <MatchCard
+              key={mt.matchId}
+              mt={mt}
+              metric={metric(mt)}
+              onClick={() => openMatch(mt.matchId)}
+            />
+          ))}
+        </motion.div>
+      </div>
+    ) : null;
+
+  const hasMatchTops =
+    matchTops.gains.length +
+      matchTops.losses.length +
+      matchTops.mostBets.length +
+      matchTops.mostStaked.length >
+    0;
 
   return (
     <div className="space-y-14 pb-10">
@@ -416,33 +433,10 @@ export function FimHall() {
       {/* Reyes del beneficio */}
       <Section
         title="Reyes del beneficio"
-        subtitle="Top 3 con más beneficio total"
+        subtitle="Quién más dinero le ha sacado"
         icon={<Crown className="h-6 w-6" />}
       >
-        {peopleCards(rankings.byProfit, (m) => profitBadge(m.profit))}
-      </Section>
-
-      {/* Partidos con más ganancias */}
-      {matchTops.gains.length > 0 && (
-        <Section
-          title="Partidos más rentables"
-          subtitle="Datos globales del grupo · pulsa para ver las apuestas"
-          icon={<Trophy className="h-6 w-6" />}
-        >
-          {matchCards(matchTops.gains, (m) => profitBadge(m.profit))}
-        </Section>
-      )}
-
-      {/* Las más ganadoras */}
-      <Section
-        title="Las más ganadoras"
-        subtitle="Top 3 por apuestas acertadas"
-        icon={<Trophy className="h-6 w-6" />}
-      >
-        {peopleCards(rankings.byWon, (m) => ({
-          text: `${m.won} ganadas`,
-          tone: "text-profit",
-        }))}
+        {peopleCards(rankings.byProfit, (m) => profitMetric(m.profit))}
       </Section>
 
       {/* Dúos */}
@@ -457,35 +451,16 @@ export function FimHall() {
         </Section>
       )}
 
-      {/* Los más mancos */}
+      {/* Las más ganadoras */}
       <Section
-        title="Los más mancos"
-        subtitle="Top 3 que más palos se han comido"
-        icon={<Skull className="h-6 w-6" />}
+        title="Las más ganadoras"
+        subtitle="Quién más apuestas acierta"
+        icon={<Trophy className="h-6 w-6" />}
       >
-        {peopleCards(rankings.byLoss, (m) => profitBadge(m.profit))}
-      </Section>
-
-      {/* Partidos con más pérdidas */}
-      {matchTops.losses.length > 0 && (
-        <Section
-          title="Partidos malditos"
-          subtitle="Donde el grupo más ha palmado · pulsa para abrir"
-          icon={<Skull className="h-6 w-6" />}
-        >
-          {matchCards(matchTops.losses, (m) => profitBadge(m.profit))}
-        </Section>
-      )}
-
-      {/* Los más viciados */}
-      <Section
-        title="Los más viciados"
-        subtitle="Top 3 que más apuestan"
-        icon={<Receipt className="h-6 w-6" />}
-      >
-        {peopleCards(rankings.byBets, (m) => ({
-          text: `${m.betsCount} ap.`,
-          tone: "text-white",
+        {peopleCards(rankings.byWon, (m) => ({
+          value: String(m.won),
+          label: "ganadas",
+          tone: "text-profit",
         }))}
       </Section>
 
@@ -501,33 +476,14 @@ export function FimHall() {
         </Section>
       )}
 
-      {/* Partidos con más apuestas */}
-      {matchTops.mostBets.length > 0 && (
-        <Section
-          title="Partidos más calientes"
-          subtitle="Los que más apuestas han movido · pulsa para abrir"
-          icon={<Receipt className="h-6 w-6" />}
-        >
-          {matchCards(matchTops.mostBets, (m) => ({
-            text: `${m.count} ap.`,
-            tone: "text-white",
-          }))}
-        </Section>
-      )}
-
-      {/* Partidos con más dinero */}
-      {matchTops.mostStaked.length > 0 && (
-        <Section
-          title="Partidos de billetes"
-          subtitle="Donde más dinero se ha jugado · pulsa para abrir"
-          icon={<Coins className="h-6 w-6" />}
-        >
-          {matchCards(matchTops.mostStaked, (m) => ({
-            text: formatCurrency(m.staked),
-            tone: "text-gold",
-          }))}
-        </Section>
-      )}
+      {/* Los más mancos */}
+      <Section
+        title="Los más mancos"
+        subtitle="Quién más palos se ha comido"
+        icon={<Skull className="h-6 w-6" />}
+      >
+        {peopleCards(rankings.byLoss, (m) => profitMetric(m.profit))}
+      </Section>
 
       {/* Cuarteto */}
       {data.quads.length > 0 && (
@@ -539,6 +495,47 @@ export function FimHall() {
         >
           {comboCards(data.quads)}
         </Section>
+      )}
+
+      {/* Los más viciados */}
+      <Section
+        title="Los más viciados"
+        subtitle="Quién más apuestas hace"
+        icon={<Receipt className="h-6 w-6" />}
+      >
+        {peopleCards(rankings.byBets, (m) => ({
+          value: String(m.betsCount),
+          label: "apuestas",
+          tone: "text-white",
+        }))}
+      </Section>
+
+      {/* ─── PARTIDOS: abajo del todo, en tarjetas compactas ─── */}
+      {hasMatchTops && (
+        <section className="space-y-6">
+          <BigTitle
+            subtitle="Datos globales del grupo · pulsa cualquiera para ver sus apuestas"
+            icon={<Coins className="h-6 w-6" />}
+          >
+            Los partidos
+          </BigTitle>
+          {matchBlock("Más rentables", matchTops.gains, (m) =>
+            profitMetric(m.profit)
+          )}
+          {matchBlock("Más malditos", matchTops.losses, (m) =>
+            profitMetric(m.profit)
+          )}
+          {matchBlock("Más calientes", matchTops.mostBets, (m) => ({
+            value: String(m.count),
+            label: "apuestas",
+            tone: "text-white",
+          }))}
+          {matchBlock("Más dinero jugado", matchTops.mostStaked, (m) => ({
+            value: formatCurrency(m.staked),
+            label: "jugado",
+            tone: "text-gold",
+          }))}
+        </section>
       )}
 
       <MatchBetsDialog
