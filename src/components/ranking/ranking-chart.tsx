@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { TeamFlag } from "@/components/matches/team-flag";
 import {
   Select,
   SelectContent,
@@ -42,6 +43,8 @@ interface Props {
 interface MatchMarker {
   id: string;
   t: number;
+  home: string;
+  away: string;
   label: string;
 }
 
@@ -311,6 +314,8 @@ export function RankingChart({ users, bets, matches = [] }: Props) {
       .map((m) => ({
         id: m.id,
         t: m.kickoffUtc.toMillis(),
+        home: m.homeLabel,
+        away: m.awayLabel,
         label: `${m.homeLabel} vs ${m.awayLabel}`,
       }))
       .filter((m) => m.t >= bounds.minT && m.t <= bounds.maxT)
@@ -470,8 +475,8 @@ export function RankingChart({ users, bets, matches = [] }: Props) {
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />
             {matchMarkers.length}{" "}
-            {matchMarkers.length === 1 ? "partido" : "partidos"} en el periodo
-            (pasa el ratón por cada punto para ver cuál)
+            {matchMarkers.length === 1 ? "partido" : "partidos"} en el periodo,
+            marcados con sus banderas bajo la gráfica
           </p>
         )}
       </div>
@@ -786,6 +791,25 @@ export function RankingChart({ users, bets, matches = [] }: Props) {
               );
             })()}
         </svg>
+
+        {/* Tira de banderas de los partidos del periodo, alineadas bajo su
+            posición temporal. Sustituye al tooltip de hover: se ven de un
+            vistazo, sin tener que pasar el ratón. */}
+        {matchMarkers.length > 0 && (
+          <div className="relative mt-1 h-5">
+            {matchMarkers.map((mk) => (
+              <div
+                key={`flag-${mk.id}`}
+                className="absolute top-0 flex -translate-x-1/2 items-center gap-0.5"
+                style={{ left: xFor(mk.t) }}
+                title={`${mk.label} · ${formatMarkerDateTime(mk.t)}`}
+              >
+                <TeamFlag name={mk.home} className="h-3 w-[18px]" />
+                <TeamFlag name={mk.away} className="h-3 w-[18px]" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
