@@ -7,12 +7,14 @@ import { RankingCarousel } from "@/components/layout/ranking-carousel";
 import { OnboardingGate } from "@/components/layout/onboarding-gate";
 import { BetDetailProvider } from "@/components/bets/bet-detail-dialog";
 import { SuggestionsProvider } from "@/features/suggestions/suggestions.context";
+import { HallOfFameProvider } from "@/features/hall-of-fame/hall-of-fame.context";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <OnboardingGate />
       <SuggestionsProvider>
+      <HallOfFameProvider>
       <BetDetailProvider>
       <div className="flex min-h-screen flex-col">
         {/* Wrapper sticky para que el carrusel y la barra superior se queden
@@ -32,6 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <BottomNav />
       </div>
       </BetDetailProvider>
+      </HallOfFameProvider>
       </SuggestionsProvider>
     </AuthGuard>
   );

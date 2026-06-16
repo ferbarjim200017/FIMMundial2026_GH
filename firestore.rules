@@ -58,6 +58,15 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    // Salón de la Fama por grupo: pertenencia actual de cada ranking + eventos
+    // de "nuevos entrantes" para el banner del dashboard. Lo mantiene el cliente
+    // de cualquier miembro (dato no sensible), así que lectura/escritura para
+    // cualquier usuario autenticado.
+    match /hallOfFame/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // ---------- Predictions ----------
     match /predictions/{userId} {
       allow read: if isSignedIn();
