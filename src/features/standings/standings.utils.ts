@@ -1,4 +1,5 @@
 import type { GroupId, Match, MatchResult } from "@/types/domain";
+import { fifaRank } from "@/features/matches/fifa-ranking";
 
 // ============================================================
 // Standings (clasificación de grupos)
@@ -111,6 +112,7 @@ export function computeGroupStandings(
  *  2. Diferencia de goles
  *  3. Goles a favor
  *  4. Fair play
+ *  5. Ranking FIFA (menor posición = mejor)
  *  (Los criterios head-to-head se aplicarían entre equipos empatados, pero
  *   con datos manuales y para un grupo de amigos, la regla global es
  *   suficiente y mucho más predecible.)
@@ -120,6 +122,9 @@ function compareStandings(a: TeamStanding, b: TeamStanding): number {
   if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
   if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
   if (b.fairPlay !== a.fairPlay) return b.fairPlay - a.fairPlay;
+  const rankA = fifaRank(a.teamLabel);
+  const rankB = fifaRank(b.teamLabel);
+  if (rankA !== rankB) return rankA - rankB;
   return a.teamLabel.localeCompare(b.teamLabel);
 }
 
@@ -152,7 +157,7 @@ export interface ThirdPlaceEntry {
  *  2. Diferencia de goles
  *  3. Mayor cantidad de goles a favor
  *  4. Puntuación Fair Play
- *  5. Ranking FIFA (no disponible aquí — desempate alfabético)
+ *  5. Ranking FIFA (menor posición = mejor)
  */
 export function computeBestThirds(
   allGroupIds: readonly GroupId[],
@@ -189,6 +194,9 @@ export function computeBestThirds(
     if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
     if (b.fairPlay !== a.fairPlay) return b.fairPlay - a.fairPlay;
+    const rankA = fifaRank(a.teamLabel);
+    const rankB = fifaRank(b.teamLabel);
+    if (rankA !== rankB) return rankA - rankB;
     return a.teamLabel.localeCompare(b.teamLabel);
   });
 
