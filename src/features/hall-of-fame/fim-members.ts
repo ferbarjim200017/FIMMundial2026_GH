@@ -14,7 +14,8 @@ export interface FimMember {
   mote: string;
 }
 
-// username (en minúsculas) -> miembro.
+// username -> miembro. Se puede mapear varios usernames al mismo miembro
+// (alias). El lookup es insensible a mayúsculas, tildes y espacios extra.
 const BY_USERNAME: Record<string, FimMember> = {
   albeltico: { key: "alberto", name: "Alberto", mote: "El Cojo" },
   alexandru: { key: "alexandru", name: "Alexandru", mote: "El Correas" },
@@ -24,10 +25,29 @@ const BY_USERNAME: Record<string, FimMember> = {
   "dani blanco": { key: "danib", name: "Dani Blanco", mote: "El Farlopa" },
   "daniro el rey nini": { key: "daniro", name: "Daniro", mote: "El Rey Nini" },
   fernando: { key: "fernando", name: "Fernando", mote: "El Maricón" },
+  "fernando barrera jiménez": {
+    key: "fernando",
+    name: "Fernando",
+    mote: "El Maricón",
+  },
 };
 
 const BY_KEY: Record<string, FimMember> = Object.fromEntries(
   Object.values(BY_USERNAME).map((m) => [m.key, m])
+);
+
+/** Normaliza: minúsculas, sin tildes, espacios colapsados. */
+function normUsername(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const BY_USERNAME_NORM: Record<string, FimMember> = Object.fromEntries(
+  Object.entries(BY_USERNAME).map(([k, v]) => [normUsername(k), v])
 );
 
 /** Fotos indexadas por clave de combo (incluye individuos). */
@@ -35,7 +55,7 @@ export const FIM_PHOTOS_BY_KEY: Record<string, FimPhotoEntry> =
   Object.fromEntries(FIM_PHOTOS.map((p) => [p.key, p]));
 
 export function fimMemberByUsername(username: string): FimMember | null {
-  return BY_USERNAME[username.trim().toLowerCase()] ?? null;
+  return BY_USERNAME_NORM[normUsername(username)] ?? null;
 }
 
 export function fimMemberByKey(key: string): FimMember | null {
