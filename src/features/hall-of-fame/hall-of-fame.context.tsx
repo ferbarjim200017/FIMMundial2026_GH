@@ -19,6 +19,7 @@ import {
   computeHofMembership,
   membershipSig,
 } from "@/features/hall-of-fame/hall-of-fame.utils";
+import { fimMemberByUsername } from "@/features/hall-of-fame/fim-members";
 import {
   reconcileHof,
   subscribeToHof,
@@ -108,7 +109,10 @@ export function HallOfFameProvider({ children }: { children: ReactNode }) {
 
   const usernameByUid = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const u of groupMembers) m[u.uid] = u.username;
+    // En FIM mostramos el nombre real (Sergio, Daniro…) en vez del username.
+    for (const u of groupMembers) {
+      m[u.uid] = fimMemberByUsername(u.username)?.name ?? u.username;
+    }
     return m;
   }, [groupMembers]);
 

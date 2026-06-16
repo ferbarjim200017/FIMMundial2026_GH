@@ -24,6 +24,8 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { betInGroup, betOutcome, round2 } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
+import { FIM_GROUP_ID } from "@/features/groups/groups.service";
+import { FimHall } from "@/components/hall-of-fame/fim-hall";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -58,7 +60,17 @@ interface MatchAgg {
   count: number;
 }
 
+/**
+ * El Salón de la Fama tiene DOS versiones: la galería inmersiva exclusiva del
+ * grupo FIM (con fotos, motes y stats) y la genérica para el resto de grupos.
+ */
 export default function HallOfFamePage() {
+  const { activeGroup } = useGroup();
+  if (activeGroup?.id === FIM_GROUP_ID) return <FimHall />;
+  return <GenericHall />;
+}
+
+function GenericHall() {
   const { memberUids, activeGroup, groupMembers } = useGroup();
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
