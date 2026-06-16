@@ -1,7 +1,7 @@
 import { computeUserStats } from "@/features/bets/bets.utils";
 import { FIM_PHOTOS } from "./fim-photos.generated";
 import {
-  FIM_PHOTOS_BY_KEY,
+  fimMemberByKey,
   fimMemberByUsername,
   fimNameByKey,
 } from "./fim-members";
@@ -47,42 +47,41 @@ export interface FimHallData {
  *   más ganador).
  */
 export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
-  const keyByUid = new Map<string, string>();
   const uidByKey = new Map<string, string>();
-  const moteByKey = new Map<string, string>();
-  const nameByKey = new Map<string, string>();
   for (const u of users) {
     const m = fimMemberByUsername(u.username);
-    if (!m) continue;
-    keyByUid.set(u.uid, m.key);
-    uidByKey.set(m.key, u.uid);
-    moteByKey.set(m.key, m.mote);
-    nameByKey.set(m.key, m.name);
+    if (m) uidByKey.set(m.key, u.uid);
   }
 
+  // Stats por clave (0 si esa persona no casa con ningún usuario del grupo).
   const statByKey = new Map<string, FimMemberStat>();
-  for (const [key, uid] of uidByKey) {
-    const s = computeUserStats(bets.filter((b) => b.userId === uid));
+  for (const p of FIM_PHOTOS) {
+    if (p.members.length !== 1) continue;
+    const key = p.members[0];
+    const fm = fimMemberByKey(key);
+    const uid = uidByKey.get(key);
+    const s = uid ? computeUserStats(bets.filter((b) => b.userId === uid)) : null;
     statByKey.set(key, {
       key,
-      name: nameByKey.get(key) ?? fimNameByKey(key),
-      mote: moteByKey.get(key) ?? "",
-      profit: s.totalProfit,
-      roi: s.roi,
-      hitRate: s.hitRate,
-      betsCount: s.betsCount,
-      won: s.betsWon,
-      lost: s.betsLost,
-      images: FIM_PHOTOS_BY_KEY[key]?.images ?? [],
+      name: fm?.name ?? fimNameByKey(key),
+      mote: fm?.mote ?? "",
+      profit: s?.totalProfit ?? 0,
+      roi: s?.roi ?? 0,
+      hitRate: s?.hitRate ?? 0,
+      betsCount: s?.betsCount ?? 0,
+      won: s?.betsWon ?? 0,
+      lost: s?.betsLost ?? 0,
+      images: p.images,
     });
   }
 
+  // SIEMPRE salen los 8 individuos que tienen foto, ordenados por beneficio.
   const members = [...statByKey.values()].sort((a, b) => b.profit - a.profit);
 
+  // SIEMPRE salen todos los combos que tienen foto (stats sumadas, 0 si falta).
   const combos: FimComboStat[] = [];
   for (const p of FIM_PHOTOS) {
     if (p.members.length < 2) continue;
-    if (!p.members.every((k) => uidByKey.has(k))) continue;
     const profit = p.members.reduce(
       (a, k) => a + (statByKey.get(k)?.profit ?? 0),
       0
