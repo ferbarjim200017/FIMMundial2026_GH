@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "import:hof": "node scripts/import-hall-of-fame.mjs",
+    "predev": "node scripts/import-hall-of-fame.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/import-hall-of-fame.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

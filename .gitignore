@@ -17,7 +17,3 @@ firebase-debug.log
 service-account.json
 
 *.tsbuildinfo
-
-# Fotos originales del Salón de la Fama (se importan renombradas con
-# scripts/import-hall-of-fame.mjs; no commiteamos los originales).
-public/hall-of-fame/_origen/

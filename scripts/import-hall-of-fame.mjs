@@ -40,6 +40,7 @@ const TOKEN_TO_KEY = {
   danib: "danib",
   daniblanco: "danib",
   dani: "danib",
+  blanco: "danib",
   daniro: "daniro",
   fernando: "fernando",
   montero: "montero",
@@ -88,18 +89,16 @@ async function main() {
   try {
     srcStat = await fs.stat(SRC);
   } catch {
-    console.error(
-      `\n❌ No encuentro la carpeta de origen:\n   ${SRC}\n\n` +
-        `Arrastra tu carpeta (con sus subcarpetas) dentro de\n` +
-        `   public/hall-of-fame/_origen\n` +
-        `y vuelve a ejecutar, o pásame la ruta:\n` +
-        `   node scripts/import-hall-of-fame.mjs "C:\\ruta\\a\\tu\\carpeta"\n`
+    // No es un error: simplemente no hay carpeta de origen (p. ej. en un build
+    // limpio). Mantenemos el manifiesto existente y salimos sin romper nada.
+    console.warn(
+      `ℹ Sin carpeta de origen (${SRC}); se mantienen las fotos actuales.`
     );
-    process.exit(1);
+    return;
   }
   if (!srcStat.isDirectory()) {
-    console.error(`❌ ${SRC} no es una carpeta.`);
-    process.exit(1);
+    console.warn(`ℹ ${SRC} no es una carpeta; se mantienen las fotos actuales.`);
+    return;
   }
 
   await fs.mkdir(OUT_DIR, { recursive: true });
