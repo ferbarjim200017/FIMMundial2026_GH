@@ -30,10 +30,9 @@ import {
   createSuggestion,
   deleteSuggestion,
   setSuggestionDone,
-  subscribeToSuggestions,
   updateSuggestionText,
 } from "@/features/suggestions/suggestions.service";
-import { isFirebaseConfigured } from "@/lib/firebase/client";
+import { useSuggestions } from "@/features/suggestions/suggestions.context";
 import { ROUTES } from "@/lib/constants";
 import { cn, initials } from "@/lib/utils";
 import type { Suggestion } from "@/types/domain";
@@ -48,27 +47,19 @@ const FILTERS: { value: SuggestionFilter; label: string }[] = [
 
 export default function SuggestionsPage() {
   const { appUser, isAdmin } = useAuth();
-  const [items, setItems] = useState<Suggestion[] | null>(null);
+  const { suggestions: items, markAllSeen } = useSuggestions();
   const [filter, setFilter] = useState<SuggestionFilter>("all");
 
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Al entrar en la pestaña (y cada vez que llega una nueva mientras estás
+  // aquí) marcamos todo como visto, así el aviso rojo del menú desaparece y no
+  // vuelve a saltar hasta que entre OTRA sugerencia nueva.
   useEffect(() => {
-    if (!isFirebaseConfigured) {
-      setItems([]);
-      return;
-    }
-    const unsub = subscribeToSuggestions(
-      setItems,
-      (err) => {
-        console.error("[suggestions]", err);
-        setItems([]);
-      }
-    );
-    return unsub;
-  }, []);
+    markAllSeen();
+  }, [markAllSeen, items]);
 
   const stats = useMemo(() => {
     const all = items ?? [];

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
+import { useSuggestions } from "@/features/suggestions/suggestions.context";
 
 const NAV = [
   { href: ROUTES.dashboard, label: "Inicio", icon: LayoutDashboard },
@@ -34,6 +35,7 @@ const NAV = [
  */
 export function BottomNav() {
   const pathname = usePathname();
+  const { hasUnread } = useSuggestions();
 
   return (
     <nav
@@ -44,6 +46,7 @@ export function BottomNav() {
       <ul className="grid h-14 grid-cols-8">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
+          const showDot = href === ROUTES.suggestions && hasUnread;
           return (
             <li key={href}>
               <Link
@@ -55,10 +58,18 @@ export function BottomNav() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon
-                  className={cn("h-5 w-5", active && "scale-110")}
-                  aria-hidden="true"
-                />
+                <span className="relative">
+                  <Icon
+                    className={cn("h-5 w-5", active && "scale-110")}
+                    aria-hidden="true"
+                  />
+                  {showDot && (
+                    <span
+                      className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background"
+                      aria-label="Hay sugerencias nuevas"
+                    />
+                  )}
+                </span>
                 <span className="leading-none">{label}</span>
               </Link>
             </li>

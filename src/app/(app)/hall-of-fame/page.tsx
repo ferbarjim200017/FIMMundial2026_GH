@@ -10,6 +10,7 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Trophy,
 } from "lucide-react";
 import {
   Card,
@@ -89,8 +90,10 @@ export default function HallOfFamePage() {
   );
 
   // Récords sueltos.
+  // La machada: solo apuestas ACERTADAS por completo (status "won"). Quedan
+  // fuera cashouts y anuladas/push, aunque tengan beneficio.
   const biggestOddsWon = useMemo(() => {
-    const won = settled.filter((b) => betOutcome(b) === "won");
+    const won = settled.filter((b) => b.status === "won");
     if (won.length === 0) return null;
     return [...won].sort((a, b) => b.odds - a.odds)[0];
   }, [settled]);
@@ -101,18 +104,55 @@ export default function HallOfFamePage() {
     return [...real].sort((a, b) => b.stake - a.stake)[0];
   }, [bets]);
 
-  // Reyes del beneficio: ranking de usuarios por beneficio neto en el grupo.
-  const userRanking = useMemo(() => {
+  // Agregados por usuario (sobre apuestas resueltas del grupo): beneficio neto
+  // y nº de apuestas ganadas/perdidas. De aquí salen los podios de usuarios.
+  const userAgg = useMemo(() => {
     if (!bets) return [];
-    const byUid = new Map<string, number>();
+    const byUid = new Map<
+      string,
+      { profit: number; won: number; lost: number }
+    >();
     for (const b of bets) {
       if (b.status === "pending") continue;
-      byUid.set(b.userId, (byUid.get(b.userId) ?? 0) + (b.profit ?? 0));
+      const cur = byUid.get(b.userId) ?? { profit: 0, won: 0, lost: 0 };
+      cur.profit += b.profit ?? 0;
+      const outcome = betOutcome(b);
+      if (outcome === "won") cur.won += 1;
+      else if (outcome === "lost") cur.lost += 1;
+      byUid.set(b.userId, cur);
     }
-    return [...byUid.entries()]
-      .map(([uid, profit]) => ({ user: usersById[uid] ?? null, profit }))
-      .sort((a, b) => b.profit - a.profit);
+    return [...byUid.entries()].map(([uid, v]) => ({
+      user: usersById[uid] ?? null,
+      ...v,
+    }));
   }, [bets, usersById]);
+
+  const kings = useMemo(
+    () =>
+      userAgg
+        .filter((u) => u.profit > 0)
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3),
+    [userAgg]
+  );
+
+  const biggestLosers = useMemo(
+    () =>
+      userAgg
+        .filter((u) => u.profit < 0)
+        .sort((a, b) => a.profit - b.profit)
+        .slice(0, 3),
+    [userAgg]
+  );
+
+  const mostWinners = useMemo(
+    () =>
+      userAgg
+        .filter((u) => u.won > 0)
+        .sort((a, b) => b.won - a.won)
+        .slice(0, 3),
+    [userAgg]
+  );
 
   const loading = bets === null;
   const isEmpty = !loading && settled.length === 0;
@@ -168,7 +208,7 @@ export default function HallOfFamePage() {
             {biggestOddsWon && (
               <RecordCard
                 title="La machada"
-                caption="Mayor cuota acertada"
+                caption="Mayor cuota acertada (sin cashout)"
                 icon={<Sparkles className="h-5 w-5 text-gold" />}
                 bet={biggestOddsWon}
                 user={usersById[biggestOddsWon.userId] ?? null}
@@ -189,56 +229,44 @@ export default function HallOfFamePage() {
             )}
           </div>
 
-          {userRanking.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Flame className="h-5 w-5 text-orange-500" />
-                  Reyes del beneficio
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {userRanking.map((row, i) => (
-                  <div
-                    key={row.user?.uid ?? i}
-                    className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2"
-                  >
-                    <RankBadge rank={i + 1} />
-                    {row.user ? (
-                      <Link
-                        href={ROUTES.profile(row.user.uid)}
-                        className="flex min-w-0 flex-1 items-center gap-2 hover:underline"
-                      >
-                        <Avatar className="h-8 w-8">
-                          {row.user.avatarUrl && (
-                            <AvatarImage src={row.user.avatarUrl} />
-                          )}
-                          <AvatarFallback>
-                            {initials(row.user.username)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="truncate text-sm font-medium">
-                          {row.user.username}
-                        </span>
-                      </Link>
-                    ) : (
-                      <span className="flex-1 text-sm text-muted-foreground">
-                        Usuario
-                      </span>
-                    )}
-                    <span
-                      className={cn(
-                        "font-mono text-sm font-bold",
-                        profitClass(row.profit)
-                      )}
-                    >
-                      {row.profit > 0 ? "+" : ""}
-                      {formatCurrency(row.profit)}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+          {(kings.length > 0 ||
+            biggestLosers.length > 0 ||
+            mostWinners.length > 0) && (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <UserPodium
+                title="Reyes del beneficio"
+                subtitle="Top 3 con más beneficio total"
+                icon={<Flame className="h-5 w-5 text-orange-500" />}
+                rows={kings.map((u) => ({
+                  user: u.user,
+                  value: `${u.profit > 0 ? "+" : ""}${formatCurrency(u.profit)}`,
+                  valueClass: profitClass(u.profit),
+                }))}
+                emptyLabel="Nadie está en positivo todavía."
+              />
+              <UserPodium
+                title="Los más sufridores"
+                subtitle="Top 3 con más pérdidas totales"
+                icon={<TrendingDown className="h-5 w-5 text-loss" />}
+                rows={biggestLosers.map((u) => ({
+                  user: u.user,
+                  value: formatCurrency(u.profit),
+                  valueClass: profitClass(u.profit),
+                }))}
+                emptyLabel="Nadie está en negativo todavía."
+              />
+              <UserPodium
+                title="Más ganadoras"
+                subtitle="Top 3 por apuestas acertadas"
+                icon={<Trophy className="h-5 w-5 text-gold" />}
+                rows={mostWinners.map((u) => ({
+                  user: u.user,
+                  value: `${u.won} ganadas`,
+                  valueClass: "text-profit",
+                }))}
+                emptyLabel="Aún no hay apuestas ganadas."
+              />
+            </div>
           )}
         </>
       )}
@@ -355,6 +383,88 @@ function BetRow({
         {bet.profit > 0 ? "+" : ""}
         {formatCurrency(bet.profit)}
       </span>
+    </Link>
+  );
+}
+
+function UserPodium({
+  title,
+  subtitle,
+  icon,
+  rows,
+  emptyLabel,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  rows: { user: AppUser | null; value: string; valueClass?: string }[];
+  emptyLabel: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          {icon}
+          {title}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {rows.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {emptyLabel}
+          </p>
+        ) : (
+          rows.map((row, i) => (
+            <UserRow
+              key={row.user?.uid ?? i}
+              rank={i + 1}
+              user={row.user}
+              value={row.value}
+              valueClass={row.valueClass}
+            />
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function UserRow({
+  rank,
+  user,
+  value,
+  valueClass,
+}: {
+  rank: number;
+  user: AppUser | null;
+  value: string;
+  valueClass?: string;
+}) {
+  const content = (
+    <>
+      <RankBadge rank={rank} />
+      <Avatar className="h-8 w-8 shrink-0">
+        {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
+        <AvatarFallback>{initials(user?.username ?? "?")}</AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {user?.username ?? "Usuario"}
+      </span>
+      <span className={cn("shrink-0 font-mono text-sm font-bold", valueClass)}>
+        {value}
+      </span>
+    </>
+  );
+  const base =
+    "flex items-center gap-3 rounded-md border border-border/60 px-3 py-2";
+  if (!user) return <div className={base}>{content}</div>;
+  return (
+    <Link
+      href={ROUTES.profile(user.uid)}
+      className={cn(base, "transition-colors hover:bg-accent/40")}
+    >
+      {content}
     </Link>
   );
 }
