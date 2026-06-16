@@ -40,11 +40,14 @@ import {
 } from "@/components/ui/select";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { MatchFilter } from "@/components/bets/match-filter";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
 import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
+  betHasMatch,
   betInGroup,
   betOutcome,
   computeSuperaumentoSummary,
@@ -60,7 +63,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet, BetStatus, Bookmaker } from "@/types/domain";
+import type { AppUser, Bet, BetStatus, Bookmaker, Match } from "@/types/domain";
 
 type FeedFilter = "results" | "won" | "lost" | "pending" | "all";
 
@@ -94,10 +97,12 @@ type BookmakerFilter = Bookmaker | "all";
 export default function FeedPage() {
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
   const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
+  const [matches, setMatches] = useState<Match[]>([]);
   const { memberUids, activeGroup } = useGroup();
   const [filter, setFilter] = useState<FeedFilter>("results");
   const [query, setQuery] = useState("");
   const [userFilter, setUserFilter] = useState<string>("all");
+  const [matchFilter, setMatchFilter] = useState<string>("all");
   const [bookmakerFilter, setBookmakerFilter] = useState<BookmakerFilter>("all");
   const [minStake, setMinStake] = useState("");
   const [maxStake, setMaxStake] = useState("");
@@ -130,9 +135,11 @@ export default function FeedPage() {
       for (const u of users) map[u.uid] = u;
       setUsersById(map);
     });
+    const unsubMatches = subscribeToMatches(setMatches, () => setMatches([]));
     return () => {
       unsubBets();
       unsubUsers();
+      unsubMatches();
     };
   }, []);
 
@@ -171,6 +178,7 @@ export default function FeedPage() {
   const maxStakeNum = maxStake === "" ? null : Number(maxStake);
   const hasAdvancedFilters =
     userFilter !== "all" ||
+    matchFilter !== "all" ||
     bookmakerFilter !== "all" ||
     minStake !== "" ||
     maxStake !== "" ||
@@ -182,6 +190,7 @@ export default function FeedPage() {
       .filter((b) => matchesFilter(b, filter))
       .filter((b) => {
         if (userFilter !== "all" && b.userId !== userFilter) return false;
+        if (matchFilter !== "all" && !betHasMatch(b, matchFilter)) return false;
         if (bookmakerFilter !== "all" && b.bookmaker !== bookmakerFilter)
           return false;
         if (minStakeNum !== null && !Number.isNaN(minStakeNum) && b.stake < minStakeNum)
@@ -209,6 +218,7 @@ export default function FeedPage() {
     sortedBets,
     filter,
     userFilter,
+    matchFilter,
     bookmakerFilter,
     minStakeNum,
     maxStakeNum,
@@ -219,6 +229,7 @@ export default function FeedPage() {
   const resetFilters = () => {
     setQuery("");
     setUserFilter("all");
+    setMatchFilter("all");
     setBookmakerFilter("all");
     setMinStake("");
     setMaxStake("");
@@ -503,6 +514,12 @@ export default function FeedPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <MatchFilter
+                matches={matches}
+                value={matchFilter}
+                onChange={setMatchFilter}
+              />
 
               <div className="space-y-1">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">

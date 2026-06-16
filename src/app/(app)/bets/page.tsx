@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, Plus, Filter, Search, X } from "lucide-react";
+import { Plus, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
+import { betInGroup, betHasMatch, bookmakerLabel } from "@/features/bets/bets.utils";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BetsTable } from "@/components/bets/bets-table";
+import { MatchFilter } from "@/components/bets/match-filter";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets, type BetsFilter } from "@/features/bets/bets.service";
@@ -29,16 +30,6 @@ import type { Bet, Match } from "@/types/domain";
 
 type ScopeKey = "me" | "all";
 
-/** Ventana "juegan pronto": desde hoy 00:00 hasta mañana a las 10:00. */
-function soonWindow(now: number): { start: number; end: number } {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(now);
-  end.setDate(end.getDate() + 1);
-  end.setHours(10, 0, 0, 0);
-  return { start: start.getTime(), end: end.getTime() };
-}
-
 export default function BetsPage() {
   const { appUser, isAdmin } = useAuth();
   const { activeGroup, memberUids } = useGroup();
@@ -48,30 +39,14 @@ export default function BetsPage() {
   const [status, setStatus] = useState<BetsFilter["status"] | "settled">("all");
   const [bookmaker, setBookmaker] = useState<BetsFilter["bookmaker"]>("all");
   const [query, setQuery] = useState("");
-  // Filtro "juegan pronto" + partidos (para conocer horarios y equipos).
-  const [soonOnly, setSoonOnly] = useState(false);
+  // Filtro por partido ("all" o un id) + lista de partidos para el desplegable.
+  const [matchFilter, setMatchFilter] = useState("all");
   const [matches, setMatches] = useState<Match[]>([]);
 
   useEffect(() => {
     const unsub = subscribeToMatches(setMatches);
     return unsub;
   }, []);
-
-  // Ids de partido y equipos que juegan dentro de la ventana (hoy + mañana 10h).
-  const soonSets = useMemo(() => {
-    const { start, end } = soonWindow(Date.now());
-    const matchIds = new Set<string>();
-    const teams = new Set<string>();
-    for (const m of matches) {
-      const k = m.kickoffUtc.toMillis();
-      if (k >= start && k < end) {
-        matchIds.add(m.id);
-        if (m.homeLabel) teams.add(m.homeLabel);
-        if (m.awayLabel) teams.add(m.awayLabel);
-      }
-    }
-    return { matchIds, teams };
-  }, [matches]);
 
   useEffect(() => {
     if (!appUser) return;
@@ -103,16 +78,8 @@ export default function BetsPage() {
         return false;
       // "Terminadas" = todas las que no están pendientes.
       if (status === "settled" && b.status === "pending") return false;
-      // "Juegan pronto": solo apuestas PENDIENTES cuyo partido o equipo juega
-      // hoy o mañana hasta las 10:00.
-      if (soonOnly) {
-        if (b.status !== "pending") return false;
-        const inWindow =
-          (b.matchId ? soonSets.matchIds.has(b.matchId) : false) ||
-          (b.matchIds ?? []).some((id) => soonSets.matchIds.has(id)) ||
-          (b.teams ?? []).some((t) => soonSets.teams.has(t));
-        if (!inWindow) return false;
-      }
+      // Filtro por partido concreto.
+      if (matchFilter !== "all" && !betHasMatch(b, matchFilter)) return false;
       if (normalizedQuery) {
         const haystack = [
           b.matchLabel,
@@ -134,8 +101,7 @@ export default function BetsPage() {
     memberUids,
     scope,
     status,
-    soonOnly,
-    soonSets,
+    matchFilter,
     normalizedQuery,
   ]);
 
@@ -270,19 +236,12 @@ export default function BetsPage() {
             </Select>
           </div>
 
-          <div className="space-y-1">
-            <Button
-              type="button"
-              variant={soonOnly ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSoonOnly((v) => !v)}
-              className="h-9 gap-1.5"
-              title="Solo apuestas de partidos o equipos que juegan hoy o mañana hasta las 10:00"
-            >
-              <CalendarClock className="h-4 w-4" />
-              Juegan pronto
-            </Button>
-          </div>
+          <MatchFilter
+            matches={matches}
+            value={matchFilter}
+            onChange={setMatchFilter}
+            className="w-full sm:w-64"
+          />
         </CardContent>
       </Card>
 

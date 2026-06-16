@@ -30,6 +30,13 @@ export function betInGroup(bet: Bet, groupId: string): boolean {
   return getBetGroupIds(bet).includes(groupId);
 }
 
+/** True si la apuesta está vinculada al partido dado (directa o en un combo). */
+export function betHasMatch(bet: Bet, matchId: string): boolean {
+  if (bet.matchId === matchId) return true;
+  if ((bet.matchIds ?? []).includes(matchId)) return true;
+  return (bet.legs ?? []).some((l) => l.matchId === matchId);
+}
+
 export function calcProfit(
   stake: number,
   odds: number,
