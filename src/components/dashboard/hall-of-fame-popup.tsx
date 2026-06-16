@@ -45,15 +45,15 @@ export function HallOfFamePopup() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={dismiss}
-          className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-black/85 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-black/90"
         >
           <div className="flex min-h-full items-center justify-center p-4">
             <motion.div
               onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.85, y: 30, opacity: 0, rotate: -1 }}
-              animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
-              exit={{ scale: 0.85, opacity: 0 }}
-              transition={{ type: "spring", damping: 16, stiffness: 220 }}
+              initial={{ scale: 0.92, y: 16, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
               className="relative my-4 w-full max-w-lg rounded-2xl border-2 border-loss/70 bg-gradient-to-b from-zinc-900 to-black p-6 shadow-2xl"
             >
               <button
@@ -65,32 +65,24 @@ export function HallOfFamePopup() {
                 <X className="h-6 w-6" />
               </button>
 
-            <motion.div
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.15, type: "spring", damping: 10 }}
-              className="flex items-center justify-center gap-2 text-center"
-            >
+            <div className="flex items-center justify-center gap-2 text-center">
               <Skull className="h-6 w-6 text-loss" />
               <h2 className="text-xl font-black uppercase tracking-tight text-loss md:text-2xl">
                 {header}
               </h2>
-            </motion.div>
+            </div>
 
             <ul className="mt-5 space-y-3">
-              {unseen.map((e, i) => (
-                <motion.li
+              {unseen.map((e) => (
+                <li
                   key={e.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.25 + i * 0.12 }}
                   className={cn(
                     "rounded-xl border-l-4 bg-white/5 p-3 text-center text-base font-semibold leading-snug text-white",
                     e.tone === "bad" ? "border-l-loss" : "border-l-profit"
                   )}
                 >
                   {e.phrase}
-                </motion.li>
+                </li>
               ))}
             </ul>
 

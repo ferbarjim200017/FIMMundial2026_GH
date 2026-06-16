@@ -133,10 +133,14 @@ export function HallOfFameProvider({ children }: { children: ReactNode }) {
     });
   }, [gid, currentMembership, storedSig, usernameByUid, groupMembers.length]);
 
-  const unseen = useMemo(
-    () => events.filter((e) => e.at > lastSeen).sort((a, b) => b.at - a.at),
-    [events, lastSeen]
-  );
+  // Solo mostramos los entrantes NO vistos y RECIENTES (últimas 2 h), para que
+  // no se acumule un listón de gente antigua en el popup.
+  const unseen = useMemo(() => {
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    return events
+      .filter((e) => e.at > lastSeen && e.at >= cutoff)
+      .sort((a, b) => b.at - a.at);
+  }, [events, lastSeen]);
 
   const dismiss = useCallback(() => {
     const maxAt = events.reduce((m, e) => Math.max(m, e.at), lastSeen);
