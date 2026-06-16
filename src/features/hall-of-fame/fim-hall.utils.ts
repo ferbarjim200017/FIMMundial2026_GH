@@ -21,6 +21,10 @@ export interface FimMemberStat {
   betsCount: number;
   won: number;
   lost: number;
+  bestStreak: number;
+  avgOdds: number;
+  /** Cuota más alta de una apuesta ACERTADA entera (status "won"). 0 si ninguna. */
+  maxWonOdds: number;
   images: string[];
 }
 
@@ -67,7 +71,12 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
     const key = p.members[0];
     const fm = fimMemberByKey(key);
     const uid = uidByKey.get(key);
-    const s = uid ? computeUserStats(bets.filter((b) => b.userId === uid)) : null;
+    const userBets = uid ? bets.filter((b) => b.userId === uid) : [];
+    const s = uid ? computeUserStats(userBets) : null;
+    const maxWonOdds = userBets.reduce(
+      (mx, b) => (b.status === "won" && b.odds > mx ? b.odds : mx),
+      0
+    );
     statByKey.set(key, {
       key,
       name: fm?.name ?? fimNameByKey(key),
@@ -78,6 +87,9 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
       betsCount: s?.betsCount ?? 0,
       won: s?.betsWon ?? 0,
       lost: s?.betsLost ?? 0,
+      bestStreak: s?.bestStreak ?? 0,
+      avgOdds: s?.avgOdds ?? 0,
+      maxWonOdds,
       images: p.images,
     });
   }

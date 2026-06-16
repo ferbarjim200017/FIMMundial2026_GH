@@ -5,6 +5,8 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   Coins,
   Crown,
+  Flame,
+  Gauge,
   Receipt,
   Skull,
   Sparkles,
@@ -26,7 +28,7 @@ import {
 } from "@/features/hall-of-fame/fim-hall.utils";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
-import { cn, formatCurrency, profitClass } from "@/lib/utils";
+import { cn, formatCurrency, formatPercent, profitClass } from "@/lib/utils";
 import type { Bet, Match } from "@/types/domain";
 
 /* ── Imagen que rota entre las fotos en orden ALEATORIO (sin distorsión) ── */
@@ -411,9 +413,18 @@ export function FimHall() {
   const indByLoss = [...members].sort((a, b) => a.profit - b.profit);
   const indByWon = [...members].sort((a, b) => b.won - a.won);
   const indByBets = [...members].sort((a, b) => b.betsCount - a.betsCount);
+  const indByMachada = members
+    .filter((m) => m.maxWonOdds > 0)
+    .sort((a, b) => b.maxWonOdds - a.maxWonOdds);
+  const indByRoi = [...members].sort((a, b) => b.roi - a.roi);
+  const indByStreak = [...members].sort((a, b) => b.bestStreak - a.bestStreak);
+  const indByValiente = members
+    .filter((m) => m.betsCount > 0)
+    .sort((a, b) => b.avgOdds - a.avgOdds);
 
   const duosByProfit = [...data.duos].sort((a, b) => b.profit - a.profit);
   const duosByLoss = [...data.duos].sort((a, b) => a.profit - b.profit);
+  const duosByActive = [...data.duos].sort((a, b) => b.betsCount - a.betsCount);
   const triosOrdered = [...data.trios].sort((a, b) => b.profit - a.profit);
   const quadsOrdered = [...data.quads].sort((a, b) => b.profit - a.profit);
 
@@ -572,6 +583,58 @@ export function FimHall() {
         }))}
       </Section>
 
+      {indByMachada.length > 0 && (
+        <Section
+          title="La mayor machada"
+          subtitle="La cuota más alta acertada entera"
+          icon={<Sparkles className="h-6 w-6" />}
+        >
+          {peopleCards(indByMachada, (m) => ({
+            value: `@${m.maxWonOdds.toFixed(2)}`,
+            label: "cuota acertada",
+            tone: "text-gold",
+          }))}
+        </Section>
+      )}
+
+      <Section
+        title="Mejor ROI"
+        subtitle="Quién saca más rendimiento a lo que apuesta"
+        icon={<Gauge className="h-6 w-6" />}
+      >
+        {peopleCards(indByRoi, (m) => ({
+          value: formatPercent(m.roi),
+          label: "ROI",
+          tone: profitClass(m.roi),
+        }))}
+      </Section>
+
+      <Section
+        title="Mejor racha"
+        subtitle="Más apuestas ganadas seguidas"
+        icon={<Flame className="h-6 w-6" />}
+      >
+        {peopleCards(indByStreak, (m) => ({
+          value: String(m.bestStreak),
+          label: "seguidas",
+          tone: "text-profit",
+        }))}
+      </Section>
+
+      {indByValiente.length > 0 && (
+        <Section
+          title="El más valiente"
+          subtitle="La cuota media más alta (el que más se la juega)"
+          icon={<Trophy className="h-6 w-6" />}
+        >
+          {peopleCards(indByValiente, (m) => ({
+            value: `@${m.avgOdds.toFixed(2)}`,
+            label: "cuota media",
+            tone: "text-primary",
+          }))}
+        </Section>
+      )}
+
       {/* ─────────── DÚOS ─────────── */}
       {data.duos.length > 0 && (
         <>
@@ -597,6 +660,18 @@ export function FimHall() {
             icon={<Target className="h-6 w-6" />}
           >
             {comboCards(topStable(data.duos), (c) => hitMetric(c.hitRate))}
+          </Section>
+
+          <Section
+            title="Dúo más activo"
+            subtitle="La pareja que más apuestas suma"
+            icon={<Receipt className="h-6 w-6" />}
+          >
+            {comboCards(duosByActive.slice(0, 3), (c) => ({
+              value: String(c.betsCount),
+              label: "apuestas",
+              tone: "text-white",
+            }))}
           </Section>
         </>
       )}
