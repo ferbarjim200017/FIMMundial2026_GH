@@ -9,6 +9,7 @@ import {
   Trophy,
   Globe2,
   Newspaper,
+  Lightbulb,
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const NAV = [
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
+  { href: ROUTES.suggestions, label: "Sugerencias", icon: Lightbulb },
 ] as const;
 
 export function Sidebar() {

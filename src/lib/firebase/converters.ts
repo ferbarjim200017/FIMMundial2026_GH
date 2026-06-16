@@ -3,7 +3,7 @@ import type {
   FirestoreDataConverter,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
-import type { AppGroup, AppUser, Bet } from "@/types/domain";
+import type { AppGroup, AppUser, Bet, Suggestion } from "@/types/domain";
 
 export const userConverter: FirestoreDataConverter<AppUser> = {
   toFirestore(user: AppUser): DocumentData {
@@ -32,5 +32,15 @@ export const groupConverter: FirestoreDataConverter<AppGroup> = {
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): AppGroup {
     return { id: snapshot.id, ...(snapshot.data() as Omit<AppGroup, "id">) };
+  },
+};
+
+export const suggestionConverter: FirestoreDataConverter<Suggestion> = {
+  toFirestore(s: Suggestion): DocumentData {
+    const { id: _id, ...rest } = s;
+    return rest;
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): Suggestion {
+    return { id: snapshot.id, ...(snapshot.data() as Omit<Suggestion, "id">) };
   },
 };

@@ -89,6 +89,30 @@ service cloud.firestore {
       }
     }
 
+    // ---------- Suggestions (buzón de sugerencias) ----------
+    match /suggestions/{id} {
+      allow read: if isSignedIn();
+      // Crear: cualquier usuario autenticado, siempre como autor de su propia
+      // sugerencia y arrancando sin marcar como hecha.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.done == false;
+      // Actualizar:
+      //   - Admin: cualquier cambio (incluye marcar/desmarcar "done").
+      //   - Autor (no admin): puede editar su sugerencia PERO no cambiar el
+      //     campo `done`, ni la autoría, ni la fecha de creación. Así solo los
+      //     admins pueden marcar una sugerencia como hecha.
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.userId == request.auth.uid
+            && request.resource.data.userId == resource.data.userId
+            && request.resource.data.done == resource.data.done
+            && request.resource.data.createdAt == resource.data.createdAt);
+      // Eliminar: el autor su propia sugerencia, o un admin cualquiera.
+      allow delete: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
     // ---------- Seasons / Audit ----------
     match /seasons/{id}   { allow read: if isSignedIn(); allow write: if isAdmin(); }
     match /auditLog/{id}  { allow read: if isAdmin();   allow write: if false; }
