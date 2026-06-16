@@ -1,4 +1,8 @@
-import { computeUserStats } from "@/features/bets/bets.utils";
+import {
+  betHasMatch,
+  computeUserStats,
+  matchShareProfit,
+} from "@/features/bets/bets.utils";
 import { FIM_PHOTOS } from "./fim-photos.generated";
 import {
   fimMemberByKey,
@@ -27,8 +31,11 @@ export interface FimComboStat {
   nickname: string | null;
   profit: number;
   betsCount: number;
+  won: number;
+  lost: number;
+  hitRate: number;
   images: string[];
-  /** Etiqueta de extremo ("Dúo más perdedor"…) si aplica. */
+  /** Etiqueta de extremo ("Trío más perdedor"…) si aplica. */
   badge: string | null;
 }
 
@@ -82,14 +89,12 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
   const combos: FimComboStat[] = [];
   for (const p of FIM_PHOTOS) {
     if (p.members.length < 2) continue;
-    const profit = p.members.reduce(
-      (a, k) => a + (statByKey.get(k)?.profit ?? 0),
-      0
-    );
-    const betsCount = p.members.reduce(
-      (a, k) => a + (statByKey.get(k)?.betsCount ?? 0),
-      0
-    );
+    const sum = (f: (s: FimMemberStat) => number) =>
+      p.members.reduce((a, k) => a + (statByKey.get(k) ? f(statByKey.get(k)!) : 0), 0);
+    const profit = sum((s) => s.profit);
+    const betsCount = sum((s) => s.betsCount);
+    const won = sum((s) => s.won);
+    const lost = sum((s) => s.lost);
     combos.push({
       key: p.key,
       size: p.members.length,
@@ -97,6 +102,9 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
       nickname: p.nickname,
       profit: Math.round(profit * 100) / 100,
       betsCount,
+      won,
+      lost,
+      hitRate: won + lost > 0 ? Math.round((won / (won + lost)) * 1000) / 10 : 0,
       images: p.images,
       badge: null,
     });
@@ -106,6 +114,8 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
   const trios = combos.filter((c) => c.size === 3);
   const quads = combos.filter((c) => c.size >= 4);
 
+  // Badge de extremo solo en tríos/cuartetos (se muestran todos en orden); los
+  // dúos van en secciones propias (más rentable / más nefasto / más fiable).
   const tagExtremes = (arr: FimComboStat[], label: string) => {
     if (arr.length === 0) return;
     const worst = arr.reduce((m, c) => (c.profit < m.profit ? c : m));
@@ -113,7 +123,6 @@ export function computeFimHall(bets: Bet[], users: AppUser[]): FimHallData {
     if (worst.profit < 0) worst.badge = `${label} más perdedor`;
     if (best !== worst && best.profit > 0) best.badge = `${label} más ganador`;
   };
-  tagExtremes(duos, "Dúo");
   tagExtremes(trios, "Trío");
   tagExtremes(quads, "Cuarteto");
 
@@ -145,39 +154,29 @@ export function computeFimMatchTops(
   bets: Bet[],
   matches: Match[]
 ): FimMatchTops {
-  const matchById = new Map(matches.map((m) => [m.id, m]));
-  const byId = new Map<string, FimMatchStat>();
-
-  for (const b of bets) {
-    const ids = new Set<string>();
-    if (b.matchId) ids.add(b.matchId);
-    for (const x of b.matchIds ?? []) if (x) ids.add(x);
-    for (const leg of b.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
-    for (const id of ids) {
-      const m = matchById.get(id);
-      if (!m) continue;
-      const cur =
-        byId.get(id) ??
-        ({
-          matchId: id,
-          home: m.homeLabel,
-          away: m.awayLabel,
-          profit: 0,
-          staked: 0,
-          count: 0,
-        } as FimMatchStat);
-      cur.profit += b.profit ?? 0;
-      if (!b.isFreebet) cur.staked += b.stake;
-      cur.count += 1;
-      byId.set(id, cur);
-    }
+  // Misma lógica que el popup del partido: cuentan las apuestas directas al
+  // partido Y las a futuro/outright ligadas a alguno de sus dos equipos. El
+  // dinero jugado es el stake completo (incluye freebets) y el beneficio se
+  // reparte por partido/equipo (`matchShareProfit`), igual que en el popup.
+  const all: FimMatchStat[] = [];
+  for (const m of matches) {
+    const linked = bets.filter(
+      (b) =>
+        betHasMatch(b, m.id) ||
+        (b.teams ?? []).some((t) => t === m.homeLabel || t === m.awayLabel)
+    );
+    if (linked.length === 0) continue;
+    const profit = linked.reduce((a, b) => a + matchShareProfit(b), 0);
+    const staked = linked.reduce((a, b) => a + b.stake, 0);
+    all.push({
+      matchId: m.id,
+      home: m.homeLabel,
+      away: m.awayLabel,
+      profit: Math.round(profit * 100) / 100,
+      staked: Math.round(staked * 100) / 100,
+      count: linked.length,
+    });
   }
-
-  const all = [...byId.values()].map((m) => ({
-    ...m,
-    profit: Math.round(m.profit * 100) / 100,
-    staked: Math.round(m.staked * 100) / 100,
-  }));
 
   return {
     gains: all.filter((m) => m.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 3),

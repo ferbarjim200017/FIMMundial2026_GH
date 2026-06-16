@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Coins, Crown, Receipt, Skull, Sparkles, Trophy } from "lucide-react";
+import {
+  Coins,
+  Crown,
+  Receipt,
+  Skull,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+} from "lucide-react";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { betInGroup } from "@/features/bets/bets.utils";
@@ -20,10 +29,8 @@ import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { cn, formatCurrency, profitClass } from "@/lib/utils";
 import type { Bet, Match } from "@/types/domain";
 
-/* ── Imagen que rota entre las fotos (ratio fijo → sin distorsión) ── */
+/* ── Imagen que rota entre las fotos en orden ALEATORIO (sin distorsión) ── */
 function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
-  // Orden ALEATORIO por card: ni la primera foto ni la secuencia son siempre
-  // las mismas (se baraja una vez al montar).
   const shuffled = useMemo(() => {
     const a = [...images];
     for (let k = a.length - 1; k > 0; k--) {
@@ -68,19 +75,57 @@ function RotatingImage({ images, alt }: { images: string[]; alt: string }) {
   );
 }
 
+/** Miniatura estática (una foto al azar), para listas compactas. */
+function Thumb({ images, alt }: { images: string[]; alt: string }) {
+  const src = useMemo(
+    () => (images.length ? images[Math.floor(Math.random() * images.length)] : null),
+    [images]
+  );
+  if (!src)
+    return <div className="h-10 w-10 shrink-0 rounded-md bg-zinc-800" />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-10 w-10 shrink-0 rounded-md object-cover"
+      draggable={false}
+    />
+  );
+}
+
 const container: Variants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07 } },
+  show: { transition: { staggerChildren: 0.06 } },
 };
 const item: Variants = {
   hidden: { opacity: 0, y: 26 },
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-// La métrica es la protagonista: un valor grande + una etiqueta pequeña.
 type Metric = { value: string; label?: string; tone?: string };
 
-/* ── Card de persona/combo. El dato (métrica) manda; el puesto da igual. ── */
+const profitMetric = (v: number, label = "beneficio"): Metric => ({
+  value: `${v > 0 ? "+" : ""}${formatCurrency(v)}`,
+  label,
+  tone: profitClass(v),
+});
+const hitMetric = (v: number): Metric => ({
+  value: `${v}%`,
+  label: "acierto",
+  tone: "text-primary",
+});
+
+/** Top por estabilidad (% de acierto), exigiendo un mínimo de apuestas. */
+function topStable<T extends { betsCount: number; hitRate: number }>(
+  list: T[],
+  n = 3
+): T[] {
+  const cand = list.filter((x) => x.betsCount >= 5);
+  const base = cand.length >= 3 ? cand : list;
+  return [...base].sort((a, b) => b.hitRate - a.hitRate).slice(0, n);
+}
+
+/* ── Card de persona/combo: el DATO manda (grande), el puesto da igual ── */
 function GalleryCard({
   images,
   eyebrow,
@@ -150,6 +195,45 @@ function GalleryCard({
           </p>
         )}
       </div>
+    </motion.div>
+  );
+}
+
+/* ── Fila compacta para la "Mención especial" ── */
+function RankRow({
+  rank,
+  images,
+  eyebrow,
+  title,
+  profit,
+}: {
+  rank: number;
+  images: string[];
+  eyebrow?: string;
+  title: string;
+  profit: number;
+}) {
+  return (
+    <motion.div
+      variants={item}
+      className="flex items-center gap-3 rounded-lg border border-white/10 bg-zinc-900/40 p-2"
+    >
+      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">
+        {rank}
+      </span>
+      <Thumb images={images} alt={title} />
+      <div className="min-w-0 flex-1">
+        {eyebrow && (
+          <p className="truncate text-[10px] font-bold uppercase tracking-widest text-primary">
+            {eyebrow}
+          </p>
+        )}
+        <p className="truncate text-sm font-bold">{title}</p>
+      </div>
+      <span className={cn("shrink-0 font-mono text-sm font-black", profitClass(profit))}>
+        {profit > 0 ? "+" : ""}
+        {formatCurrency(profit)}
+      </span>
     </motion.div>
   );
 }
@@ -262,12 +346,6 @@ function HeroBackdrop({ images }: { images: string[] }) {
   );
 }
 
-const profitMetric = (v: number, label = "beneficio"): Metric => ({
-  value: `${v > 0 ? "+" : ""}${formatCurrency(v)}`,
-  label,
-  tone: profitClass(v),
-});
-
 export function FimHall() {
   const { memberUids, activeGroup, groupMembers } = useGroup();
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
@@ -310,17 +388,6 @@ export function FimHall() {
     [bets, matches]
   );
 
-  const rankings = useMemo(() => {
-    if (!data) return null;
-    const ms = data.members;
-    return {
-      byProfit: [...ms].sort((a, b) => b.profit - a.profit).slice(0, 3),
-      byWon: [...ms].sort((a, b) => b.won - a.won).slice(0, 3),
-      byLoss: [...ms].sort((a, b) => a.profit - b.profit).slice(0, 3),
-      byBets: [...ms].sort((a, b) => b.betsCount - a.betsCount).slice(0, 3),
-    };
-  }, [data]);
-
   const heroImages = useMemo(() => {
     if (!data) return [];
     return data.members
@@ -329,7 +396,7 @@ export function FimHall() {
       .slice(0, 12);
   }, [data]);
 
-  if (!data || !rankings || !matchTops) {
+  if (!data || !matchTops) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
         Cargando el Salón de la Fama…
@@ -339,8 +406,19 @@ export function FimHall() {
 
   const openMatch = (id: string) => setSelectedMatch(matchById.get(id) ?? null);
 
+  const members = data.members;
+  const indByProfit = [...members].sort((a, b) => b.profit - a.profit);
+  const indByLoss = [...members].sort((a, b) => a.profit - b.profit);
+  const indByWon = [...members].sort((a, b) => b.won - a.won);
+  const indByBets = [...members].sort((a, b) => b.betsCount - a.betsCount);
+
+  const duosByProfit = [...data.duos].sort((a, b) => b.profit - a.profit);
+  const duosByLoss = [...data.duos].sort((a, b) => a.profit - b.profit);
+  const triosOrdered = [...data.trios].sort((a, b) => b.profit - a.profit);
+  const quadsOrdered = [...data.quads].sort((a, b) => b.profit - a.profit);
+
   const peopleCards = (list: FimMemberStat[], metric: (m: FimMemberStat) => Metric) =>
-    list.map((m, i) => (
+    list.slice(0, 3).map((m, i) => (
       <GalleryCard
         key={m.key}
         images={m.images}
@@ -351,14 +429,18 @@ export function FimHall() {
       />
     ));
 
-  const comboCards = (list: FimComboStat[]) =>
+  const comboCards = (
+    list: FimComboStat[],
+    metric: (c: FimComboStat) => Metric,
+    staggerCols = false
+  ) =>
     list.map((c, i) => (
       <GalleryCard
         key={c.key}
         images={c.images}
         eyebrow={c.nickname ? `«${c.nickname}»` : undefined}
         title={c.names.join(" · ")}
-        metric={profitMetric(c.profit, "combinado")}
+        metric={metric(c)}
         corner={c.badge ?? undefined}
         cornerBad={c.badge?.includes("perdedor")}
         accent={
@@ -368,7 +450,7 @@ export function FimHall() {
               : "border-profit/60"
             : undefined
         }
-        mtClass={i % 2 ? "sm:mt-8" : ""}
+        mtClass={staggerCols ? (i % 2 ? "sm:mt-8" : "") : STAGGER3[i % 3]}
       />
     ));
 
@@ -441,91 +523,113 @@ export function FimHall() {
         </motion.div>
       </motion.section>
 
-      {/* Reyes del beneficio */}
+      {/* ─────────── INDIVIDUALES ─────────── */}
       <Section
         title="Reyes del beneficio"
         subtitle="Quién más dinero le ha sacado"
         icon={<Crown className="h-6 w-6" />}
       >
-        {peopleCards(rankings.byProfit, (m) => profitMetric(m.profit))}
+        {peopleCards(indByProfit, (m) => profitMetric(m.profit))}
       </Section>
 
-      {/* Dúos */}
-      {data.duos.length > 0 && (
-        <Section
-          title="Dúos"
-          subtitle="Las parejas de hecho del grupo"
-          icon={<Sparkles className="h-6 w-6" />}
-          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          {comboCards(data.duos)}
-        </Section>
-      )}
+      <Section
+        title="Los más mancos"
+        subtitle="Quién más palos se ha comido"
+        icon={<Skull className="h-6 w-6" />}
+      >
+        {peopleCards(indByLoss, (m) => profitMetric(m.profit))}
+      </Section>
 
-      {/* Las más ganadoras */}
+      <Section
+        title="Los más fiables"
+        subtitle="Más % de acierto (mín. 5 apuestas)"
+        icon={<Target className="h-6 w-6" />}
+      >
+        {peopleCards(topStable(members), (m) => hitMetric(m.hitRate))}
+      </Section>
+
       <Section
         title="Las más ganadoras"
         subtitle="Quién más apuestas acierta"
         icon={<Trophy className="h-6 w-6" />}
       >
-        {peopleCards(rankings.byWon, (m) => ({
+        {peopleCards(indByWon, (m) => ({
           value: String(m.won),
           label: "ganadas",
           tone: "text-profit",
         }))}
       </Section>
 
-      {/* Tríos */}
-      {data.trios.length > 0 && (
-        <Section
-          title="Tríos"
-          subtitle="Cuando se juntan tres"
-          icon={<Sparkles className="h-6 w-6" />}
-          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          {comboCards(data.trios)}
-        </Section>
-      )}
-
-      {/* Los más mancos */}
-      <Section
-        title="Los más mancos"
-        subtitle="Quién más palos se ha comido"
-        icon={<Skull className="h-6 w-6" />}
-      >
-        {peopleCards(rankings.byLoss, (m) => profitMetric(m.profit))}
-      </Section>
-
-      {/* Cuarteto */}
-      {data.quads.length > 0 && (
-        <Section
-          title="La banda al completo"
-          subtitle="Los cuartetos legendarios"
-          icon={<Crown className="h-6 w-6" />}
-          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          {comboCards(data.quads)}
-        </Section>
-      )}
-
-      {/* Los más viciados */}
       <Section
         title="Los más viciados"
         subtitle="Quién más apuestas hace"
         icon={<Receipt className="h-6 w-6" />}
       >
-        {peopleCards(rankings.byBets, (m) => ({
+        {peopleCards(indByBets, (m) => ({
           value: String(m.betsCount),
           label: "apuestas",
           tone: "text-white",
         }))}
       </Section>
 
-      {/* ─── PARTIDOS: abajo del todo, en tarjetas compactas ─── */}
+      {/* ─────────── DÚOS ─────────── */}
+      {data.duos.length > 0 && (
+        <>
+          <Section
+            title="Dúo más rentable"
+            subtitle="La pareja que más gana junta"
+            icon={<Sparkles className="h-6 w-6" />}
+          >
+            {comboCards(duosByProfit.slice(0, 3), (c) => profitMetric(c.profit))}
+          </Section>
+
+          <Section
+            title="Dúo más nefasto"
+            subtitle="La pareja que más palma junta"
+            icon={<Skull className="h-6 w-6" />}
+          >
+            {comboCards(duosByLoss.slice(0, 3), (c) => profitMetric(c.profit))}
+          </Section>
+
+          <Section
+            title="Dúo más fiable"
+            subtitle="Más % de acierto combinado (mín. 5 apuestas)"
+            icon={<Target className="h-6 w-6" />}
+          >
+            {comboCards(topStable(data.duos), (c) => hitMetric(c.hitRate))}
+          </Section>
+        </>
+      )}
+
+      {/* ─────────── TRÍOS (todos, ordenados) ─────────── */}
+      {triosOrdered.length > 0 && (
+        <Section
+          title="Tríos"
+          subtitle="Todos, ordenados por beneficio"
+          icon={<Sparkles className="h-6 w-6" />}
+          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          {comboCards(triosOrdered, (c) => profitMetric(c.profit, "combinado"), true)}
+        </Section>
+      )}
+
+      {/* ─────────── CUARTETOS (todos, ordenados) ─────────── */}
+      {quadsOrdered.length > 0 && (
+        <Section
+          title="La banda al completo"
+          subtitle="Todos, ordenados por beneficio"
+          icon={<Crown className="h-6 w-6" />}
+          cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          {comboCards(quadsOrdered, (c) => profitMetric(c.profit, "combinado"), true)}
+        </Section>
+      )}
+
+      {/* ─────────── PARTIDOS (abajo, compactos) ─────────── */}
       {hasMatchTops && (
         <section className="space-y-6">
           <BigTitle
-            subtitle="Datos globales del grupo · pulsa cualquiera para ver sus apuestas"
+            subtitle="Datos globales del grupo (como en el popup) · pulsa para ver las apuestas"
             icon={<Coins className="h-6 w-6" />}
           >
             Los partidos
@@ -548,6 +652,64 @@ export function FimHall() {
           }))}
         </section>
       )}
+
+      {/* ─────────── MENCIÓN ESPECIAL: todos ordenados por beneficio ─────────── */}
+      <section className="space-y-5">
+        <BigTitle
+          subtitle="Todos los individuales y dúos, ordenados por beneficio"
+          icon={<Star className="h-6 w-6" />}
+        >
+          Mención especial
+        </BigTitle>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">
+              Individuales
+            </h3>
+            <motion.div
+              variants={container}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.05 }}
+              className="space-y-2"
+            >
+              {indByProfit.map((m, i) => (
+                <RankRow
+                  key={m.key}
+                  rank={i + 1}
+                  images={m.images}
+                  eyebrow={m.mote}
+                  title={m.name}
+                  profit={m.profit}
+                />
+              ))}
+            </motion.div>
+          </div>
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">
+              Dúos
+            </h3>
+            <motion.div
+              variants={container}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.05 }}
+              className="space-y-2"
+            >
+              {duosByProfit.map((c, i) => (
+                <RankRow
+                  key={c.key}
+                  rank={i + 1}
+                  images={c.images}
+                  eyebrow={c.nickname ? `«${c.nickname}»` : undefined}
+                  title={c.names.join(" · ")}
+                  profit={c.profit}
+                />
+              ))}
+            </motion.div>
+          </div>
+        </div>
+      </section>
 
       <MatchBetsDialog
         match={selectedMatch}
