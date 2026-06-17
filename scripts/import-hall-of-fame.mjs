@@ -84,7 +84,24 @@ async function listImages(dir) {
   return out.sort((a, b) => a.localeCompare(b, "es"));
 }
 
+/** Carga sharp si está disponible (viene con Next). Si no, devolvemos null y
+ *  copiamos las fotos tal cual. */
+async function loadSharp() {
+  try {
+    return (await import("sharp")).default;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
+  const sharp = await loadSharp();
+  console.log(
+    sharp
+      ? "🗜  Optimizando fotos (resize + compresión) con sharp…"
+      : "ℹ sharp no disponible: copio las fotos sin optimizar."
+  );
+
   let srcStat;
   try {
     srcStat = await fs.stat(SRC);
@@ -126,12 +143,33 @@ async function main() {
 
     const imgs = await listImages(path.join(SRC, e.name));
     for (const img of imgs) {
-      const ext = path.extname(img).toLowerCase();
-      const dest = `${comboKey}-${cur.images.length + 1}${ext}`;
-      await fs.copyFile(
-        path.join(SRC, e.name, img),
-        path.join(OUT_DIR, dest)
-      );
+      const srcPath = path.join(SRC, e.name, img);
+      const n = cur.images.length + 1;
+      let dest;
+      if (sharp) {
+        // Reorienta según EXIF, reduce a un máx. razonable para tarjetas y
+        // comprime a JPEG: pasa de MB a decenas de KB.
+        dest = `${comboKey}-${n}.jpg`;
+        try {
+          await sharp(srcPath)
+            .rotate()
+            .resize({
+              width: 720,
+              height: 960,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .jpeg({ quality: 72, mozjpeg: true })
+            .toFile(path.join(OUT_DIR, dest));
+        } catch (err) {
+          console.warn(`  ⚠ no se pudo optimizar ${img}, copio tal cual:`, err.message);
+          dest = `${comboKey}-${n}${path.extname(img).toLowerCase()}`;
+          await fs.copyFile(srcPath, path.join(OUT_DIR, dest));
+        }
+      } else {
+        dest = `${comboKey}-${n}${path.extname(img).toLowerCase()}`;
+        await fs.copyFile(srcPath, path.join(OUT_DIR, dest));
+      }
       cur.images.push(`/hall-of-fame/${dest}`);
     }
     entries.set(comboKey, cur);

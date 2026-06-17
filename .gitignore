@@ -17,3 +17,8 @@ firebase-debug.log
 service-account.json
 
 *.tsbuildinfo
+
+# Fotos originales del Salón de la Fama: pesan mucho y NO se suben. El
+# importador (scripts/import-hall-of-fame.mjs) genera versiones optimizadas en
+# public/hall-of-fame/ y ESAS sí se commitean.
+public/hall-of-fame/_origen/

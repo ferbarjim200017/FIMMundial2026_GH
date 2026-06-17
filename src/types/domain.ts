@@ -125,6 +125,7 @@ export type BetMarket =
   | "shots_on_target"
   | "fouls"
   | "superaumento"   // cuota "superaumentada" por la casa (super boost)
+  | "asegurada"  // apuesta asegurada (seguro/cobertura de la casa)
   | "outright"   // apuestas a futuro: ganador grupo, mejor equipo de un continente, top scorer…
   | "combo"
   | "custom";
