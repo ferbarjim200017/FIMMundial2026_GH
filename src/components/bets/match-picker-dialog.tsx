@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Search, Check, Flag, Star } from "lucide-react";
 import {
   Dialog,
@@ -26,6 +33,79 @@ interface Props {
   onConfirm: (matches: Match[]) => void;
 }
 
+/**
+ * Fila de un partido. Memoizada: al marcar/desmarcar un partido solo se
+ * re-renderiza la fila cuyo `selected` cambia, no las ~104 de la lista (eso
+ * era lo que dejaba el selector lento al tocar o escribir).
+ */
+const MatchRow = memo(function MatchRow({
+  m,
+  selected,
+  onToggle,
+}: {
+  m: Match;
+  selected: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const kickoff = new Date(m.kickoffUtc.toMillis());
+  return (
+    <li
+      className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent/40 ${
+        selected ? "bg-primary/10" : ""
+      }`}
+      onClick={() => onToggle(m.id)}
+    >
+      <div
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+          selected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-input"
+        }`}
+      >
+        {selected && <Check className="h-3.5 w-3.5" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 truncate font-medium">
+          {isSpainMatch(m) && (
+            <Star
+              className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500"
+              aria-label="Partido de España"
+            />
+          )}
+          <span className="truncate">
+            <TeamFlag name={m.homeLabel} className="mr-1" />
+            {m.homeLabel} <span className="text-muted-foreground">vs</span>{" "}
+            <TeamFlag name={m.awayLabel} className="mr-1" />
+            {m.awayLabel}
+          </span>
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {STAGE_LABELS[m.stage]}
+          {m.groupId && ` · Grupo ${m.groupId}`}
+          {m.matchday && ` · J${m.matchday}`}
+          {m.city && ` · ${m.city}`}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 text-right text-xs text-muted-foreground">
+        {m.status === "finished" && (
+          <span className="rounded-[3px] bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">
+            Final
+          </span>
+        )}
+        {isTveMatch(m) && (
+          <span className="rounded-[3px] bg-blue-600 px-1 py-0 text-[10px] font-semibold uppercase text-white">
+            TVE
+          </span>
+        )}
+        {kickoff.toLocaleTimeString("es-ES", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </div>
+    </li>
+  );
+});
+
 export function MatchPickerDialog({
   open,
   onOpenChange,
@@ -36,6 +116,9 @@ export function MatchPickerDialog({
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // Valor diferido: el input se actualiza al instante y el filtrado pesado de
+  // la lista se hace en baja prioridad, así escribir no se atasca.
+  const deferredSearch = useDeferredValue(search);
   const [showFinished, setShowFinished] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -62,7 +145,7 @@ export function MatchPickerDialog({
     const base = showFinished
       ? matches
       : matches.filter((m) => m.status !== "finished");
-    const s = search.trim().toLowerCase();
+    const s = deferredSearch.trim().toLowerCase();
     if (!s) return base;
     return base.filter(
       (m) =>
@@ -71,7 +154,7 @@ export function MatchPickerDialog({
         (m.groupId ?? "").toLowerCase().includes(s) ||
         (m.city ?? "").toLowerCase().includes(s)
     );
-  }, [matches, search, showFinished]);
+  }, [matches, deferredSearch, showFinished]);
 
   // Agrupar por día (ordenado por kickoff asc en el servicio)
   const grouped = useMemo(() => {
@@ -90,19 +173,22 @@ export function MatchPickerDialog({
     return groups;
   }, [filtered]);
 
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (multi) {
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-      } else {
-        next.clear();
-        next.add(id);
-      }
-      return next;
-    });
-  }
+  const toggle = useCallback(
+    (id: string) => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (multi) {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        } else {
+          next.clear();
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [multi]
+  );
 
   function handleConfirm() {
     const chosen = matches.filter((m) => selected.has(m.id));
@@ -169,68 +255,14 @@ export function MatchPickerDialog({
                   {g.day}
                 </div>
                 <ul className="divide-y">
-                  {g.items.map((m) => {
-                    const isSelected = selected.has(m.id);
-                    const kickoff = new Date(m.kickoffUtc.toMillis());
-                    return (
-                      <li
-                        key={m.id}
-                        className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent/40 ${
-                          isSelected ? "bg-primary/10" : ""
-                        }`}
-                        onClick={() => toggle(m.id)}
-                      >
-                        <div
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                            isSelected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-input"
-                          }`}
-                        >
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="flex items-center gap-1.5 truncate font-medium">
-                            {isSpainMatch(m) && (
-                              <Star
-                                className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500"
-                                aria-label="Partido de España"
-                              />
-                            )}
-                            <span className="truncate">
-                              <TeamFlag name={m.homeLabel} className="mr-1" />
-                              {m.homeLabel}{" "}
-                              <span className="text-muted-foreground">vs</span>{" "}
-                              <TeamFlag name={m.awayLabel} className="mr-1" />
-                              {m.awayLabel}
-                            </span>
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {STAGE_LABELS[m.stage]}
-                            {m.groupId && ` · Grupo ${m.groupId}`}
-                            {m.matchday && ` · J${m.matchday}`}
-                            {m.city && ` · ${m.city}`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 text-right text-xs text-muted-foreground">
-                          {m.status === "finished" && (
-                            <span className="rounded-[3px] bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">
-                              Final
-                            </span>
-                          )}
-                          {isTveMatch(m) && (
-                            <span className="rounded-[3px] bg-blue-600 px-1 py-0 text-[10px] font-semibold uppercase text-white">
-                              TVE
-                            </span>
-                          )}
-                          {kickoff.toLocaleTimeString("es-ES", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {g.items.map((m) => (
+                    <MatchRow
+                      key={m.id}
+                      m={m}
+                      selected={selected.has(m.id)}
+                      onToggle={toggle}
+                    />
+                  ))}
                 </ul>
               </div>
             ))
