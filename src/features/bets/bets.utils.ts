@@ -63,10 +63,15 @@ export function currentDayWindow(nowMs: number = Date.now()): {
 }
 
 /**
- * True si ALGÚN partido de la apuesta se juega dentro de [startMs, endMs). La
- * "fecha" de una apuesta es la de su PARTIDO (kickoff), no la de cuándo se creó
- * o liquidó: una pérdida de un partido de ayer cuenta en el día de ayer aunque
- * la marques hoy.
+ * True si la apuesta es "de ese día": TODOS sus partidos se juegan dentro de
+ * [startMs, endMs). La fecha de una apuesta es la de su(s) PARTIDO(s) (kickoff),
+ * no la de cuándo se creó o liquidó.
+ *
+ * - Apuesta a un único partido de hoy → cuenta.
+ * - Combinada de partidos TODOS de hoy → cuenta.
+ * - Combinada que MEZCLA hoy con otros días → NO cuenta (su resultado pudo
+ *   decidirse otro día; no es una apuesta "solo de hoy").
+ * - Sin partidos (outright/manual) → no cuenta (no tiene día asignable).
  */
 export function betPlaysInWindow(
   bet: Bet,
@@ -74,11 +79,12 @@ export function betPlaysInWindow(
   startMs: number,
   endMs: number
 ): boolean {
-  for (const id of betMatchIds(bet)) {
+  const ids = betMatchIds(bet);
+  if (ids.length === 0) return false;
+  return ids.every((id) => {
     const k = kickoffByMatchId.get(id);
-    if (k != null && k >= startMs && k < endMs) return true;
-  }
-  return false;
+    return k != null && k >= startMs && k < endMs;
+  });
 }
 
 export function calcProfit(
