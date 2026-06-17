@@ -37,6 +37,50 @@ export function betHasMatch(bet: Bet, matchId: string): boolean {
   return (bet.legs ?? []).some((l) => l.matchId === matchId);
 }
 
+/** IDs de partido vinculados a una apuesta (directos o en combo). */
+export function betMatchIds(bet: Bet): string[] {
+  const ids = new Set<string>();
+  if (bet.matchId) ids.add(bet.matchId);
+  for (const x of bet.matchIds ?? []) if (x) ids.add(x);
+  for (const leg of bet.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
+  return [...ids];
+}
+
+/**
+ * Ventana de la "jornada" actual, de MEDIODÍA a MEDIODÍA (12:00 → 12:00 del día
+ * siguiente). Si aún no es mediodía, devuelve la jornada que arrancó ayer a las
+ * 12:00. Así una sesión de noche (19-21h → 8h) cuenta entera en el mismo día.
+ */
+export function currentDayWindow(nowMs: number = Date.now()): {
+  startMs: number;
+  endMs: number;
+} {
+  const start = new Date(nowMs);
+  start.setHours(12, 0, 0, 0);
+  if (nowMs < start.getTime()) start.setDate(start.getDate() - 1);
+  const startMs = start.getTime();
+  return { startMs, endMs: startMs + 24 * 60 * 60 * 1000 };
+}
+
+/**
+ * True si ALGÚN partido de la apuesta se juega dentro de [startMs, endMs). La
+ * "fecha" de una apuesta es la de su PARTIDO (kickoff), no la de cuándo se creó
+ * o liquidó: una pérdida de un partido de ayer cuenta en el día de ayer aunque
+ * la marques hoy.
+ */
+export function betPlaysInWindow(
+  bet: Bet,
+  kickoffByMatchId: Map<string, number>,
+  startMs: number,
+  endMs: number
+): boolean {
+  for (const id of betMatchIds(bet)) {
+    const k = kickoffByMatchId.get(id);
+    if (k != null && k >= startMs && k < endMs) return true;
+  }
+  return false;
+}
+
 export function calcProfit(
   stake: number,
   odds: number,

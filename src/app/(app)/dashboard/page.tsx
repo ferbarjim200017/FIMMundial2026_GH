@@ -30,10 +30,12 @@ import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   betInGroup,
   betOutcome,
+  betPlaysInWindow,
   bookmakerLabel,
   computeBookmakerSummary,
   computeSuperaumentoSummary,
   computeUserStats,
+  currentDayWindow,
   getInitialBalances,
 } from "@/features/bets/bets.utils";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
@@ -157,34 +159,14 @@ export default function DashboardPage() {
   // según cuándo se creó ni cuándo se liquidó. Para combos basta con que algún
   // partido de la apuesta se juegue hoy.
   const today = useMemo(() => {
-    const now = Date.now();
-    const start = new Date(now);
-    start.setHours(12, 0, 0, 0);
-    if (now < start.getTime()) start.setDate(start.getDate() - 1);
-    const startMs = start.getTime();
-    const endMs = startMs + 24 * 60 * 60 * 1000;
-
+    const { startMs, endMs } = currentDayWindow();
     let profit = 0;
     let won = 0;
     let lost = 0;
     let placed = 0;
     let stakePlaced = 0;
     for (const b of bets) {
-      const ids = new Set<string>();
-      if (b.matchId) ids.add(b.matchId);
-      for (const x of b.matchIds ?? []) if (x) ids.add(x);
-      for (const leg of b.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
-
-      let isToday = false;
-      for (const id of ids) {
-        const k = kickoffByMatchId.get(id);
-        if (k != null && k >= startMs && k < endMs) {
-          isToday = true;
-          break;
-        }
-      }
-      if (!isToday) continue;
-
+      if (!betPlaysInWindow(b, kickoffByMatchId, startMs, endMs)) continue;
       placed += 1;
       if (!b.isFreebet) stakePlaced += b.stake;
       if (b.status !== "pending") {

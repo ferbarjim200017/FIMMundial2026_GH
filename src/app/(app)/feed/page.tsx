@@ -50,8 +50,10 @@ import {
   betHasMatch,
   betInGroup,
   betOutcome,
+  betPlaysInWindow,
   computeSuperaumentoSummary,
   computeUserStats,
+  currentDayWindow,
 } from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -235,19 +237,29 @@ export default function FeedPage() {
     setMaxStake("");
   };
 
+  // Hora de inicio (kickoff) de cada partido, para atribuir cada apuesta al
+  // día en que se JUEGA su partido (no a cuándo se liquidó).
+  const kickoffByMatchId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const x of matches) m.set(x.id, x.kickoffUtc.toMillis());
+    return m;
+  }, [matches]);
+
+  // "Resultado de hoy": jornada de mediodía a mediodía, por hora del partido.
+  // Una pérdida de un partido de ayer NO cuenta hoy aunque la marques hoy.
   const todaySummary = useMemo(() => {
     if (!sortedBets) return null;
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const startMs = start.getTime();
+    const { startMs, endMs } = currentDayWindow();
     const todays = sortedBets.filter(
-      (b) => b.settledAt && b.settledAt.toMillis() >= startMs
+      (b) =>
+        b.status !== "pending" &&
+        betPlaysInWindow(b, kickoffByMatchId, startMs, endMs)
     );
     const won = todays.filter((b) => betOutcome(b) === "won");
     const lost = todays.filter((b) => betOutcome(b) === "lost");
     const netProfit = todays.reduce((acc, b) => acc + b.profit, 0);
     return { won: won.length, lost: lost.length, netProfit };
-  }, [sortedBets]);
+  }, [sortedBets, kickoffByMatchId]);
 
   // Ganador y perdedor "absolutos" del grupo activo, calculados a partir
   // de las apuestas etiquetadas con este grupo (no del stats global).
