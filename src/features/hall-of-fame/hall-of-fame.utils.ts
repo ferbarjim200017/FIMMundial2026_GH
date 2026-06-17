@@ -146,9 +146,15 @@ const PHRASES: Record<string, string[]> = {
   ],
 };
 
+/** Frase del banner, DETERMINISTA: el mismo entrante en el mismo podio siempre
+ *  recibe la misma frase (estable entre renders y entre dispositivos), eligiendo
+ *  por un hash de podio+nombre en vez de al azar. */
 export function buildEntryPhrase(podiumKey: string, name: string): string {
   const list = PHRASES[podiumKey] ?? ["{name} entra en el Salón de la Fama."];
-  const tpl = list[Math.floor(Math.random() * list.length)];
+  const seed = `${podiumKey}|${name}`;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  const tpl = list[Math.abs(h) % list.length];
   return tpl.replace("{name}", name);
 }
 

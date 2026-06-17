@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,21 +15,28 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { betInGroup } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
+  HOF_PODIUMS,
+  buildEntryPhrase,
   computeHofMembership,
-  membershipSig,
+  type HofMembership,
+  type HofTone,
 } from "@/features/hall-of-fame/hall-of-fame.utils";
 import { fimMemberByUsername } from "@/features/hall-of-fame/fim-members";
-import {
-  reconcileHof,
-  subscribeToHof,
-  type HofEvent,
-} from "@/features/hall-of-fame/hall-of-fame.service";
 import type { Bet } from "@/types/domain";
 
+/** Evento de "fulano ha entrado nuevo en tal ranking" (calculado en cliente). */
+export interface HofEvent {
+  id: string;
+  uid: string;
+  username: string;
+  podiumKey: string;
+  podiumLabel: string;
+  tone: HofTone;
+  phrase: string;
+}
+
 interface HofContextValue {
-  /** Eventos de nuevos entrantes que este usuario aún no ha cerrado. */
   unseen: HofEvent[];
-  /** Cierra el banner: marca como vistos todos los eventos actuales. */
   dismiss: () => void;
 }
 
@@ -39,8 +45,11 @@ const HofContext = createContext<HofContextValue>({
   dismiss: () => {},
 });
 
-// "Último visto" por usuario y grupo (los eventos son por grupo).
-const LS_PREFIX = "fim:hofSeen:";
+// "Base ya reconocida": la pertenencia de cada ranking que este usuario ya ha
+// visto, guardada en localStorage por usuario + grupo. Comparando la
+// pertenencia ACTUAL con esta base detectamos quién entra nuevo, SIN tocar
+// Firestore (las apuestas ya están en memoria por el listener compartido).
+const LS_PREFIX = "fim:hofBaseline:";
 
 export function HallOfFameProvider({ children }: { children: ReactNode }) {
   const { appUser } = useAuth();
@@ -49,12 +58,10 @@ export function HallOfFameProvider({ children }: { children: ReactNode }) {
   const gid = activeGroup?.id ?? null;
 
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
-  const [events, setEvents] = useState<HofEvent[]>([]);
-  // "__none__" = aún sin primer snapshot; "__missing__" = doc no existe.
-  const [storedSig, setStoredSig] = useState<string>("__none__");
-  const [lastSeen, setLastSeen] = useState(0);
+  const [baseline, setBaseline] = useState<HofMembership | null>(null);
+  const [baselineLoaded, setBaselineLoaded] = useState(false);
 
-  // Suscripción global a apuestas (compartida con el resto de la app).
+  // Listener compartido de apuestas (ya está siempre activo por el carrusel).
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setAllBets([]);
@@ -63,92 +70,96 @@ export function HallOfFameProvider({ children }: { children: ReactNode }) {
     return subscribeToAllBets(setAllBets);
   }, []);
 
-  // Documento del Salón de la Fama del grupo activo.
+  // Carga la base guardada para este usuario en este grupo.
   useEffect(() => {
-    if (!gid || !isFirebaseConfigured) {
-      setEvents([]);
-      setStoredSig("__none__");
-      return;
-    }
-    setStoredSig("__none__");
-    return subscribeToHof(
-      gid,
-      (d) => {
-        if (!d) {
-          setEvents([]);
-          setStoredSig("__missing__");
-          return;
-        }
-        setEvents(d.events ?? []);
-        setStoredSig(membershipSig(d.membership ?? {}));
-      },
-      () => setEvents([])
-    );
-  }, [gid]);
-
-  // "Último visto" guardado para este usuario en este grupo.
-  useEffect(() => {
+    setBaselineLoaded(false);
     if (!uid || !gid || typeof window === "undefined") {
-      setLastSeen(0);
+      setBaseline(null);
       return;
     }
     const raw = window.localStorage.getItem(`${LS_PREFIX}${uid}:${gid}`);
-    setLastSeen(raw ? Number(raw) || 0 : 0);
+    let parsed: HofMembership | null = null;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw) as HofMembership;
+      } catch {
+        parsed = null;
+      }
+    }
+    setBaseline(parsed);
+    setBaselineLoaded(true);
   }, [uid, gid]);
 
-  // Apuestas del grupo activo (misma visibilidad que el feed/salón).
   const groupBets = useMemo(() => {
     if (allBets === null || !gid || memberUids.size === 0) return null;
     return allBets.filter((b) => betInGroup(b, gid) && memberUids.has(b.userId));
   }, [allBets, gid, memberUids]);
 
-  const currentMembership = useMemo(
+  const current = useMemo(
     () => (groupBets ? computeHofMembership(groupBets) : null),
     [groupBets]
   );
 
-  const usernameByUid = useMemo(() => {
-    const m: Record<string, string> = {};
-    // En FIM mostramos el nombre real (Sergio, Daniro…) en vez del username.
+  const nameByUid = useMemo(() => {
+    const m = new Map<string, string>();
     for (const u of groupMembers) {
-      m[u.uid] = fimMemberByUsername(u.username)?.name ?? u.username;
+      m.set(u.uid, fimMemberByUsername(u.username)?.name ?? u.username);
     }
     return m;
   }, [groupMembers]);
 
-  // Reconcilia cuando la pertenencia actual difiere de la guardada. Evita
-  // reintentos en bucle con una firma del último intento.
-  const lastAttempt = useRef<string>("");
+  const persist = useCallback(
+    (membership: HofMembership) => {
+      if (uid && gid && typeof window !== "undefined") {
+        window.localStorage.setItem(
+          `${LS_PREFIX}${uid}:${gid}`,
+          JSON.stringify(membership)
+        );
+      }
+    },
+    [uid, gid]
+  );
+
+  // Primera vez (sin base guardada): fijamos la pertenencia actual SIN mostrar
+  // banner, para no soltar un aluvión con la gente que ya estaba dentro.
   useEffect(() => {
-    if (!gid || !currentMembership || groupMembers.length === 0) return;
-    if (storedSig === "__none__") return; // esperamos el primer snapshot
-    const curSig = membershipSig(currentMembership);
-    if (curSig === storedSig) return; // nada que registrar
-    const attemptKey = `${gid}|${curSig}`;
-    if (lastAttempt.current === attemptKey) return;
-    lastAttempt.current = attemptKey;
-    reconcileHof(gid, currentMembership, usernameByUid).catch((e) => {
-      console.error("[hof reconcile]", e);
-      lastAttempt.current = ""; // permite reintentar al siguiente cambio
-    });
-  }, [gid, currentMembership, storedSig, usernameByUid, groupMembers.length]);
-
-  // Solo mostramos los entrantes NO vistos y RECIENTES (últimas 2 h), para que
-  // no se acumule un listón de gente antigua en el popup.
-  const unseen = useMemo(() => {
-    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-    return events
-      .filter((e) => e.at > lastSeen && e.at >= cutoff)
-      .sort((a, b) => b.at - a.at);
-  }, [events, lastSeen]);
-
-  const dismiss = useCallback(() => {
-    const maxAt = events.reduce((m, e) => Math.max(m, e.at), lastSeen);
-    setLastSeen(maxAt);
-    if (uid && gid && typeof window !== "undefined") {
-      window.localStorage.setItem(`${LS_PREFIX}${uid}:${gid}`, String(maxAt));
+    if (!baselineLoaded || !current) return;
+    if (baseline === null) {
+      persist(current);
+      setBaseline(current);
     }
-  }, [events, lastSeen, uid, gid]);
+  }, [baselineLoaded, current, baseline, persist]);
+
+  // Nuevos entrantes = uids que ahora están en un podio y no estaban en la base.
+  const unseen = useMemo<HofEvent[]>(() => {
+    if (!current || !baseline) return [];
+    const evs: HofEvent[] = [];
+    for (const def of HOF_PODIUMS) {
+      const before = new Set(baseline[def.key] ?? []);
+      for (const u of current[def.key] ?? []) {
+        if (before.has(u)) continue;
+        const name = nameByUid.get(u) ?? "Alguien";
+        evs.push({
+          id: `${def.key}:${u}`,
+          uid: u,
+          username: name,
+          podiumKey: def.key,
+          podiumLabel: def.label,
+          tone: def.tone,
+          phrase: buildEntryPhrase(def.key, name),
+        });
+      }
+    }
+    return evs;
+  }, [current, baseline, nameByUid]);
+
+  // Cerrar el banner = aceptar la pertenencia actual como nueva base.
+  const dismiss = useCallback(() => {
+    if (current) {
+      persist(current);
+      setBaseline(current);
+    }
+  }, [current, persist]);
 
   const value = useMemo(() => ({ unseen, dismiss }), [unseen, dismiss]);
 
