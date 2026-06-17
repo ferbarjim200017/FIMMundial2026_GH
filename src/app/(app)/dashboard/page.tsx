@@ -26,6 +26,7 @@ import {
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   betInGroup,
   betOutcome,
@@ -61,7 +62,7 @@ import {
 } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
-import type { Bet } from "@/types/domain";
+import type { Bet, Match } from "@/types/domain";
 
 // Formateadores para el count-up de las tarjetas (enteros y cuotas).
 const asInt = (n: number) => String(Math.round(n));
@@ -82,12 +83,23 @@ export default function DashboardPage() {
   const { activeGroup } = useGroup();
   const { openBet } = useBetDetail();
   const [allBets, setAllBets] = useState<Bet[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
 
   useEffect(() => {
     if (!appUser) return;
     const unsub = subscribeToBets({ userId: appUser.uid }, setAllBets);
     return unsub;
   }, [appUser]);
+
+  useEffect(() => subscribeToMatches(setMatches, () => setMatches([])), []);
+
+  // Hora de inicio (kickoff) de cada partido, para decidir qué apuestas son
+  // "de hoy" según cuándo se juega el partido (no cuándo se creó la apuesta).
+  const kickoffByMatchId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const x of matches) m.set(x.id, x.kickoffUtc.toMillis());
+    return m;
+  }, [matches]);
 
   // Filtramos a las apuestas del grupo activo. Cada grupo es contabilidad
   // independiente: saldos, stats y "últimas apuestas" solo reflejan el
@@ -141,8 +153,9 @@ export default function DashboardPage() {
   // "Hoy" = jornada de MEDIODÍA a MEDIODÍA. Así una sesión de noche (de 19-21h
   // hasta las 8h de la mañana siguiente) cuenta entera en el mismo día. Si aún
   // no es mediodía, seguimos en la jornada que arrancó ayer a las 12:00.
-  // Beneficio/ganadas/perdidas se cuentan por cuándo se LIQUIDÓ la apuesta;
-  // "apuestas" y "en juego" por cuándo se REGISTRÓ.
+  // Una apuesta cuenta como "de hoy" según la HORA DEL PARTIDO (kickoff), no
+  // según cuándo se creó ni cuándo se liquidó. Para combos basta con que algún
+  // partido de la apuesta se juegue hoy.
   const today = useMemo(() => {
     const now = Date.now();
     const start = new Date(now);
@@ -157,13 +170,24 @@ export default function DashboardPage() {
     let placed = 0;
     let stakePlaced = 0;
     for (const b of bets) {
-      const created = b.createdAt ? b.createdAt.toMillis() : 0;
-      if (created >= startMs && created < endMs) {
-        placed += 1;
-        if (!b.isFreebet) stakePlaced += b.stake;
+      const ids = new Set<string>();
+      if (b.matchId) ids.add(b.matchId);
+      for (const x of b.matchIds ?? []) if (x) ids.add(x);
+      for (const leg of b.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
+
+      let isToday = false;
+      for (const id of ids) {
+        const k = kickoffByMatchId.get(id);
+        if (k != null && k >= startMs && k < endMs) {
+          isToday = true;
+          break;
+        }
       }
-      const settledMs = b.settledAt ? b.settledAt.toMillis() : null;
-      if (settledMs !== null && settledMs >= startMs && settledMs < endMs) {
+      if (!isToday) continue;
+
+      placed += 1;
+      if (!b.isFreebet) stakePlaced += b.stake;
+      if (b.status !== "pending") {
         profit += b.profit ?? 0;
         const o = betOutcome(b);
         if (o === "won") won += 1;
@@ -171,7 +195,7 @@ export default function DashboardPage() {
       }
     }
     return { startMs, endMs, profit, won, lost, placed, stakePlaced };
-  }, [bets]);
+  }, [bets, kickoffByMatchId]);
 
   if (!appUser || !summary) return null;
 
