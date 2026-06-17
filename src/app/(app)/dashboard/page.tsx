@@ -14,6 +14,7 @@ import {
   Flame,
   Gauge,
   Percent,
+  Sunrise,
   Target,
   Ticket,
   TrendingDown,
@@ -27,6 +28,7 @@ import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import {
   betInGroup,
+  betOutcome,
   bookmakerLabel,
   computeBookmakerSummary,
   computeSuperaumentoSummary,
@@ -64,6 +66,16 @@ import type { Bet } from "@/types/domain";
 // Formateadores para el count-up de las tarjetas (enteros y cuotas).
 const asInt = (n: number) => String(Math.round(n));
 const asOdds = (n: number) => n.toFixed(2);
+
+/** Fecha+hora corta para mostrar la ventana de la "jornada de hoy". */
+function fmtWindow(ms: number): string {
+  return new Date(ms).toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function DashboardPage() {
   const { appUser } = useAuth();
@@ -126,6 +138,41 @@ export default function DashboardPage() {
     [bets]
   );
 
+  // "Hoy" = jornada de MEDIODÍA a MEDIODÍA. Así una sesión de noche (de 19-21h
+  // hasta las 8h de la mañana siguiente) cuenta entera en el mismo día. Si aún
+  // no es mediodía, seguimos en la jornada que arrancó ayer a las 12:00.
+  // Beneficio/ganadas/perdidas se cuentan por cuándo se LIQUIDÓ la apuesta;
+  // "apuestas" y "en juego" por cuándo se REGISTRÓ.
+  const today = useMemo(() => {
+    const now = Date.now();
+    const start = new Date(now);
+    start.setHours(12, 0, 0, 0);
+    if (now < start.getTime()) start.setDate(start.getDate() - 1);
+    const startMs = start.getTime();
+    const endMs = startMs + 24 * 60 * 60 * 1000;
+
+    let profit = 0;
+    let won = 0;
+    let lost = 0;
+    let placed = 0;
+    let stakePlaced = 0;
+    for (const b of bets) {
+      const created = b.createdAt ? b.createdAt.toMillis() : 0;
+      if (created >= startMs && created < endMs) {
+        placed += 1;
+        if (!b.isFreebet) stakePlaced += b.stake;
+      }
+      const settledMs = b.settledAt ? b.settledAt.toMillis() : null;
+      if (settledMs !== null && settledMs >= startMs && settledMs < endMs) {
+        profit += b.profit ?? 0;
+        const o = betOutcome(b);
+        if (o === "won") won += 1;
+        else if (o === "lost") lost += 1;
+      }
+    }
+    return { startMs, endMs, profit, won, lost, placed, stakePlaced };
+  }, [bets]);
+
   if (!appUser || !summary) return null;
 
   const recent = bets.slice(0, 5);
@@ -143,6 +190,52 @@ export default function DashboardPage() {
           Aquí tienes tu resumen completo: saldos por casa y estadísticas en tiempo real.
         </p>
       </div>
+
+      {/* ─────── Hoy (jornada de mediodía a mediodía) ─────── */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <Sunrise className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Hoy</h2>
+          <span className="text-xs text-muted-foreground">
+            {fmtWindow(today.startMs)} → {fmtWindow(today.endMs)}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
+          <MiniStat
+            label="Beneficio hoy"
+            value={
+              <CountUp
+                end={today.profit}
+                format={(n) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`}
+              />
+            }
+            accent={profitClass(today.profit)}
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Ganadas hoy"
+            value={<CountUp end={today.won} format={asInt} />}
+            accent="text-profit"
+            icon={<Trophy className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Perdidas hoy"
+            value={<CountUp end={today.lost} format={asInt} />}
+            accent="text-loss"
+            icon={<TrendingDown className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Apuestas hoy"
+            value={<CountUp end={today.placed} format={asInt} />}
+            icon={<Ticket className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Apostado hoy"
+            value={<CountUp end={today.stakePlaced} format={formatCurrency} />}
+            icon={<Coins className="h-4 w-4" />}
+          />
+        </div>
+      </section>
 
       {/* ─────── Resumen general ─────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
