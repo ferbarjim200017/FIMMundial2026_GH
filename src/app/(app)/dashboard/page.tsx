@@ -41,7 +41,6 @@ import {
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
-import { HallOfFamePopup } from "@/components/dashboard/hall-of-fame-popup";
 import { updateInitialBalances } from "@/features/users/users.service";
 import {
   Card,
@@ -185,7 +184,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <HallOfFamePopup />
       <LiveTvBanner />
 
       <div>

@@ -9,12 +9,9 @@ import {
   Trophy,
   Globe2,
   Newspaper,
-  Crown,
-  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
-import { useSuggestions } from "@/features/suggestions/suggestions.context";
 
 const NAV = [
   { href: ROUTES.dashboard, label: "Inicio", icon: LayoutDashboard },
@@ -23,8 +20,6 @@ const NAV = [
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
-  { href: ROUTES.hallOfFame, label: "Fama", icon: Crown },
-  { href: ROUTES.suggestions, label: "Ideas", icon: Lightbulb },
 ] as const;
 
 /**
@@ -35,7 +30,6 @@ const NAV = [
  */
 export function BottomNav() {
   const pathname = usePathname();
-  const { hasUnread } = useSuggestions();
 
   return (
     <nav
@@ -43,10 +37,9 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Navegación principal"
     >
-      <ul className="grid h-14 grid-cols-8">
+      <ul className="grid h-14 grid-cols-6">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
-          const showDot = href === ROUTES.suggestions && hasUnread;
           return (
             <li key={href}>
               <Link
@@ -63,12 +56,6 @@ export function BottomNav() {
                     className={cn("h-5 w-5", active && "scale-110")}
                     aria-hidden="true"
                   />
-                  {showDot && (
-                    <span
-                      className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background"
-                      aria-label="Hay sugerencias nuevas"
-                    />
-                  )}
                 </span>
                 <span className="leading-none">{label}</span>
               </Link>

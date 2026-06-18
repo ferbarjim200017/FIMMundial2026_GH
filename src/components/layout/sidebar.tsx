@@ -9,14 +9,11 @@ import {
   Trophy,
   Globe2,
   Newspaper,
-  Crown,
-  Lightbulb,
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { useAuth } from "@/features/auth/auth.context";
-import { useSuggestions } from "@/features/suggestions/suggestions.context";
 
 const NAV = [
   { href: ROUTES.dashboard, label: "Dashboard", icon: LayoutDashboard },
@@ -25,14 +22,11 @@ const NAV = [
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
-  { href: ROUTES.hallOfFame, label: "Salón de la Fama", icon: Crown },
-  { href: ROUTES.suggestions, label: "Sugerencias", icon: Lightbulb },
 ] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
   const { isAdmin } = useAuth();
-  const { hasUnread } = useSuggestions();
 
   const items = [
     ...NAV,
@@ -55,7 +49,6 @@ export function Sidebar() {
       <nav className="flex flex-col gap-1 p-3">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
-          const showDot = href === ROUTES.suggestions && hasUnread;
           return (
             <Link
               key={href}
@@ -69,12 +62,6 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               <span>{label}</span>
-              {showDot && (
-                <span
-                  className="ml-auto h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background"
-                  aria-label="Hay sugerencias nuevas"
-                />
-              )}
             </Link>
           );
         })}

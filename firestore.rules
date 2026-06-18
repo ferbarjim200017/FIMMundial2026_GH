@@ -58,15 +58,6 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Salón de la Fama por grupo: pertenencia actual de cada ranking + eventos
-    // de "nuevos entrantes" para el banner del dashboard. Lo mantiene el cliente
-    // de cualquier miembro (dato no sensible), así que lectura/escritura para
-    // cualquier usuario autenticado.
-    match /hallOfFame/{groupId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
     // ---------- Predictions ----------
     match /predictions/{userId} {
       allow read: if isSignedIn();
@@ -96,30 +87,6 @@ service cloud.firestore {
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow update, delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
       }
-    }
-
-    // ---------- Suggestions (buzón de sugerencias) ----------
-    match /suggestions/{id} {
-      allow read: if isSignedIn();
-      // Crear: cualquier usuario autenticado, siempre como autor de su propia
-      // sugerencia y arrancando sin marcar como hecha.
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.done == false;
-      // Actualizar:
-      //   - Admin: cualquier cambio (incluye marcar/desmarcar "done").
-      //   - Autor (no admin): puede editar su sugerencia PERO no cambiar el
-      //     campo `done`, ni la autoría, ni la fecha de creación. Así solo los
-      //     admins pueden marcar una sugerencia como hecha.
-      allow update: if isAdmin()
-        || (isSignedIn()
-            && resource.data.userId == request.auth.uid
-            && request.resource.data.userId == resource.data.userId
-            && request.resource.data.done == resource.data.done
-            && request.resource.data.createdAt == resource.data.createdAt);
-      // Eliminar: el autor su propia sugerencia, o un admin cualquiera.
-      allow delete: if isAdmin()
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     // ---------- Seasons / Audit ----------

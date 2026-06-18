@@ -263,28 +263,3 @@ export interface Match {
   result?: MatchResult | null;
   enteredBy?: string | null;    // uid del admin que metió el resultado
 }
-
-// ============================================================
-// SUGGESTIONS (buzón de sugerencias)
-// ============================================================
-/**
- * Una sugerencia que cualquier usuario puede publicar. Se guarda en la
- * colección `suggestions` de Firestore y la ven todos los usuarios. Solo los
- * admins pueden marcarla como "hecha"; el autor (y los admins) pueden editarla
- * o eliminarla. El resto de usuarios solo la leen.
- *
- * `authorName` / `authorAvatarUrl` se denormalizan al crear para poder pintar
- * el feed sin tener que cruzar con la colección de usuarios.
- */
-export interface Suggestion {
-  id: string;
-  userId: string;                 // uid del autor
-  authorName: string;             // nombre mostrado (denormalizado)
-  authorAvatarUrl: string | null; // avatar del autor (denormalizado)
-  text: string;                   // contenido de la sugerencia
-  done: boolean;                  // marcada como hecha por un admin
-  doneBy: string | null;          // uid del admin que la marcó
-  doneAt: Timestamp | null;       // cuándo se marcó como hecha
-  createdAt: Timestamp;
-  updatedAt: Timestamp | null;    // última edición del texto
-}
