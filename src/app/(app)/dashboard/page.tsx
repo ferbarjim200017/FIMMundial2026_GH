@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
+  ArrowDownUp,
   ArrowRight,
   ArrowUpRight,
   Award,
@@ -41,6 +42,7 @@ import {
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
+import { CashMovementDialog } from "@/components/dashboard/cash-movement-dialog";
 import { updateInitialBalances } from "@/features/users/users.service";
 import {
   Card,
@@ -85,6 +87,7 @@ export default function DashboardPage() {
   const { openBet } = useBetDetail();
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [cashOpen, setCashOpen] = useState(false);
 
   useEffect(() => {
     if (!appUser) return;
@@ -184,6 +187,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {activeGroup && (
+        <CashMovementDialog
+          open={cashOpen}
+          onOpenChange={setCashOpen}
+          user={appUser}
+          groupId={activeGroup.id}
+        />
+      )}
       <LiveTvBanner />
 
       <div>
@@ -287,12 +298,22 @@ export default function DashboardPage() {
 
       {/* ─────── Saldos por casa ─────── */}
       <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Saldos por casa</h2>
-          <p className="text-sm text-muted-foreground">
-            Configura tu saldo inicial en cada casa. El saldo actual se
-            calcula sumando el beneficio de tus apuestas liquidadas.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Saldos por casa</h2>
+            <p className="text-sm text-muted-foreground">
+              Saldo = inicial + ingresos − retiradas + beneficio de tus apuestas.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCashOpen(true)}
+            className="gap-1.5"
+          >
+            <ArrowDownUp className="h-4 w-4" />
+            Ingresos / Retiradas
+          </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <BookmakerCard

@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
-import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  computeCashSummary,
+  computeUserStats,
+  getInitialBalances,
+} from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { formatCurrency, formatPercent, profitClass } from "@/lib/utils";
@@ -44,7 +49,11 @@ export function RankingCarousel() {
         const stats = computeUserStats(userBets);
         const initial = getInitialBalances(u, activeGroup.id);
         const balance =
-          initial.bet365 + initial.winamax + initial.other + stats.totalProfit;
+          initial.bet365 +
+          initial.winamax +
+          initial.other +
+          stats.totalProfit +
+          computeCashSummary(u, activeGroup.id).net;
         return {
           ...u,
           stats,

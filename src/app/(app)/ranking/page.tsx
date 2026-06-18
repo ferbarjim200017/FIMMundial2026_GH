@@ -35,6 +35,7 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   betInGroup,
+  computeCashSummary,
   computeSuperaumentoSummary,
   computeUserStats,
   getInitialBalances,
@@ -240,7 +241,8 @@ export default function RankingPage() {
       const initialSum =
         initial.bet365 + initial.winamax + initial.other;
       const profit = groupStatsByUid.get(u.uid)?.totalProfit ?? 0;
-      map.set(u.uid, initialSum + profit);
+      const netCash = computeCashSummary(u, activeGroup?.id).net;
+      map.set(u.uid, initialSum + profit + netCash);
     }
     return map;
   }, [users, groupStatsByUid, activeGroup]);

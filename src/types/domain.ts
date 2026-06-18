@@ -60,6 +60,9 @@ export interface AppUser {
    *  alternar desde el topbar. Persistido en Firestore para sincronizar entre
    *  dispositivos. */
   activeGroupId?: string | null;
+  /** Ingresos/retiradas de dinero real, por grupo y casa. Afectan al saldo
+   *  disponible, no al beneficio/ROI. */
+  cashMovements?: CashMovement[];
 }
 
 /** Última posición conocida de un usuario en un grupo + dirección del último
@@ -111,6 +114,28 @@ export const EMPTY_USER_STATS: UserStats = {
 // BETS (preparado para próximo módulo)
 // ============================================================
 export type Bookmaker = "bet365" | "winamax" | "other";
+
+// ============================================================
+// CASH MOVEMENTS (ingresos / retiradas de dinero real)
+// ============================================================
+export type CashMovementType = "deposit" | "withdrawal";
+
+/**
+ * Ingreso o retirada de dinero real en una casa de apuestas. Se guarda como un
+ * array dentro del documento del usuario (`AppUser.cashMovements`) para no
+ * añadir colecciones/listeners ni coste extra de Firestore. Afecta SOLO al
+ * saldo disponible; NO cuenta como beneficio ni en el ROI/ranking.
+ */
+export interface CashMovement {
+  id: string;
+  groupId: string;
+  bookmaker: Bookmaker;
+  type: CashMovementType;
+  /** Importe SIEMPRE positivo; el signo lo marca `type`. */
+  amount: number;
+  at: Timestamp;
+  note?: string;
+}
 
 export type BetMarket =
   | "winner"

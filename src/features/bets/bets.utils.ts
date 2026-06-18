@@ -327,6 +327,8 @@ export function bookmakerLabel(
 export interface BookmakerSummary {
   initial: number;
   profit: number;
+  /** Ingresos − retiradas (dinero real metido/sacado). */
+  netCash: number;
   current: number;
   pendingStake: number;
   betsCount: number;
@@ -335,6 +337,45 @@ export interface BookmakerSummary {
 export type BookmakerKey = keyof BookmakerBalances;
 
 const KEYS: BookmakerKey[] = ["bet365", "winamax", "other"];
+
+/** Dinero neto (ingresos − retiradas) por casa para un usuario y grupo. */
+export function netCashByBookmaker(
+  user: AppUser,
+  groupId?: string
+): Record<BookmakerKey, number> {
+  const net: Record<BookmakerKey, number> = { bet365: 0, winamax: 0, other: 0 };
+  for (const m of user.cashMovements ?? []) {
+    if (groupId && m.groupId !== groupId) continue;
+    const signed = m.type === "deposit" ? m.amount : -m.amount;
+    net[m.bookmaker] = round2((net[m.bookmaker] ?? 0) + signed);
+  }
+  return net;
+}
+
+export interface CashSummary {
+  deposits: number;
+  withdrawals: number;
+  net: number;
+}
+
+/** Totales de ingresos/retiradas de un usuario en un grupo. */
+export function computeCashSummary(
+  user: AppUser,
+  groupId?: string
+): CashSummary {
+  let deposits = 0;
+  let withdrawals = 0;
+  for (const m of user.cashMovements ?? []) {
+    if (groupId && m.groupId !== groupId) continue;
+    if (m.type === "deposit") deposits += m.amount;
+    else withdrawals += m.amount;
+  }
+  return {
+    deposits: round2(deposits),
+    withdrawals: round2(withdrawals),
+    net: round2(deposits - withdrawals),
+  };
+}
 
 /**
  * Devuelve los saldos iniciales del usuario para un grupo concreto. Si el
@@ -370,6 +411,7 @@ export function computeBookmakerSummary(
   groupId?: string
 ): Record<BookmakerKey, BookmakerSummary> & { total: BookmakerSummary } {
   const initials = getInitialBalances(user, groupId);
+  const netCash = netCashByBookmaker(user, groupId);
   const result = {} as Record<BookmakerKey, BookmakerSummary>;
 
   for (const key of KEYS) {
@@ -381,10 +423,14 @@ export function computeBookmakerSummary(
       .filter((b) => b.status === "pending" && !b.isFreebet)
       .reduce((acc, b) => acc + b.stake, 0);
     const initial = initials[key] ?? 0;
+    const cash = netCash[key] ?? 0;
     result[key] = {
       initial: round2(initial),
       profit: round2(profit),
-      current: round2(initial + profit),
+      netCash: round2(cash),
+      // Saldo = inicial + beneficio de apuestas + dinero neto (ingresos −
+      // retiradas). El beneficio NO incluye ingresos/retiradas.
+      current: round2(initial + profit + cash),
       pendingStake: round2(pendingStake),
       betsCount: houseBets.length,
     };
@@ -393,6 +439,7 @@ export function computeBookmakerSummary(
   const total: BookmakerSummary = {
     initial: round2(KEYS.reduce((a, k) => a + result[k].initial, 0)),
     profit: round2(KEYS.reduce((a, k) => a + result[k].profit, 0)),
+    netCash: round2(KEYS.reduce((a, k) => a + result[k].netCash, 0)),
     current: round2(KEYS.reduce((a, k) => a + result[k].current, 0)),
     pendingStake: round2(KEYS.reduce((a, k) => a + result[k].pendingStake, 0)),
     betsCount: KEYS.reduce((a, k) => a + result[k].betsCount, 0),

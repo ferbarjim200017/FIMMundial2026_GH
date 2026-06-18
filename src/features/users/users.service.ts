@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   deleteDoc,
   doc,
   getDoc,
@@ -21,6 +22,7 @@ import {
   EMPTY_USER_STATS,
   type AppUser,
   type BookmakerBalances,
+  type CashMovement,
   type RankMovementMap,
   type UserRole,
 } from "@/types/domain";
@@ -235,6 +237,33 @@ export async function updateInitialBalances(
       currentBalance: round2(initialBalance + totalProfit),
     });
   }
+}
+
+// ---------- Ingresos / retiradas (cash movements) ----------
+
+/**
+ * Añade un ingreso o retirada al documento del usuario (array `cashMovements`).
+ * Es 1 sola escritura y no necesita listeners: los movimientos viajan con los
+ * datos del usuario que ya se cargan. No toca el beneficio ni el ROI.
+ */
+export async function addCashMovement(
+  uid: string,
+  movement: CashMovement
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    cashMovements: arrayUnion(movement),
+  });
+}
+
+/**
+ * Reemplaza la lista completa de movimientos (para editar/borrar). El que llama
+ * pasa el array ya modificado a partir del que tiene en memoria.
+ */
+export async function setCashMovements(
+  uid: string,
+  movements: CashMovement[]
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), { cashMovements: movements });
 }
 
 /**
