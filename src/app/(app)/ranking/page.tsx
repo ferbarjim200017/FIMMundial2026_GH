@@ -29,7 +29,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import {
   subscribeToRankMovements,
-  subscribeToRanking,
   writeRankMovements,
 } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
@@ -130,10 +129,12 @@ function RankMovementIndicator({
 type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "username";
 
 export default function RankingPage() {
-  const [allUsers, setAllUsers] = useState<AppUser[] | null>(null);
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const { memberUids, activeGroup } = useGroup();
+  // `groupMembers` ya lo provee el GroupProvider (listener acotado al grupo);
+  // el ranking solo muestra a los miembros del grupo activo, así que no abrimos
+  // un listener extra a la colección `users` completa.
+  const { memberUids, activeGroup, groupMembers } = useGroup();
   const { appUser } = useAuth();
 
   // "Ahora" para la ventana de 24 h de las flechas de movimiento. Se refresca
@@ -186,14 +187,12 @@ export default function RankingPage() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setAllUsers([]);
+      setAllBets([]);
       return;
     }
-    const unsubUsers = subscribeToRanking(setAllUsers);
     const unsubBets = subscribeToAllBets(setAllBets);
     const unsubMatches = subscribeToMatches(setMatches, () => setMatches([]));
     return () => {
-      unsubUsers();
       unsubBets();
       unsubMatches();
     };
@@ -203,10 +202,9 @@ export default function RankingPage() {
   // resuelto (carga inicial) devolvemos null para que la tabla se quede
   // en "Cargando…".
   const users = useMemo(() => {
-    if (allUsers === null) return null;
     if (!activeGroup || memberUids.size === 0) return null;
-    return allUsers.filter((u) => memberUids.has(u.uid));
-  }, [allUsers, memberUids, activeGroup]);
+    return groupMembers;
+  }, [groupMembers, memberUids, activeGroup]);
 
   const bets = useMemo(() => {
     if (!activeGroup) return [];

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
-import { subscribeToRanking } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import { useGroup } from "@/features/groups/groups.context";
@@ -18,18 +17,16 @@ function medal(rank: number) {
 }
 
 export function RankingCarousel() {
-  const [users, setUsers] = useState<AppUser[]>([]);
   const [allBets, setAllBets] = useState<Bet[]>([]);
-  const { memberUids, activeGroup } = useGroup();
+  // Los miembros del grupo (con perfil) ya los mantiene el GroupProvider con un
+  // listener acotado a `users where groups array-contains groupId`. El carrusel
+  // solo muestra a esos miembros, así que reutilizamos `groupMembers` en lugar
+  // de abrir un segundo listener a la colección `users` ENTERA en cada página.
+  const { memberUids, activeGroup, groupMembers } = useGroup();
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    const unsubUsers = subscribeToRanking(setUsers);
-    const unsubBets = subscribeToAllBets(setAllBets);
-    return () => {
-      unsubUsers();
-      unsubBets();
-    };
+    return subscribeToAllBets(setAllBets);
   }, []);
 
   // Filtra a los miembros del grupo activo. Hasta que el listener de
@@ -41,8 +38,7 @@ export function RankingCarousel() {
     const groupBets = allBets.filter(
       (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
-    return users
-      .filter((u) => memberUids.has(u.uid))
+    return groupMembers
       .map((u) => {
         const userBets = groupBets.filter((b) => b.userId === u.uid);
         const stats = computeUserStats(userBets);
@@ -56,7 +52,7 @@ export function RankingCarousel() {
         };
       })
       .sort((a, b) => b.stats.roi - a.stats.roi);
-  }, [users, allBets, memberUids, activeGroup]);
+  }, [groupMembers, allBets, memberUids, activeGroup]);
 
   // Si no hay usuarios todavía (cargando o estado vacío) reservamos el
   // mismo espacio que ocuparía el carrusel para que los offsets sticky

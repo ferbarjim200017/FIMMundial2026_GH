@@ -44,7 +44,6 @@ import { MatchFilter } from "@/components/bets/match-filter";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
-import { subscribeToRanking } from "@/features/users/users.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betHasMatch,
@@ -98,9 +97,17 @@ type BookmakerFilter = Bookmaker | "all";
 
 export default function FeedPage() {
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
-  const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
   const [matches, setMatches] = useState<Match[]>([]);
-  const { memberUids, activeGroup } = useGroup();
+  const { memberUids, activeGroup, groupMembers } = useGroup();
+
+  // Mapa de autores para pintar el feed. Las apuestas mostradas se filtran a
+  // miembros del grupo activo, que ya están en memoria vía GroupProvider, así
+  // que evitamos abrir un listener a la colección `users` ENTERA.
+  const usersById = useMemo(() => {
+    const map: Record<string, AppUser> = {};
+    for (const u of groupMembers) map[u.uid] = u;
+    return map;
+  }, [groupMembers]);
   const [filter, setFilter] = useState<FeedFilter>("results");
   const [query, setQuery] = useState("");
   const [userFilter, setUserFilter] = useState<string>("all");
@@ -132,15 +139,9 @@ export default function FeedPage() {
       return;
     }
     const unsubBets = subscribeToAllBets(setAllBets);
-    const unsubUsers = subscribeToRanking((users) => {
-      const map: Record<string, AppUser> = {};
-      for (const u of users) map[u.uid] = u;
-      setUsersById(map);
-    });
     const unsubMatches = subscribeToMatches(setMatches, () => setMatches([]));
     return () => {
       unsubBets();
-      unsubUsers();
       unsubMatches();
     };
   }, []);

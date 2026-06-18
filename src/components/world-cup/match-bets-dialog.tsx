@@ -34,7 +34,6 @@ import {
 import { TeamFlag } from "@/components/matches/team-flag";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
-import { subscribeToRanking } from "@/features/users/users.service";
 import {
   betInGroup,
   betOutcome,
@@ -289,13 +288,20 @@ interface Props {
 
 export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { appUser, isAdmin } = useAuth();
-  const { memberUids, activeGroup } = useGroup();
+  const { memberUids, activeGroup, groupMembers } = useGroup();
   const { openBet } = useBetDetail();
   const [resultOpen, setResultOpen] = useState(false);
   // Apuesta que se está liquidando desde el propio popup (solo las mías).
   const [betToSettle, setBetToSettle] = useState<Bet | null>(null);
   const [bets, setBets] = useState<Bet[] | null>(null);
-  const [usersById, setUsersById] = useState<Record<string, AppUser>>({});
+  // Autores de las apuestas del partido, filtradas a miembros del grupo activo
+  // (ya en memoria vía GroupProvider): así no abrimos un listener a la
+  // colección `users` ENTERA cada vez que se abre el popup del partido.
+  const usersById = useMemo(() => {
+    const map: Record<string, AppUser> = {};
+    for (const u of groupMembers) map[u.uid] = u;
+    return map;
+  }, [groupMembers]);
   // "all"  → comportamiento por defecto (todas las apuestas).
   // "mine" → solo las del usuario logueado.
   const [scope, setScope] = useState<"all" | "mine">("all");
@@ -340,15 +346,9 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
         setBets([]); // si Firestore rechaza la query (p.ej. falta índice), no nos quedamos colgados
       }
     );
-    const unsubUsers = subscribeToRanking((users) => {
-      const map: Record<string, AppUser> = {};
-      for (const u of users) map[u.uid] = u;
-      setUsersById(map);
-    });
     return () => {
       window.clearTimeout(safety);
       unsubBets();
-      unsubUsers();
     };
   }, [open, match]);
 
