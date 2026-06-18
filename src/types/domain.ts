@@ -28,6 +28,7 @@ export interface BookmakerBalances {
   bet365: number;
   winamax: number;
   betfair: number;
+  luckia: number;
   other: number;
 }
 
@@ -35,6 +36,7 @@ export const EMPTY_BOOKMAKER_BALANCES: BookmakerBalances = {
   bet365: 0,
   winamax: 0,
   betfair: 0,
+  luckia: 0,
   other: 0,
 };
 
@@ -115,7 +117,7 @@ export const EMPTY_USER_STATS: UserStats = {
 // ============================================================
 // BETS (preparado para próximo módulo)
 // ============================================================
-export type Bookmaker = "bet365" | "winamax" | "betfair" | "other";
+export type Bookmaker = "bet365" | "winamax" | "betfair" | "luckia" | "other";
 
 // ============================================================
 // CASH MOVEMENTS (ingresos / retiradas de dinero real)

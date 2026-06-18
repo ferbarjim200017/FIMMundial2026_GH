@@ -30,6 +30,8 @@ export function BookmakerPill({
       ? "border-red-500/70 text-red-600 dark:text-red-400"
       : bookmaker === "betfair"
       ? "border-yellow-500/80 text-yellow-600 dark:text-yellow-400"
+      : bookmaker === "luckia"
+      ? "border-orange-500/80 text-orange-600 dark:text-orange-400"
       : "border-sky-500/70 text-sky-600 dark:text-sky-400";
 
   return (

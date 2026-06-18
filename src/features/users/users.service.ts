@@ -222,10 +222,11 @@ export async function updateInitialBalances(
     bet365: round2(patch.bet365 ?? base.bet365),
     winamax: round2(patch.winamax ?? base.winamax),
     betfair: round2(patch.betfair ?? base.betfair ?? 0),
+    luckia: round2(patch.luckia ?? base.luckia ?? 0),
     other: round2(patch.other ?? base.other),
   };
   const initialBalance = round2(
-    merged.bet365 + merged.winamax + merged.betfair + merged.other
+    merged.bet365 + merged.winamax + merged.betfair + merged.luckia + merged.other
   );
   const totalProfit = user.stats?.totalProfit ?? 0;
 

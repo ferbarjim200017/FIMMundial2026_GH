@@ -52,6 +52,7 @@ export function RankingCarousel() {
           initial.bet365 +
           initial.winamax +
           (initial.betfair ?? 0) +
+          (initial.luckia ?? 0) +
           initial.other +
           stats.totalProfit +
           computeCashSummary(u, activeGroup.id).net;

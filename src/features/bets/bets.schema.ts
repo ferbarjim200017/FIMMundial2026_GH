@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const BOOKMAKERS = ["bet365", "winamax", "betfair", "other"] as const;
+export const BOOKMAKERS = [
+  "bet365",
+  "winamax",
+  "betfair",
+  "luckia",
+  "other",
+] as const;
 
 export const MARKET_OPTIONS = [
   { value: "winner", label: "Ganador del partido" },
@@ -33,6 +39,7 @@ export const BOOKMAKER_OPTIONS = [
   { value: "bet365", label: "Bet365" },
   { value: "winamax", label: "Winamax" },
   { value: "betfair", label: "Betfair" },
+  { value: "luckia", label: "Luckia" },
   { value: "other", label: "Otra" },
 ] as const;
 

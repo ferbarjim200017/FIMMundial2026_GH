@@ -346,6 +346,16 @@ export default function DashboardPage() {
             pendingStake={summary.betfair.pendingStake}
             betsCount={summary.betfair.betsCount}
           />
+          <BookmakerCard
+            uid={appUser.uid}
+            groupId={activeGroup?.id ?? null}
+            bookmaker="luckia"
+            initial={summary.luckia.initial}
+            profit={summary.luckia.profit}
+            current={summary.luckia.current}
+            pendingStake={summary.luckia.pendingStake}
+            betsCount={summary.luckia.betsCount}
+          />
           <TotalBalanceCard
             initial={summary.total.initial}
             profit={summary.total.profit}
@@ -641,7 +651,7 @@ function BookmakerCard({
 }: {
   uid: string;
   groupId: string | null;
-  bookmaker: "bet365" | "winamax" | "betfair";
+  bookmaker: "bet365" | "winamax" | "betfair" | "luckia";
   initial: number;
   profit: number;
   current: number;
@@ -701,7 +711,9 @@ function BookmakerCard({
       ? "border-2 border-emerald-500/70"
       : bookmaker === "winamax"
       ? "border-2 border-red-500/70"
-      : "border-2 border-yellow-500/80";
+      : bookmaker === "betfair"
+      ? "border-2 border-yellow-500/80"
+      : "border-2 border-orange-500/80";
 
   return (
     <Card className={borderClass}>

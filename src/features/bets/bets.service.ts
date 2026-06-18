@@ -506,11 +506,18 @@ export async function recomputeAndPersistStats(userId: string): Promise<void> {
   }
   const user = userSnap.data();
   const initials =
-    user.initialBalances ?? { bet365: 0, winamax: 0, betfair: 0, other: 0 };
+    user.initialBalances ?? {
+      bet365: 0,
+      winamax: 0,
+      betfair: 0,
+      luckia: 0,
+      other: 0,
+    };
   const initialBalance = round2(
     (initials.bet365 ?? 0) +
       (initials.winamax ?? 0) +
       (initials.betfair ?? 0) +
+      (initials.luckia ?? 0) +
       (initials.other ?? 0)
   );
   // currentBalance se mantiene como agregado legacy global. La UI por
