@@ -200,7 +200,11 @@ function CompareContent() {
     const stats = computeUserStats(userBets);
     const initials = getInitialBalances(userA, activeGroup.id);
     const balance =
-      initials.bet365 + initials.winamax + initials.other + stats.totalProfit;
+      initials.bet365 +
+      initials.winamax +
+      (initials.betfair ?? 0) +
+      initials.other +
+      stats.totalProfit;
     return { stats, balance };
   }, [userA, bets, activeGroup]);
 
@@ -212,7 +216,11 @@ function CompareContent() {
     const stats = computeUserStats(userBets);
     const initials = getInitialBalances(userB, activeGroup.id);
     const balance =
-      initials.bet365 + initials.winamax + initials.other + stats.totalProfit;
+      initials.bet365 +
+      initials.winamax +
+      (initials.betfair ?? 0) +
+      initials.other +
+      stats.totalProfit;
     return { stats, balance };
   }, [userB, bets, activeGroup]);
 

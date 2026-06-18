@@ -160,7 +160,11 @@ export default function ProfilePage() {
       return { initial: 0, current: 0 };
     }
     const initials = getInitialBalances(user, activeGroup.id);
-    const initial = initials.bet365 + initials.winamax + initials.other;
+    const initial =
+      initials.bet365 +
+      initials.winamax +
+      (initials.betfair ?? 0) +
+      initials.other;
     return {
       initial,
       current: initial + groupStats.totalProfit,

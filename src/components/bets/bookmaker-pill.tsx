@@ -28,6 +28,8 @@ export function BookmakerPill({
       ? "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
       : bookmaker === "winamax"
       ? "border-red-500/70 text-red-600 dark:text-red-400"
+      : bookmaker === "betfair"
+      ? "border-yellow-500/80 text-yellow-600 dark:text-yellow-400"
       : "border-sky-500/70 text-sky-600 dark:text-sky-400";
 
   return (

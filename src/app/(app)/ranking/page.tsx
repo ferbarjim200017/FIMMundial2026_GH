@@ -239,7 +239,10 @@ export default function RankingPage() {
     for (const u of users ?? []) {
       const initial = getInitialBalances(u, activeGroup?.id);
       const initialSum =
-        initial.bet365 + initial.winamax + initial.other;
+        initial.bet365 +
+        initial.winamax +
+        (initial.betfair ?? 0) +
+        initial.other;
       const profit = groupStatsByUid.get(u.uid)?.totalProfit ?? 0;
       const netCash = computeCashSummary(u, activeGroup?.id).net;
       map.set(u.uid, initialSum + profit + netCash);

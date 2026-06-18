@@ -315,7 +315,7 @@ export default function DashboardPage() {
             Ingresos / Retiradas
           </Button>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <BookmakerCard
             uid={appUser.uid}
             groupId={activeGroup?.id ?? null}
@@ -335,6 +335,16 @@ export default function DashboardPage() {
             current={summary.winamax.current}
             pendingStake={summary.winamax.pendingStake}
             betsCount={summary.winamax.betsCount}
+          />
+          <BookmakerCard
+            uid={appUser.uid}
+            groupId={activeGroup?.id ?? null}
+            bookmaker="betfair"
+            initial={summary.betfair.initial}
+            profit={summary.betfair.profit}
+            current={summary.betfair.current}
+            pendingStake={summary.betfair.pendingStake}
+            betsCount={summary.betfair.betsCount}
           />
           <TotalBalanceCard
             initial={summary.total.initial}
@@ -631,7 +641,7 @@ function BookmakerCard({
 }: {
   uid: string;
   groupId: string | null;
-  bookmaker: "bet365" | "winamax";
+  bookmaker: "bet365" | "winamax" | "betfair";
   initial: number;
   profit: number;
   current: number;
@@ -685,11 +695,13 @@ function BookmakerCard({
     }
   }
 
-  const label = bookmaker === "bet365" ? "Bet365" : "Winamax";
+  const label = bookmakerLabel(bookmaker);
   const borderClass =
     bookmaker === "bet365"
       ? "border-2 border-emerald-500/70"
-      : "border-2 border-red-500/70";
+      : bookmaker === "winamax"
+      ? "border-2 border-red-500/70"
+      : "border-2 border-yellow-500/80";
 
   return (
     <Card className={borderClass}>

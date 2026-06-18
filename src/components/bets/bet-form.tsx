@@ -31,6 +31,7 @@ import {
 import { TEAMS_2026 } from "@/features/matches/teams-2026";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useGroup } from "@/features/groups/groups.context";
+import { useAuth } from "@/features/auth/auth.context";
 import { formatCurrency, TimeoutError, withTimeout } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import type { Bet, Match } from "@/types/domain";
@@ -60,6 +61,13 @@ function composeLabel(matches: Match[]): string {
 export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
   const { activeGroup, userGroups } = useGroup();
+  const { appUser } = useAuth();
+  // Casa por defecto al crear una apuesta nueva. Sergiomonty1 arranca en
+  // Betfair; el resto en Bet365. (Al editar/copiar se respeta la de la apuesta.)
+  const defaultBookmaker: BetFormValues["bookmaker"] =
+    appUser?.username?.trim().toLowerCase() === "sergiomonty1"
+      ? "betfair"
+      : "bet365";
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.
@@ -76,7 +84,7 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     return activeGroup ? [activeGroup.id] : [];
   })();
   const [values, setValues] = useState<BetFormValues>(() => ({
-    bookmaker: seed?.bookmaker ?? "bet365",
+    bookmaker: seed?.bookmaker ?? defaultBookmaker,
     bookmakerLabel: seed?.bookmakerLabel ?? "",
     matchIds: seed?.matchIds ?? (seed?.matchId ? [seed.matchId] : []),
     matchLabel: seed?.matchLabel ?? "",

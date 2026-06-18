@@ -321,6 +321,7 @@ export function bookmakerLabel(
 ): string {
   if (bookmaker === "bet365") return "Bet365";
   if (bookmaker === "winamax") return "Winamax";
+  if (bookmaker === "betfair") return "Betfair";
   return custom?.trim() || "Otra";
 }
 
@@ -336,14 +337,19 @@ export interface BookmakerSummary {
 
 export type BookmakerKey = keyof BookmakerBalances;
 
-const KEYS: BookmakerKey[] = ["bet365", "winamax", "other"];
+const KEYS: BookmakerKey[] = ["bet365", "winamax", "betfair", "other"];
 
 /** Dinero neto (ingresos − retiradas) por casa para un usuario y grupo. */
 export function netCashByBookmaker(
   user: AppUser,
   groupId?: string
 ): Record<BookmakerKey, number> {
-  const net: Record<BookmakerKey, number> = { bet365: 0, winamax: 0, other: 0 };
+  const net: Record<BookmakerKey, number> = {
+    bet365: 0,
+    winamax: 0,
+    betfair: 0,
+    other: 0,
+  };
   for (const m of user.cashMovements ?? []) {
     if (groupId && m.groupId !== groupId) continue;
     const signed = m.type === "deposit" ? m.amount : -m.amount;
