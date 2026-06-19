@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { subscribeToMatches, STAGE_LABELS } from "@/features/matches/matches.service";
+import { currentDayWindow } from "@/features/bets/bets.utils";
 import { isSpainMatch, isTveMatch } from "@/features/matches/tve-matches";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { formatDateTime } from "@/lib/utils";
@@ -120,6 +121,11 @@ export function MatchPickerDialog({
   // la lista se hace en baja prioridad, así escribir no se atasca.
   const deferredSearch = useDeferredValue(search);
   const [showFinished, setShowFinished] = useState(false);
+  // Por defecto el selector muestra solo los partidos de la jornada de hoy
+  // (ventana 12:00 → 12:00, la misma del dashboard). Con "Ver todos" se
+  // muestran el resto. Además de ser más cómodo, renderizar menos filas hace
+  // que el diálogo abra más fluido.
+  const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Renderizar las ~104 filas a la vez que corre la animación de apertura del
   // diálogo la dejaba lageada/bugeada. Esperamos a que termine la animación
@@ -135,6 +141,7 @@ export function MatchPickerDialog({
     setSelected(new Set(initialSelected));
     setSearch("");
     setShowFinished(false);
+    setShowAll(false);
     const t = setTimeout(() => setReady(true), 220);
     const unsub = subscribeToMatches(
       (list) => {
@@ -158,15 +165,29 @@ export function MatchPickerDialog({
       ? matches
       : matches.filter((m) => m.status !== "finished");
     const s = deferredSearch.trim().toLowerCase();
-    if (!s) return base;
-    return base.filter(
-      (m) =>
-        m.homeLabel.toLowerCase().includes(s) ||
-        m.awayLabel.toLowerCase().includes(s) ||
-        (m.groupId ?? "").toLowerCase().includes(s) ||
-        (m.city ?? "").toLowerCase().includes(s)
-    );
-  }, [matches, deferredSearch, showFinished]);
+    if (s) {
+      // Al buscar, miramos en TODOS los partidos (ignoramos el filtro de
+      // jornada): si buscas un equipo concreto, quieres encontrarlo aunque no
+      // juegue hoy.
+      return base.filter(
+        (m) =>
+          m.homeLabel.toLowerCase().includes(s) ||
+          m.awayLabel.toLowerCase().includes(s) ||
+          (m.groupId ?? "").toLowerCase().includes(s) ||
+          (m.city ?? "").toLowerCase().includes(s)
+      );
+    }
+    // Sin búsqueda: por defecto solo la jornada actual (12:00 → 12:00). El
+    // botón "Ver todos los partidos" desactiva este filtro.
+    if (!showAll) {
+      const { startMs, endMs } = currentDayWindow();
+      return base.filter((m) => {
+        const k = m.kickoffUtc.toMillis();
+        return k >= startMs && k < endMs;
+      });
+    }
+    return base;
+  }, [matches, deferredSearch, showFinished, showAll]);
 
   // Agrupar por día (ordenado por kickoff asc en el servicio)
   const grouped = useMemo(() => {
@@ -242,6 +263,24 @@ export function MatchPickerDialog({
           </Button>
         </div>
 
+        {/* Solo cuando no se está buscando: indicador de jornada + "Ver todos". */}
+        {!deferredSearch.trim() && (
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              {showAll
+                ? "Mostrando todos los partidos"
+                : "Mostrando la jornada de hoy (desde las 12:00)"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="font-medium text-primary hover:underline"
+            >
+              {showAll ? "Ver solo hoy" : "Ver todos los partidos"}
+            </button>
+          </div>
+        )}
+
         <div className="max-h-[55vh] overflow-y-auto rounded-md border">
           {loading || !ready ? (
             <p className="p-6 text-center text-sm text-muted-foreground">Cargando partidos…</p>
@@ -256,8 +295,22 @@ export function MatchPickerDialog({
                     <code className="rounded bg-muted px-1">/admin/matches</code>.
                   </span>
                 </>
-              ) : (
+              ) : deferredSearch.trim() ? (
                 "Sin resultados para esa búsqueda."
+              ) : !showAll ? (
+                <>
+                  No hay partidos en la jornada de hoy.
+                  <br />
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(true)}
+                    className="mt-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    Ver todos los partidos
+                  </button>
+                </>
+              ) : (
+                "No hay partidos."
               )}
             </div>
           ) : (

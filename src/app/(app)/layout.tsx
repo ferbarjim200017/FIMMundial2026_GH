@@ -9,12 +9,14 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 // reactivarlo, descomenta este import y el <RankingCarousel /> de abajo.
 // import { RankingCarousel } from "@/components/layout/ranking-carousel";
 import { OnboardingGate } from "@/components/layout/onboarding-gate";
+import { DataKeepAlive } from "@/components/layout/data-keep-alive";
 import { BetDetailProvider } from "@/components/bets/bet-detail-dialog";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <OnboardingGate />
+      <DataKeepAlive />
       <BetDetailProvider>
       <div className="flex min-h-screen flex-col">
         {/* Wrapper sticky para que la barra superior se quede fija al hacer
