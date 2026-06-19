@@ -13,7 +13,6 @@ import {
   Gift,
   Shield,
   Bomb,
-  Banknote,
   Percent,
   Snowflake,
   Dices,
@@ -281,12 +280,6 @@ export default function HallOfFamePage() {
       .sort((a, b) => b.odds - a.odds)
       .slice(0, 3);
 
-    // Lo que se dejó escapar: mayor retorno potencial de una apuesta perdida.
-    const escaped = [...settled]
-      .filter((b) => b.status === "lost")
-      .sort((a, b) => (b.potentialReturn ?? 0) - (a.potentialReturn ?? 0))
-      .slice(0, 3);
-
     return {
       topProfit,
       topLoss,
@@ -296,7 +289,6 @@ export default function HallOfFamePage() {
       topFreebet,
       safestWon,
       biggestFail,
-      escaped,
     };
   }, [bets]);
 
@@ -525,19 +517,6 @@ export default function HallOfFamePage() {
                   valueClass: "text-red-500",
                 }))}
                 emptyText="Nadie ha fallado un cuotón aún."
-              />
-              <PodiumCard
-                title="Lo que se dejó escapar"
-                icon={Banknote}
-                accent="text-amber-600"
-                entries={records.escaped.map((b) => ({
-                  name: nameOf(b.userId),
-                  detail: `${b.selection || b.matchLabel || "—"} · @${b.odds.toFixed(
-                    2
-                  )}`,
-                  value: formatCurrency(b.potentialReturn ?? 0),
-                }))}
-                emptyText="Nada que lamentar… de momento."
               />
             </div>
           </section>
