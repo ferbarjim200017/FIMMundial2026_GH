@@ -25,7 +25,7 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
-import { subscribeToBetsForMatch } from "@/features/bets/bets.service";
+import { subscribeToAllBets } from "@/features/bets/bets.service";
 import {
   MARKET_OPTIONS,
   STATUS_OPTIONS,
@@ -35,6 +35,7 @@ import { TeamFlag } from "@/components/matches/team-flag";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import {
+  betHasMatch,
   betInGroup,
   betOutcome,
   betShareBasis,
@@ -328,24 +329,30 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     // Reset al abrir para evitar mostrar las apuestas del partido anterior
     setBets(null);
 
-    // Salvavidas: si la suscripción no devuelve nada en 4 s, mostramos
-    // "no hay apuestas" en vez de quedarnos en "Cargando…" para siempre.
+    // Salvavidas: si no llega nada en 4 s, mostramos "no hay apuestas" en vez
+    // de quedarnos en "Cargando…" para siempre.
     const safety = window.setTimeout(() => {
       setBets((prev) => (prev === null ? [] : prev));
     }, 4000);
 
-    const unsubBets = subscribeToBetsForMatch(
-      match,
-      (bets) => {
-        window.clearTimeout(safety);
-        setBets(bets);
-      },
-      (err) => {
-        console.error("[match bets]", err);
-        window.clearTimeout(safety);
-        setBets([]); // si Firestore rechaza la query (p.ej. falta índice), no nos quedamos colgados
-      }
+    // Antes abríamos 1-2 listeners NUEVOS a Firestore por cada partido que se
+    // abría (apuestas del partido + de los equipos), repitiendo lecturas en
+    // cada popup. Ahora reutilizamos el listener COMPARTIDO de todas las
+    // apuestas (el mismo que usan ranking/feed/comparador) y filtramos en
+    // memoria. Si ese listener ya está vivo, abrir el popup cuesta 0 lecturas.
+    const teamLabels = [match.homeLabel, match.awayLabel].filter(
+      (s): s is string => typeof s === "string" && s.length > 0
     );
+    const unsubBets = subscribeToAllBets((all) => {
+      window.clearTimeout(safety);
+      const relevant = all.filter(
+        (b) =>
+          betHasMatch(b, match.id) ||
+          (b.teams ?? []).some((t) => teamLabels.includes(t))
+      );
+      relevant.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      setBets(relevant);
+    });
     return () => {
       window.clearTimeout(safety);
       unsubBets();
