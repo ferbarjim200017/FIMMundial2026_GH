@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Receipt,
   Trophy,
+  Crown,
   Globe2,
   Newspaper,
   Shield,
@@ -20,6 +21,7 @@ const NAV = [
   { href: ROUTES.bets, label: "Apuestas", icon: Receipt },
   { href: ROUTES.upcoming, label: "Próximos", icon: CalendarClock },
   { href: ROUTES.ranking, label: "Ranking", icon: Trophy },
+  { href: ROUTES.hallOfFame, label: "Salón de la fama", icon: Crown },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
 ] as const;

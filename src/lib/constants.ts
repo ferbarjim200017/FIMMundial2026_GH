@@ -14,6 +14,7 @@ export const ROUTES = {
   dashboard: "/dashboard",
   bets: "/bets",
   ranking: "/ranking",
+  hallOfFame: "/hall-of-fame",
   profile: (uid: string) => `/profile/${uid}`,
   worldCup: "/world-cup",
   feed: "/feed",
