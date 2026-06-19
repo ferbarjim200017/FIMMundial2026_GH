@@ -10,6 +10,14 @@ import {
   Layers,
   Flame,
   Receipt,
+  Gift,
+  Shield,
+  Bomb,
+  Banknote,
+  Percent,
+  Snowflake,
+  Dices,
+  Skull,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +25,7 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betInGroup,
+  betOutcome,
   bookmakerLabel,
   computeUserStats,
   round2,
@@ -148,8 +157,40 @@ interface PlayerAgg {
   totalStaked: number;
   best: Bet | null;
   worst: Bet | null;
+  worstStreak: number;
   stats: ReturnType<typeof computeUserStats>;
 }
+
+/** Racha más larga de DERROTAS seguidas. Simétrica a `bestStreak` (victorias):
+ *  cuenta el resultado efectivo (un cashout por debajo del stake cuenta como
+ *  derrota, igual que en el resto de stats). */
+function worstLossStreak(bets: Bet[]): number {
+  const chrono = bets
+    .filter((b) => {
+      const o = betOutcome(b);
+      return o === "won" || o === "lost";
+    })
+    .sort(
+      (a, b) =>
+        (a.settledAt?.toMillis() ?? a.createdAt.toMillis()) -
+        (b.settledAt?.toMillis() ?? b.createdAt.toMillis())
+    );
+  let worst = 0;
+  let run = 0;
+  for (const b of chrono) {
+    if (betOutcome(b) === "lost") {
+      run += 1;
+      if (run > worst) worst = run;
+    } else {
+      run = 0;
+    }
+  }
+  return worst;
+}
+
+/** Nº mínimo de apuestas decididas para entrar en el podio de % de acierto
+ *  (evita que alguien con 1 sola apuesta ganada salga con 100%). */
+const MIN_DECIDED_FOR_HITRATE = 5;
 
 // ── Página ───────────────────────────────────────────────────────────────
 
@@ -222,7 +263,41 @@ export default function HallOfFamePage() {
       .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
       .slice(0, 3);
 
-    return { topProfit, topLoss, topOdds, topStake, topCombo };
+    // Freebet más rentable: la apuesta gratis que más beneficio dejó.
+    const topFreebet = [...settled]
+      .filter((b) => b.isFreebet && b.status === "won")
+      .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
+      .slice(0, 3);
+
+    // La más segura ganada: cuota más BAJA acertada (status won de verdad).
+    const safestWon = [...settled]
+      .filter((b) => b.status === "won")
+      .sort((a, b) => a.odds - b.odds)
+      .slice(0, 3);
+
+    // El bombazo fallado: cuota más ALTA perdida (status lost).
+    const biggestFail = [...settled]
+      .filter((b) => b.status === "lost")
+      .sort((a, b) => b.odds - a.odds)
+      .slice(0, 3);
+
+    // Lo que se dejó escapar: mayor retorno potencial de una apuesta perdida.
+    const escaped = [...settled]
+      .filter((b) => b.status === "lost")
+      .sort((a, b) => (b.potentialReturn ?? 0) - (a.potentialReturn ?? 0))
+      .slice(0, 3);
+
+    return {
+      topProfit,
+      topLoss,
+      topOdds,
+      topStake,
+      topCombo,
+      topFreebet,
+      safestWon,
+      biggestFail,
+      escaped,
+    };
   }, [bets]);
 
   // ── Agregados por jugador ──
@@ -248,6 +323,7 @@ export default function HallOfFamePage() {
           totalStaked,
           best,
           worst,
+          worstStreak: worstLossStreak(settledU),
           stats: computeUserStats(userBets),
         };
       })
@@ -275,6 +351,40 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.stats.bestStreak > 0)
         .sort((a, b) => b.stats.bestStreak - a.stats.bestStreak)
+        .slice(0, 3),
+    [perPlayer]
+  );
+  const bestHitRate = useMemo(
+    () =>
+      [...perPlayer]
+        .filter(
+          (p) => p.stats.betsWon + p.stats.betsLost >= MIN_DECIDED_FOR_HITRATE
+        )
+        .sort((a, b) => b.stats.hitRate - a.stats.hitRate)
+        .slice(0, 3),
+    [perPlayer]
+  );
+  const worstStreaks = useMemo(
+    () =>
+      [...perPlayer]
+        .filter((p) => p.worstStreak > 0)
+        .sort((a, b) => b.worstStreak - a.worstStreak)
+        .slice(0, 3),
+    [perPlayer]
+  );
+  const craziest = useMemo(
+    () =>
+      [...perPlayer]
+        .filter((p) => p.stats.avgOdds > 0)
+        .sort((a, b) => b.stats.avgOdds - a.stats.avgOdds)
+        .slice(0, 3),
+    [perPlayer]
+  );
+  const mostLost = useMemo(
+    () =>
+      [...perPlayer]
+        .filter((p) => p.stats.betsLost > 0)
+        .sort((a, b) => b.stats.betsLost - a.stats.betsLost)
         .slice(0, 3),
     [perPlayer]
   );
@@ -375,6 +485,60 @@ export default function HallOfFamePage() {
                 }))}
                 emptyText="Aún no hay combinadas ganadas."
               />
+              <PodiumCard
+                title="Freebet más rentable"
+                icon={Gift}
+                accent="text-pink-500"
+                entries={records.topFreebet.map((b) => ({
+                  name: nameOf(b.userId),
+                  detail: betDetail(b),
+                  value: formatCurrency(b.profit ?? 0),
+                  valueClass: profitClass(b.profit ?? 0),
+                }))}
+                emptyText="Sin freebets ganadas todavía."
+              />
+              <PodiumCard
+                title="La más segura ganada"
+                icon={Shield}
+                accent="text-teal-500"
+                entries={records.safestWon.map((b) => ({
+                  name: nameOf(b.userId),
+                  detail: `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
+                    b.bookmaker,
+                    b.bookmakerLabel
+                  )}`,
+                  value: `@${b.odds.toFixed(2)}`,
+                  valueClass: "text-emerald-500",
+                }))}
+              />
+              <PodiumCard
+                title="El bombazo fallado"
+                icon={Bomb}
+                accent="text-rose-500"
+                entries={records.biggestFail.map((b) => ({
+                  name: nameOf(b.userId),
+                  detail: `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
+                    b.bookmaker,
+                    b.bookmakerLabel
+                  )}`,
+                  value: `@${b.odds.toFixed(2)}`,
+                  valueClass: "text-red-500",
+                }))}
+                emptyText="Nadie ha fallado un cuotón aún."
+              />
+              <PodiumCard
+                title="Lo que se dejó escapar"
+                icon={Banknote}
+                accent="text-amber-600"
+                entries={records.escaped.map((b) => ({
+                  name: nameOf(b.userId),
+                  detail: `${b.selection || b.matchLabel || "—"} · @${b.odds.toFixed(
+                    2
+                  )}`,
+                  value: formatCurrency(b.potentialReturn ?? 0),
+                }))}
+                emptyText="Nada que lamentar… de momento."
+              />
             </div>
           </section>
 
@@ -421,6 +585,49 @@ export default function HallOfFamePage() {
                   value: `${p.stats.bestStreak} ✅`,
                 }))}
                 emptyText="Sin rachas todavía."
+              />
+              <PodiumCard
+                title="Mejor % de acierto"
+                icon={Percent}
+                accent="text-emerald-500"
+                entries={bestHitRate.map((p) => ({
+                  name: p.user.username,
+                  detail: `${p.stats.betsWon}/${
+                    p.stats.betsWon + p.stats.betsLost
+                  } decididas`,
+                  value: formatPercent(p.stats.hitRate),
+                }))}
+                emptyText={`Hacen falta ${MIN_DECIDED_FOR_HITRATE} apuestas decididas.`}
+              />
+              <PodiumCard
+                title="Peor racha"
+                icon={Snowflake}
+                accent="text-sky-500"
+                entries={worstStreaks.map((p) => ({
+                  name: p.user.username,
+                  value: `${p.worstStreak} ❌`,
+                }))}
+                emptyText="Nadie encadena derrotas… aún."
+              />
+              <PodiumCard
+                title="El más loco"
+                icon={Dices}
+                accent="text-violet-500"
+                entries={craziest.map((p) => ({
+                  name: p.user.username,
+                  detail: "cuota media",
+                  value: `@${p.stats.avgOdds.toFixed(2)}`,
+                }))}
+              />
+              <PodiumCard
+                title="El que más palma"
+                icon={Skull}
+                accent="text-red-500"
+                entries={mostLost.map((p) => ({
+                  name: p.user.username,
+                  value: `${p.stats.betsLost}`,
+                }))}
+                emptyText="Nadie ha perdido todavía."
               />
             </div>
           </section>
