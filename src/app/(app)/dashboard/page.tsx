@@ -15,6 +15,7 @@ import {
   Flame,
   Gauge,
   Percent,
+  Plus,
   Sunrise,
   Target,
   Ticket,
@@ -22,6 +23,7 @@ import {
   TrendingUp,
   Trophy,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth.context";
@@ -43,7 +45,11 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
 import { CashMovementDialog } from "@/components/dashboard/cash-movement-dialog";
-import { updateInitialBalances } from "@/features/users/users.service";
+import {
+  addShownBookmaker,
+  removeShownBookmaker,
+  updateInitialBalances,
+} from "@/features/users/users.service";
 import {
   Card,
   CardContent,
@@ -184,6 +190,18 @@ export default function DashboardPage() {
   if (!appUser || !summary) return null;
 
   const recent = bets.slice(0, 5);
+
+  // Casas opcionales (Betfair/Luckia): se muestran si tienen actividad
+  // (apuestas, dinero o saldo inicial) o si el usuario las ha añadido a mano.
+  const OPTIONAL_HOUSES = ["betfair", "luckia"] as const;
+  const shownHouses = appUser.shownBookmakers ?? [];
+  const houseHasActivity = (b: "betfair" | "luckia") =>
+    summary[b].betsCount > 0 ||
+    summary[b].netCash !== 0 ||
+    summary[b].initial !== 0;
+  const showHouse = (b: "betfair" | "luckia") =>
+    houseHasActivity(b) || shownHouses.includes(b);
+  const hiddenHouses = OPTIONAL_HOUSES.filter((b) => !showHouse(b));
 
   return (
     <div className="space-y-6">
@@ -336,26 +354,46 @@ export default function DashboardPage() {
             pendingStake={summary.winamax.pendingStake}
             betsCount={summary.winamax.betsCount}
           />
-          <BookmakerCard
-            uid={appUser.uid}
-            groupId={activeGroup?.id ?? null}
-            bookmaker="betfair"
-            initial={summary.betfair.initial}
-            profit={summary.betfair.profit}
-            current={summary.betfair.current}
-            pendingStake={summary.betfair.pendingStake}
-            betsCount={summary.betfair.betsCount}
-          />
-          <BookmakerCard
-            uid={appUser.uid}
-            groupId={activeGroup?.id ?? null}
-            bookmaker="luckia"
-            initial={summary.luckia.initial}
-            profit={summary.luckia.profit}
-            current={summary.luckia.current}
-            pendingStake={summary.luckia.pendingStake}
-            betsCount={summary.luckia.betsCount}
-          />
+          {showHouse("betfair") && (
+            <BookmakerCard
+              uid={appUser.uid}
+              groupId={activeGroup?.id ?? null}
+              bookmaker="betfair"
+              initial={summary.betfair.initial}
+              profit={summary.betfair.profit}
+              current={summary.betfair.current}
+              pendingStake={summary.betfair.pendingStake}
+              betsCount={summary.betfair.betsCount}
+              onHide={
+                houseHasActivity("betfair")
+                  ? undefined
+                  : () =>
+                      removeShownBookmaker(appUser.uid, "betfair").catch(
+                        console.error
+                      )
+              }
+            />
+          )}
+          {showHouse("luckia") && (
+            <BookmakerCard
+              uid={appUser.uid}
+              groupId={activeGroup?.id ?? null}
+              bookmaker="luckia"
+              initial={summary.luckia.initial}
+              profit={summary.luckia.profit}
+              current={summary.luckia.current}
+              pendingStake={summary.luckia.pendingStake}
+              betsCount={summary.luckia.betsCount}
+              onHide={
+                houseHasActivity("luckia")
+                  ? undefined
+                  : () =>
+                      removeShownBookmaker(appUser.uid, "luckia").catch(
+                        console.error
+                      )
+              }
+            />
+          )}
           <TotalBalanceCard
             initial={summary.total.initial}
             profit={summary.total.profit}
@@ -367,6 +405,26 @@ export default function DashboardPage() {
             }
           />
         </div>
+
+        {hiddenHouses.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Añadir casa:</span>
+            {hiddenHouses.map((b) => (
+              <Button
+                key={b}
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  addShownBookmaker(appUser.uid, b).catch(console.error)
+                }
+                className="h-8 gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {bookmakerLabel(b)}
+              </Button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ─────── Desglose de apuestas ─────── */}
@@ -648,6 +706,7 @@ function BookmakerCard({
   current,
   pendingStake,
   betsCount,
+  onHide,
 }: {
   uid: string;
   groupId: string | null;
@@ -657,6 +716,9 @@ function BookmakerCard({
   current: number;
   pendingStake: number;
   betsCount: number;
+  /** Si se pasa, muestra un botón para ocultar la tarjeta (casas opcionales
+   *  sin actividad). */
+  onHide?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(initial.toString());
@@ -716,7 +778,18 @@ function BookmakerCard({
       : "border-2 border-orange-500/80";
 
   return (
-    <Card className={borderClass}>
+    <Card className={cn("relative", borderClass)}>
+      {onHide && (
+        <button
+          type="button"
+          onClick={onHide}
+          className="absolute right-2 top-2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Ocultar esta casa"
+          aria-label="Ocultar"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{label}</CardTitle>
         <CardDescription>

@@ -63,10 +63,10 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const { activeGroup, userGroups } = useGroup();
   const { appUser } = useAuth();
   // Casa por defecto al crear una apuesta nueva. Sergiomonty1 arranca en
-  // Betfair; el resto en Bet365. (Al editar/copiar se respeta la de la apuesta.)
+  // Luckia; el resto en Bet365. (Al editar/copiar se respeta la de la apuesta.)
   const defaultBookmaker: BetFormValues["bookmaker"] =
     appUser?.username?.trim().toLowerCase() === "sergiomonty1"
-      ? "betfair"
+      ? "luckia"
       : "bet365";
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,

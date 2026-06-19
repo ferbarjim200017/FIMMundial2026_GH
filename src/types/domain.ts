@@ -67,6 +67,10 @@ export interface AppUser {
   /** Ingresos/retiradas de dinero real, por grupo y casa. Afectan al saldo
    *  disponible, no al beneficio/ROI. */
   cashMovements?: CashMovement[];
+  /** Casas opcionales (Betfair/Luckia) que el usuario ha elegido mostrar en su
+   *  dashboard. Las que tienen actividad (apuestas/movimientos) se muestran
+   *  solas aunque no estén aquí. */
+  shownBookmakers?: Bookmaker[];
 }
 
 /** Última posición conocida de un usuario en un grupo + dirección del último

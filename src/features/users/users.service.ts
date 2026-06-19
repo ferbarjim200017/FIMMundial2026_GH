@@ -1,4 +1,5 @@
 import {
+  arrayRemove,
   arrayUnion,
   deleteDoc,
   doc,
@@ -21,6 +22,7 @@ import {
   EMPTY_BOOKMAKER_BALANCES,
   EMPTY_USER_STATS,
   type AppUser,
+  type Bookmaker,
   type BookmakerBalances,
   type CashMovement,
   type RankMovementMap,
@@ -268,6 +270,28 @@ export async function setCashMovements(
   movements: CashMovement[]
 ): Promise<void> {
   await updateDoc(doc(db, USERS, uid), { cashMovements: movements });
+}
+
+// ---------- Casas opcionales mostradas en el dashboard ----------
+
+/** Muestra una casa opcional (Betfair/Luckia) en el dashboard del usuario. */
+export async function addShownBookmaker(
+  uid: string,
+  bookmaker: Bookmaker
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    shownBookmakers: arrayUnion(bookmaker),
+  });
+}
+
+/** Oculta una casa opcional del dashboard del usuario. */
+export async function removeShownBookmaker(
+  uid: string,
+  bookmaker: Bookmaker
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    shownBookmakers: arrayRemove(bookmaker),
+  });
 }
 
 /**
