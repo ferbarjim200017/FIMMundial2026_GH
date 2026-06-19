@@ -17,7 +17,6 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betInGroup,
-  betOutcome,
   bookmakerLabel,
   computeUserStats,
   round2,
@@ -204,8 +203,10 @@ export default function HallOfFamePage() {
       .sort((a, b) => (a.profit ?? 0) - (b.profit ?? 0))
       .slice(0, 3);
 
+    // "Acertada" = ganada DE VERDAD (status won). Un cashout NO cuenta como
+    // acierto aunque deje beneficio: cerraste antes y no se cumplió la cuota.
     const topOdds = [...settled]
-      .filter((b) => betOutcome(b) === "won")
+      .filter((b) => b.status === "won")
       .sort((a, b) => b.odds - a.odds)
       .slice(0, 3);
 
@@ -217,7 +218,7 @@ export default function HallOfFamePage() {
       .slice(0, 3);
 
     const topCombo = [...settled]
-      .filter((b) => b.isCombo && betOutcome(b) === "won")
+      .filter((b) => b.isCombo && b.status === "won")
       .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
       .slice(0, 3);
 
