@@ -294,6 +294,23 @@ export async function removeShownBookmaker(
   });
 }
 
+// ---------- Stake medio / por defecto ----------
+
+/**
+ * Guarda el stake medio/por defecto del usuario. Es 1 sola escritura en su
+ * propio documento (ya suscrito por el AuthContext), así que se refleja al
+ * instante sin lecturas ni listeners extra. Solo sirve para pre-rellenar el
+ * formulario de crear apuesta.
+ */
+export async function updateDefaultStake(
+  uid: string,
+  stake: number
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    defaultStake: round2(stake),
+  });
+}
+
 /**
  * Suscripción al snapshot de movimiento de posiciones de un grupo
  * (`rankMovements/{groupId}` → { [uid]: RankMovement }). Si las reglas aún no

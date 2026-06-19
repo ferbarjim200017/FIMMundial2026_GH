@@ -23,6 +23,7 @@ import {
   type BetFormValues,
 } from "@/features/bets/bets.schema";
 import { createBet, updateBet } from "@/features/bets/bets.service";
+import { updateDefaultStake } from "@/features/users/users.service";
 import {
   STAGE_LABELS,
   getMatch,
@@ -62,12 +63,9 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
   const { activeGroup, userGroups } = useGroup();
   const { appUser } = useAuth();
-  // Casa por defecto al crear una apuesta nueva. Sergiomonty1 arranca en
-  // Luckia; el resto en Bet365. (Al editar/copiar se respeta la de la apuesta.)
-  const defaultBookmaker: BetFormValues["bookmaker"] =
-    appUser?.username?.trim().toLowerCase() === "sergiomonty1"
-      ? "luckia"
-      : "bet365";
+  // Casa por defecto al crear una apuesta nueva: Bet365 para todos. (Al
+  // editar/copiar se respeta la de la apuesta original.)
+  const defaultBookmaker: BetFormValues["bookmaker"] = "bet365";
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.
@@ -92,7 +90,10 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     marketDetail: seed?.marketDetail ?? "",
     selection: seed?.selection ?? "",
     odds: seed?.odds ?? 1.5,
-    stake: seed?.stake ?? 10,
+    // Al crear una apuesta nueva pre-rellenamos con el stake medio que el
+    // usuario haya configurado (si lo tiene). Al editar/copiar se respeta el
+    // stake original (`seed`).
+    stake: seed?.stake ?? appUser?.defaultStake ?? 10,
     // En modo edición, la fecha se preserva. Al copiar, queremos "ahora" como
     // fecha de la apuesta nueva (no la del autor original).
     placedAt: initial
@@ -106,6 +107,15 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Editor del "stake medio" (stake por defecto del usuario). Es opcional y
+  // solo se usa para pre-rellenar este campo en futuras apuestas.
+  const [stakeMedioOpen, setStakeMedioOpen] = useState(false);
+  const [stakeMedioDraft, setStakeMedioDraft] = useState<string>(
+    appUser?.defaultStake != null ? String(appUser.defaultStake) : ""
+  );
+  const [stakeMedioSaving, setStakeMedioSaving] = useState(false);
+  const [stakeMedioSaved, setStakeMedioSaved] = useState(false);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedMatches, setSelectedMatches] = useState<Match[]>([]);
@@ -195,6 +205,26 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     setManualLabel(false);
     setValues((v) => ({ ...v, matchLabel: "" }));
     setPickerOpen(true);
+  }
+
+  // Guarda el stake medio del usuario (1 escritura) y lo aplica también al
+  // stake de la apuesta actual. A partir de aquí, las próximas apuestas lo
+  // pre-rellenan solas.
+  async function saveStakeMedio() {
+    const n = Number(stakeMedioDraft);
+    if (!Number.isFinite(n) || n <= 0) return;
+    setStakeMedioSaving(true);
+    setStakeMedioSaved(false);
+    try {
+      await withTimeout(updateDefaultStake(userId, n), 9000);
+    } catch (err) {
+      // Red lenta: la escritura se sincroniza en segundo plano; no bloqueamos.
+      if (!(err instanceof TimeoutError)) console.error("[stake-medio]", err);
+    } finally {
+      update("stake", n as unknown as BetFormValues["stake"]);
+      setStakeMedioSaving(false);
+      setStakeMedioSaved(true);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -472,9 +502,24 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="stake">
-              Stake (€){values.isFreebet && " · freebet"}
-            </Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="stake">
+                Stake (€){values.isFreebet && " · freebet"}
+              </Label>
+              <button
+                type="button"
+                onClick={() => {
+                  setStakeMedioOpen((o) => !o);
+                  setStakeMedioSaved(false);
+                }}
+                className="text-[11px] text-primary hover:underline"
+              >
+                Stake medio
+                {appUser?.defaultStake != null
+                  ? ` (${formatCurrency(appUser.defaultStake)})`
+                  : ""}
+              </button>
+            </div>
             <Input
               id="stake"
               type="number"
@@ -484,6 +529,49 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
               onChange={(e) => update("stake", e.target.value as unknown as number)}
             />
             {errors.stake && <p className="text-xs text-destructive">{errors.stake}</p>}
+
+            {stakeMedioOpen && (
+              <div className="mt-1.5 space-y-1.5 rounded-md border bg-muted/20 p-2.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">Tu stake medio</span>
+                  {appUser?.defaultStake != null && (
+                    <span className="text-muted-foreground">
+                      Actual: {formatCurrency(appUser.defaultStake)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={stakeMedioDraft}
+                    onChange={(e) => {
+                      setStakeMedioDraft(e.target.value);
+                      setStakeMedioSaved(false);
+                    }}
+                    placeholder="Ej: 10"
+                    className="h-8"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={saveStakeMedio}
+                    disabled={stakeMedioSaving || !stakeMedioDraft}
+                    className="shrink-0"
+                  >
+                    {stakeMedioSaving ? "Guardando…" : "Guardar"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {stakeMedioSaved
+                    ? "Guardado. Se aplicará por defecto en tus próximas apuestas."
+                    : "Se pre-rellenará automáticamente como stake en tus próximas apuestas."}
+                </p>
+              </div>
+            )}
+
             <label className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-2 text-xs">
               <input
                 type="checkbox"

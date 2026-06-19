@@ -121,12 +121,21 @@ export function MatchPickerDialog({
   const deferredSearch = useDeferredValue(search);
   const [showFinished, setShowFinished] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Renderizar las ~104 filas a la vez que corre la animación de apertura del
+  // diálogo la dejaba lageada/bugeada. Esperamos a que termine la animación
+  // (~200ms) y solo entonces montamos la lista: el popup abre suave y la lista
+  // aparece justo después.
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setReady(false);
+      return;
+    }
     setSelected(new Set(initialSelected));
     setSearch("");
     setShowFinished(false);
+    const t = setTimeout(() => setReady(true), 220);
     const unsub = subscribeToMatches(
       (list) => {
         setMatches(list);
@@ -134,7 +143,10 @@ export function MatchPickerDialog({
       },
       () => setLoading(false)
     );
-    return unsub;
+    return () => {
+      clearTimeout(t);
+      unsub();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -231,7 +243,7 @@ export function MatchPickerDialog({
         </div>
 
         <div className="max-h-[55vh] overflow-y-auto rounded-md border">
-          {loading ? (
+          {loading || !ready ? (
             <p className="p-6 text-center text-sm text-muted-foreground">Cargando partidos…</p>
           ) : grouped.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">

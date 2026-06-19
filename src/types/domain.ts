@@ -71,6 +71,10 @@ export interface AppUser {
    *  dashboard. Las que tienen actividad (apuestas/movimientos) se muestran
    *  solas aunque no estén aquí. */
   shownBookmakers?: Bookmaker[];
+  /** Stake medio/por defecto que el usuario configura una vez. Se pre-rellena
+   *  automáticamente en el formulario de crear apuesta. No afecta al
+   *  beneficio/ROI ni a ningún cálculo: es solo una comodidad. */
+  defaultStake?: number;
 }
 
 /** Última posición conocida de un usuario en un grupo + dirección del último
