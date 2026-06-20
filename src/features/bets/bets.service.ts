@@ -436,6 +436,62 @@ export async function settleBet(
   if (bet) await recomputeAndPersistStats(bet.userId);
 }
 
+/**
+ * Liquida VARIAS apuestas a la vez con el mismo estado (ganada/perdida/nula).
+ * Solo afecta a las que estén en `pending`; ignora el resto. Hace una
+ * transacción por apuesta (actualiza estado + saldo incremental) y, al final,
+ * recalcula las stats UNA sola vez por cada usuario afectado, en vez de una por
+ * apuesta — así no dispara lecturas/escrituras de más en Firestore.
+ */
+export async function settleManyBets(
+  betIds: string[],
+  newStatus: "won" | "lost" | "void"
+): Promise<void> {
+  if (betIds.length === 0) return;
+  const affectedUsers = new Set<string>();
+
+  for (const betId of betIds) {
+    const uid = await runTransaction(db, async (tx) => {
+      const betRef = doc(db, BETS, betId);
+      const betSnap = await tx.get(betRef);
+      if (!betSnap.exists()) return null;
+      const bet = { id: betSnap.id, ...(betSnap.data() as Omit<Bet, "id">) };
+      if (bet.status !== "pending") return null; // solo liquidamos pendientes
+
+      const userRef = doc(db, USERS, bet.userId).withConverter(userConverter);
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists()) return null;
+      const user = userSnap.data();
+
+      const oldProfit = bet.profit ?? 0;
+      const newProfit = calcProfit(
+        bet.stake,
+        bet.odds,
+        newStatus,
+        undefined,
+        !!bet.isFreebet
+      );
+      const deltaProfit = newProfit - oldProfit;
+
+      tx.update(betRef, {
+        status: newStatus,
+        profit: newProfit,
+        settledAt: serverTimestamp(),
+        history: arrayUnion(historyEntry("settled", newStatus)),
+      });
+      tx.update(doc(db, USERS, bet.userId), {
+        currentBalance: round2(user.currentBalance + deltaProfit),
+      });
+      return bet.userId;
+    });
+    if (uid) affectedUsers.add(uid);
+  }
+
+  for (const uid of affectedUsers) {
+    await recomputeAndPersistStats(uid);
+  }
+}
+
 export async function deleteBet(betId: string): Promise<void> {
   const bet = await getBet(betId);
   if (!bet) return;

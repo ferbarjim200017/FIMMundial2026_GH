@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
-import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
+import { deleteBet, settleManyBets, unsettleBet } from "@/features/bets/bets.service";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
 import type { Bet } from "@/types/domain";
@@ -32,9 +32,53 @@ function marketLabel(value: string): string {
 export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
   const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
+  // Selección múltiple para liquidar en bloque.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   function canManage(bet: Bet): boolean {
     return isAdmin || bet.userId === ownerUid;
+  }
+
+  // Solo se pueden seleccionar las que el usuario puede gestionar y están
+  // pendientes (la liquidación en bloque es ganada/perdida/nula).
+  const selectableIds = bets
+    .filter((b) => canManage(b) && b.status === "pending")
+    .map((b) => b.id);
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      selectableIds.every((id) => prev.has(id))
+        ? new Set()
+        : new Set(selectableIds)
+    );
+  }
+
+  async function handleBulk(status: "won" | "lost" | "void") {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const label = { won: "ganadas", lost: "perdidas", void: "nulas" }[status];
+    if (!confirm(`¿Marcar ${ids.length} apuesta(s) como ${label}?`)) return;
+    setBulkBusy(true);
+    try {
+      await settleManyBets(ids, status);
+      setSelected(new Set());
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al actualizar");
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function handleDelete(bet: Bet) {
@@ -83,10 +127,64 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
 
   return (
     <>
+      {/* Barra de acciones en bloque (aparece al seleccionar) */}
+      {selected.size > 0 && (
+        <div className="sticky top-16 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 shadow-sm">
+          <span className="text-sm font-medium">
+            {selected.size} seleccionada{selected.size > 1 ? "s" : ""}
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleBulk("won")}
+              disabled={bulkBusy}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Ganadas
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => handleBulk("lost")}
+              disabled={bulkBusy}
+            >
+              Perdidas
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulk("void")}
+              disabled={bulkBusy}
+            >
+              Nulas
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+              disabled={bulkBusy}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/30 text-left text-xs uppercase text-muted-foreground">
             <tr>
+              <th className="w-8 px-3 py-2">
+                {selectableIds.length > 0 && (
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Seleccionar todas"
+                    className="cursor-pointer"
+                  />
+                )}
+              </th>
               <th className="px-3 py-2">Fecha</th>
               <th className="px-3 py-2">Partido</th>
               <th className="px-3 py-2">Mercado / Selección</th>
@@ -102,9 +200,22 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
             {bets.map((b) => (
               <tr
                 key={b.id}
-                className="cursor-pointer border-b last:border-0 hover:bg-accent/30"
+                className={`cursor-pointer border-b last:border-0 hover:bg-accent/30 ${
+                  selected.has(b.id) ? "bg-primary/5" : ""
+                }`}
                 onClick={() => openBet(b)}
               >
+                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                  {canManage(b) && b.status === "pending" && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(b.id)}
+                      onChange={() => toggleOne(b.id)}
+                      aria-label="Seleccionar apuesta"
+                      className="cursor-pointer"
+                    />
+                  )}
+                </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   {formatDateTime(b.createdAt.toDate())}
                 </td>
