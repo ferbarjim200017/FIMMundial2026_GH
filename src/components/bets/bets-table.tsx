@@ -201,9 +201,18 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
               <tr
                 key={b.id}
                 className={`cursor-pointer border-b last:border-0 hover:bg-accent/30 ${
-                  selected.has(b.id) ? "bg-primary/5" : ""
+                  selected.has(b.id) ? "bg-primary/10" : ""
                 }`}
-                onClick={() => openBet(b)}
+                onClick={() => {
+                  // En modo selección (ya hay algo marcado) un clic en cualquier
+                  // parte de la fila la marca/desmarca, si es seleccionable. Si no
+                  // hay nada marcado, se comporta como antes: abre el detalle.
+                  if (selected.size > 0 && canManage(b) && b.status === "pending") {
+                    toggleOne(b.id);
+                  } else {
+                    openBet(b);
+                  }
+                }}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   {canManage(b) && b.status === "pending" && (
