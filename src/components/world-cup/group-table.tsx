@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GROUP_COLORS } from "@/features/matches/stage-styles";
 import { cn } from "@/lib/utils";
 import type { GroupId, Match } from "@/types/domain";
-import { computeGroupStandings, type TeamStanding } from "@/features/standings/standings.utils";
+import {
+  computeGroupStandings,
+  eliminatedFromTop2,
+  type TeamStanding,
+} from "@/features/standings/standings.utils";
 
 interface Props {
   groupId: GroupId;
@@ -14,6 +18,7 @@ interface Props {
 
 export function GroupTable({ groupId, matches, compact }: Props) {
   const standings = computeGroupStandings(groupId, matches);
+  const eliminated = eliminatedFromTop2(groupId, matches);
   const hasAny = standings.some((s) => s.played > 0);
   const groupStyle = GROUP_COLORS[groupId];
 
@@ -60,7 +65,12 @@ export function GroupTable({ groupId, matches, compact }: Props) {
           </thead>
           <tbody>
             {standings.map((s) => (
-              <Row key={s.teamLabel} s={s} compact={compact} />
+              <Row
+                key={s.teamLabel}
+                s={s}
+                compact={compact}
+                eliminated={eliminated.has(s.teamLabel)}
+              />
             ))}
           </tbody>
         </table>
@@ -69,28 +79,51 @@ export function GroupTable({ groupId, matches, compact }: Props) {
   );
 }
 
-function Row({ s, compact }: { s: TeamStanding; compact?: boolean }) {
+function Row({
+  s,
+  compact,
+  eliminated,
+}: {
+  s: TeamStanding;
+  compact?: boolean;
+  eliminated?: boolean;
+}) {
   // Marcas visuales para los puestos:
   //  - 1.º y 2.º clasifican directo (verde)
   //  - 3.º depende de la tabla de terceros (ámbar)
   //  - 4.º eliminado (rojo tenue)
   const rank = s.rank ?? 0;
-  const indicatorClass =
-    rank === 1 || rank === 2
+  const indicatorClass = eliminated
+    ? "bg-loss"
+    : rank === 1 || rank === 2
       ? "bg-profit/70"
       : rank === 3
         ? "bg-amber-500/80"
         : "bg-loss/40";
 
   return (
-    <tr className="border-b last:border-0 hover:bg-accent/30">
+    <tr
+      className={cn(
+        "border-b last:border-0 hover:bg-accent/30",
+        eliminated && "bg-loss/10"
+      )}
+    >
       <td className="px-2 py-1.5 text-center">
         <div className="flex items-center justify-center gap-1.5">
           <span className={cn("h-1.5 w-1.5 rounded-full", indicatorClass)} />
           <span className="font-medium">{rank}</span>
         </div>
       </td>
-      <td className="px-2 py-1.5 font-medium">{s.teamLabel}</td>
+      <td className="px-2 py-1.5 font-medium">
+        <span className={cn(eliminated && "text-muted-foreground line-through")}>
+          {s.teamLabel}
+        </span>
+        {eliminated && (
+          <span className="ml-1.5 rounded bg-loss/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-loss">
+            Eliminado
+          </span>
+        )}
+      </td>
       <td className="px-2 py-1.5 text-center font-mono">{s.played}</td>
       <td className="px-2 py-1.5 text-center font-mono">{s.won}</td>
       <td className="px-2 py-1.5 text-center font-mono">{s.drawn}</td>

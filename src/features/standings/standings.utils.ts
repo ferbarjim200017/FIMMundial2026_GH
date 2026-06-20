@@ -128,6 +128,80 @@ function compareStandings(a: TeamStanding, b: TeamStanding): number {
   return a.teamLabel.localeCompare(b.teamLabel);
 }
 
+/**
+ * Equipos del grupo que YA NO pueden acabar en el top-2 (clasificación directa),
+ * pase lo que pase en los partidos que faltan. Lo calcula simulando TODOS los
+ * resultados posibles de los partidos pendientes del grupo: si en ningún
+ * escenario el equipo termina 1.º o 2.º, está eliminado de la clasificación
+ * directa. Devuelve vacío si el grupo aún no está completo o no se ha jugado
+ * nada (al principio nadie está eliminado).
+ *
+ * Nota: un 3.º eliminado del top-2 aún podría colarse como mejor tercero; esto
+ * marca la eliminación de la clasificación DIRECTA, que es la lectura práctica
+ * de "está fuera" (p. ej. un último de grupo sin opciones).
+ */
+export function eliminatedFromTop2(
+  groupId: GroupId,
+  matches: Match[]
+): Set<string> {
+  const groupMatches = matches.filter(
+    (m) => m.stage === "group" && m.groupId === groupId
+  );
+  const labels = [
+    ...new Set(groupMatches.flatMap((m) => [m.homeLabel, m.awayLabel])),
+  ];
+  if (labels.length < 4) return new Set();
+
+  const finished = groupMatches.filter(
+    (m) => m.status === "finished" && m.result
+  );
+  if (finished.length === 0) return new Set();
+  const remaining = groupMatches.filter(
+    (m) => !(m.status === "finished" && m.result)
+  );
+
+  const base: Record<string, number> = {};
+  for (const l of labels) base[l] = 0;
+  for (const m of finished) {
+    const r = m.result!;
+    if (r.homeGoals > r.awayGoals) base[m.homeLabel] += 3;
+    else if (r.homeGoals === r.awayGoals) {
+      base[m.homeLabel] += 1;
+      base[m.awayLabel] += 1;
+    } else base[m.awayLabel] += 3;
+  }
+
+  const canTop2: Record<string, boolean> = {};
+  for (const l of labels) canTop2[l] = false;
+
+  const total = 3 ** remaining.length;
+  for (let mask = 0; mask < total; mask++) {
+    const pts = { ...base };
+    let x = mask;
+    for (const m of remaining) {
+      const outcome = x % 3;
+      x = Math.floor(x / 3);
+      if (outcome === 0) pts[m.homeLabel] += 3; // gana local
+      else if (outcome === 1) {
+        pts[m.homeLabel] += 1; // empate
+        pts[m.awayLabel] += 1;
+      } else pts[m.awayLabel] += 3; // gana visitante
+    }
+    for (const l of labels) {
+      // Si menos de 2 equipos tienen ESTRICTAMENTE más puntos, este equipo
+      // podría quedar 1.º o 2.º (le damos el beneficio del empate).
+      const strictlyAbove = labels.filter(
+        (o) => o !== l && pts[o] > pts[l]
+      ).length;
+      if (strictlyAbove < 2) canTop2[l] = true;
+    }
+  }
+
+  const out = new Set<string>();
+  for (const l of labels) if (!canTop2[l]) out.add(l);
+  return out;
+}
+
 // ============================================================
 // Tabla de los 12 terceros (criterios FIFA)
 // ============================================================
