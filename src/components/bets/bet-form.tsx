@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Layers, Plus, Trash2, X } from "lucide-react";
+import { CalendarPlus, Layers, Plus, Trash2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,6 +138,48 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   }
   function removeRung(i: number) {
     setRungs((rs) => (rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs));
+  }
+
+  // ---------- Generador de la escalera ----------
+  // Rellena los peldaños a partir de una frase con "#" (donde va el número), un
+  // número inicial, dirección (sube/baja), paso y nº de peldaños. Opcional: baja
+  // el stake al 50% en cada peldaño. Las cuotas las pone el usuario a mano.
+  const [gen, setGen] = useState({
+    phrase: "Más de # córners",
+    start: "5",
+    dir: "up" as "up" | "down",
+    step: "1",
+    count: "3",
+    baseStake: defaultRungStake,
+    halve: false,
+  });
+
+  function generateRungs() {
+    const start = Number(gen.start);
+    const step = Number(gen.step) || 1;
+    const count = Math.floor(Number(gen.count) || 0);
+    const base = Number(gen.baseStake) || 0;
+    if (!Number.isFinite(start) || count < 2 || count > 20) {
+      setServerError(
+        "Revisa el generador: número inicial válido y entre 2 y 20 peldaños."
+      );
+      return;
+    }
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const fmt = (n: number) =>
+      Number.isInteger(n) ? String(n) : String(r2(n)).replace(".", ",");
+    const sign = gen.dir === "up" ? 1 : -1;
+    const next: LadderRung[] = [];
+    for (let i = 0; i < count; i++) {
+      const num = start + sign * step * i;
+      const sel = gen.phrase.includes("#")
+        ? gen.phrase.replace(/#/g, fmt(num))
+        : `${gen.phrase} ${fmt(num)}`.trim();
+      const stake = gen.halve ? r2(base / Math.pow(2, i)) : base;
+      next.push({ selection: sel, odds: "", stake: base > 0 ? String(stake) : "" });
+    }
+    setRungs(next);
+    setServerError(null);
   }
 
   const ladderTotals = useMemo(() => {
@@ -720,6 +762,100 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
                 Ej. córners: «Más de 5» (stake alto, cuota baja), «Más de 6», «Más de
                 7»… bajando el stake según sube la cuota.
               </p>
+
+              {/* Generador rápido */}
+              <div className="space-y-2.5 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Generador rápido</span>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Frase (pon # donde va el número)</Label>
+                  <Input
+                    value={gen.phrase}
+                    onChange={(e) => setGen((g) => ({ ...g, phrase: e.target.value }))}
+                    placeholder="Más de # córners"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Nº inicial</Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={gen.start}
+                      onChange={(e) => setGen((g) => ({ ...g, start: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Dirección</Label>
+                    <Select
+                      value={gen.dir}
+                      onValueChange={(v) => setGen((g) => ({ ...g, dir: v as "up" | "down" }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="up">Sube ↑</SelectItem>
+                        <SelectItem value="down">Baja ↓</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Paso</Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={gen.step}
+                      onChange={(e) => setGen((g) => ({ ...g, step: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Nº peldaños</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={gen.count}
+                      onChange={(e) => setGen((g) => ({ ...g, count: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Stake base (€)</Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={gen.baseStake}
+                      onChange={(e) => setGen((g) => ({ ...g, baseStake: e.target.value }))}
+                    />
+                  </div>
+                  <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-2.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={gen.halve}
+                      onChange={(e) => setGen((g) => ({ ...g, halve: e.target.checked }))}
+                    />
+                    <span className="font-medium text-foreground">
+                      Bajar stake 50% por peldaño
+                    </span>
+                  </label>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={generateRungs}
+                  className="w-full"
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Generar peldaños
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  Reemplaza los peldaños de abajo. Las cuotas las pones tú en cada uno.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {rungs.map((r, i) => {
                   const ret = (Number(r.odds) || 0) * (Number(r.stake) || 0);
