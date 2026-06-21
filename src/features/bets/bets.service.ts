@@ -260,6 +260,9 @@ export async function createBet(input: CreateBetInput): Promise<string> {
     groupId: groupIds[0],
     groupIds,
     createdAt: Timestamp.fromDate(placedAtDate),
+    // Hora real de guardado (server). Permite ordenar "por registro" aunque la
+    // fecha de la apuesta (createdAt) sea anterior.
+    addedAt: serverTimestamp(),
     settledAt: null,
     bookmaker: input.bookmaker,
     ...(input.bookmaker === "other" && input.bookmakerLabel

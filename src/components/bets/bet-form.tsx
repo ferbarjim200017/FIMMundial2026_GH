@@ -53,6 +53,17 @@ function toLocalDatetimeValue(d: Date): string {
   return new Date(d.getTime() - tz).toISOString().slice(0, 16);
 }
 
+/** Fecha local con milisegundos y SIN zona horaria ("2026-06-21T18:00:00.003"),
+ *  que `new Date()` interpreta como hora local. Se usa para desplazar unos ms el
+ *  createdAt de cada peldaño de una escalera y que no empaten al ordenar. */
+function toLocalMsString(d: Date): string {
+  const p = (n: number, len = 2) => String(n).padStart(len, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`
+  );
+}
+
 function composeLabel(matches: Match[]): string {
   if (matches.length === 0) return "";
   if (matches.length === 1) return matchLabel(matches[0]);
@@ -350,12 +361,27 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       return;
     }
 
+    // Desplazamos el createdAt de cada peldaño unos ms (mismo minuto visible) para
+    // que NO empaten y la escalera salga SIEMPRE en orden (peldaño 1 arriba).
+    const baseMs = new Date(values.placedAt).getTime();
+    const n = items.length;
+    const ordered = items.map((it, i) => ({
+      ...it,
+      placedAt: toLocalMsString(new Date(baseMs + (n - i))),
+    }));
+
     setSubmitting(true);
     const finish = () => (onDone ? onDone() : router.push(ROUTES.bets));
     try {
+      // Secuencial en orden inverso: el peldaño 1 se guarda el último, así también
+      // queda arriba al ordenar por "registro" (addedAt = hora real de guardado).
       await withTimeout(
-        Promise.all(items.map((it) => createBet({ ...it, userId }))),
-        15000
+        (async () => {
+          for (let i = ordered.length - 1; i >= 0; i--) {
+            await createBet({ ...ordered[i], userId });
+          }
+        })(),
+        20000
       );
       finish();
     } catch (err) {

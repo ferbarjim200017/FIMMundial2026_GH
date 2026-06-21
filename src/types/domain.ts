@@ -208,7 +208,12 @@ export interface Bet {
    *  consumidor antiguo no se rompa, pero las apuestas nuevas no lo
    *  consultan. */
   groupId: string;
+  /** Fecha de la apuesta indicada por el usuario (puede ser pasada). Es por lo
+   *  que se ordena por defecto la lista. */
   createdAt: Timestamp;
+  /** Momento REAL en que se guardó en la base de datos (serverTimestamp). Sirve
+   *  para ordenar "por registro". Opcional: las apuestas antiguas no lo tienen. */
+  addedAt?: Timestamp;
   settledAt: Timestamp | null;
   bookmaker: Bookmaker;
   bookmakerLabel?: string;     // si es "other"

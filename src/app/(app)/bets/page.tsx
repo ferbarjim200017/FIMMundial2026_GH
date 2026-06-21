@@ -42,6 +42,8 @@ export default function BetsPage() {
   // Filtro por partido ("all" o un id) + lista de partidos para el desplegable.
   const [matchFilter, setMatchFilter] = useState("all");
   const [matches, setMatches] = useState<Match[]>([]);
+  // Orden de la lista: por fecha de la apuesta (createdAt) o por registro real.
+  const [sortBy, setSortBy] = useState<"placed" | "added">("placed");
 
   useEffect(() => {
     const unsub = subscribeToMatches(setMatches);
@@ -104,6 +106,24 @@ export default function BetsPage() {
     matchFilter,
     normalizedQuery,
   ]);
+
+  // La query ya viene por createdAt desc; reordenamos en cliente si el usuario
+  // elige "por registro" (addedAt, con createdAt como desempate para que las
+  // escaleras queden juntas y en orden).
+  const sortedBets = useMemo(() => {
+    const arr = [...bets];
+    if (sortBy === "added") {
+      arr.sort((a, b) => {
+        const av = (a.addedAt ?? a.createdAt).toMillis();
+        const bv = (b.addedAt ?? b.createdAt).toMillis();
+        if (bv !== av) return bv - av;
+        return b.createdAt.toMillis() - a.createdAt.toMillis();
+      });
+    } else {
+      arr.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+    }
+    return arr;
+  }, [bets, sortBy]);
 
   const stats = useMemo(() => summarize(bets), [bets]);
 
@@ -236,6 +256,22 @@ export default function BetsPage() {
             </Select>
           </div>
 
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Orden</label>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as "placed" | "added")}
+            >
+              <SelectTrigger className="h-9 w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="placed">Por fecha de la apuesta</SelectItem>
+                <SelectItem value="added">Por orden de registro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <MatchFilter
             matches={matches}
             value={matchFilter}
@@ -248,7 +284,7 @@ export default function BetsPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando apuestas…</p>
       ) : (
-        <BetsTable bets={bets} ownerUid={appUser.uid} isAdmin={isAdmin} />
+        <BetsTable bets={sortedBets} ownerUid={appUser.uid} isAdmin={isAdmin} />
       )}
     </div>
   );
