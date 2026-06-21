@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, X } from "lucide-react";
+import { CalendarPlus, Layers, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,10 @@ function composeLabel(matches: Match[]): string {
   return matches.map((m) => `${m.homeLabel} vs ${m.awayLabel}`).join(" + ");
 }
 
+/** Un peldaño de la escalera: una apuesta con su propia selección/cuota/stake.
+ *  Los inputs son strings; se parsean al validar con el schema. */
+type LadderRung = { selection: string; odds: string; stake: string };
+
 export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
   const { activeGroup, userGroups } = useGroup();
@@ -107,6 +111,50 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // ---------- Escalera (solo al CREAR) ----------
+  // Una "escalera" deja meter varios peldaños (selección + cuota + stake) y, al
+  // guardar, crea UNA apuesta por peldaño (mismo partido/casa/mercado/fecha).
+  // Ej.: córners → Más de 5 (stake alto, cuota baja), Más de 6, Más de 7… con
+  // stake bajando según sube la cuota.
+  const isEditing = !!initial;
+  const [ladder, setLadder] = useState(false);
+  const defaultRungStake = String(seed?.stake ?? appUser?.defaultStake ?? 10);
+  const [rungs, setRungs] = useState<LadderRung[]>(() => [
+    { selection: "", odds: "", stake: defaultRungStake },
+    { selection: "", odds: "", stake: defaultRungStake },
+  ]);
+
+  function updateRung(i: number, key: keyof LadderRung, val: string) {
+    setRungs((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+    setServerError(null);
+  }
+  function addRung() {
+    setRungs((rs) => {
+      const last = rs[rs.length - 1];
+      // Copiamos el último peldaño como punto de partida (cómodo para ir subiendo).
+      return [...rs, last ? { ...last } : { selection: "", odds: "", stake: defaultRungStake }];
+    });
+  }
+  function removeRung(i: number) {
+    setRungs((rs) => (rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs));
+  }
+
+  const ladderTotals = useMemo(() => {
+    let stake = 0;
+    let ret = 0;
+    let count = 0;
+    for (const r of rungs) {
+      const o = Number(r.odds) || 0;
+      const s = Number(r.stake) || 0;
+      if (o > 1 && s > 0 && r.selection.trim().length > 0) {
+        stake += s;
+        ret += o * s;
+        count += 1;
+      }
+    }
+    return { stake, ret, profit: ret - stake, count };
+  }, [rungs]);
 
   // Editor del "stake medio" (stake por defecto del usuario). Es opcional y
   // solo se usa para pre-rellenar este campo en futuras apuestas.
@@ -227,8 +275,64 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     }
   }
 
+  /** Crea una apuesta por cada peldaño válido de la escalera. */
+  async function handleLadderSubmit() {
+    setServerError(null);
+    const items: BetFormValues[] = [];
+    const issues: string[] = [];
+    rungs.forEach((r, i) => {
+      const candidate = {
+        ...values,
+        selection: r.selection,
+        odds: r.odds as unknown as number,
+        stake: r.stake as unknown as number,
+      };
+      const parsed = betFormSchema.safeParse(candidate);
+      if (!parsed.success) {
+        issues.push(`Peldaño ${i + 1}: ${parsed.error.issues[0]?.message ?? "datos incompletos"}`);
+      } else {
+        items.push(parsed.data);
+      }
+    });
+
+    if (issues.length > 0) {
+      setServerError(issues.join(" · "));
+      return;
+    }
+    if (items.length < 2) {
+      setServerError("Una escalera necesita al menos 2 peldaños válidos.");
+      return;
+    }
+    if ((items[0].groupIds ?? []).length === 0) {
+      setServerError("Selecciona al menos un grupo al que asignar la escalera.");
+      return;
+    }
+
+    setSubmitting(true);
+    const finish = () => (onDone ? onDone() : router.push(ROUTES.bets));
+    try {
+      await withTimeout(
+        Promise.all(items.map((it) => createBet({ ...it, userId }))),
+        15000
+      );
+      finish();
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        finish();
+      } else {
+        setServerError(err instanceof Error ? err.message : "Error al guardar la escalera");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (ladder && !isEditing) {
+      await handleLadderSubmit();
+      return;
+    }
     const parsed = betFormSchema.safeParse(values);
     if (!parsed.success) {
       const fieldErrors: Record<string, string> = {};
@@ -469,6 +573,26 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
             </Select>
           </div>
 
+          {!isEditing && (
+            <div className="sm:col-span-2">
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-md border bg-muted/20 px-3 py-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={ladder}
+                  onChange={(e) => setLadder(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <Layers className="h-4 w-4 shrink-0 text-primary" />
+                <span className="font-medium text-foreground">Escalera</span>
+                <span className="text-xs text-muted-foreground">
+                  — crea varias apuestas de una (distinta cuota y stake por peldaño)
+                </span>
+              </label>
+            </div>
+          )}
+
+          {!ladder && (
+          <>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="selection">Selección</Label>
             <Input
@@ -581,6 +705,92 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
               <span className="font-medium text-foreground">Freebet</span>
             </label>
           </div>
+          </>
+          )}
+
+          {ladder && (
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Peldaños de la escalera</Label>
+                <span className="text-xs text-muted-foreground">
+                  Cada peldaño = una apuesta
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ej. córners: «Más de 5» (stake alto, cuota baja), «Más de 6», «Más de
+                7»… bajando el stake según sube la cuota.
+              </p>
+              <div className="space-y-2">
+                {rungs.map((r, i) => {
+                  const ret = (Number(r.odds) || 0) * (Number(r.stake) || 0);
+                  return (
+                    <div key={i} className="rounded-md border bg-muted/10 p-2.5">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Peldaño {i + 1}
+                        </span>
+                        {rungs.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => removeRung(i)}
+                            className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                            aria-label={`Quitar peldaño ${i + 1}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_7rem_7rem]">
+                        <Input
+                          className="col-span-2 sm:col-span-1"
+                          placeholder="Selección (ej: Más de 5 córners)"
+                          value={r.selection}
+                          onChange={(e) => updateRung(i, "selection", e.target.value)}
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="1.01"
+                          inputMode="decimal"
+                          placeholder="Cuota"
+                          value={r.odds}
+                          onChange={(e) => updateRung(i, "odds", e.target.value)}
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          inputMode="decimal"
+                          placeholder="Stake €"
+                          value={r.stake}
+                          onChange={(e) => updateRung(i, "stake", e.target.value)}
+                        />
+                      </div>
+                      {ret > 0 && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Retorno:{" "}
+                          <span className="font-mono">{formatCurrency(ret)}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={addRung}>
+                  <Plus className="h-3.5 w-3.5" /> Añadir peldaño
+                </Button>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={!!values.isFreebet}
+                    onChange={(e) => update("isFreebet", e.target.checked)}
+                  />
+                  <span className="font-medium text-foreground">Freebet (todas)</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="placedAt">Fecha y hora</Label>
@@ -611,7 +821,20 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            {values.isFreebet ? (
+            {ladder ? (
+              <>
+                {ladderTotals.count} apuesta{ladderTotals.count !== 1 ? "s" : ""} ·
+                Stake total:{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {formatCurrency(ladderTotals.stake)}
+                </span>
+                <span className="mx-2 text-border">•</span>
+                Retorno si entran todas:{" "}
+                <span className="font-mono font-medium text-profit">
+                  {formatCurrency(ladderTotals.ret)}
+                </span>
+              </>
+            ) : values.isFreebet ? (
               <>
                 Beneficio potencial (freebet):{" "}
                 <span className="font-mono font-medium text-profit">
@@ -642,7 +865,13 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Guardando…" : initial ? "Guardar cambios" : "Registrar apuesta"}
+              {submitting
+                ? "Guardando…"
+                : isEditing
+                ? "Guardar cambios"
+                : ladder
+                ? `Crear escalera (${ladderTotals.count})`
+                : "Registrar apuesta"}
             </Button>
           </div>
         </CardContent>
