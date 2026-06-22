@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex flex-1">
           <Sidebar />
           {/* En móvil dejamos espacio inferior para la BottomNav (h-14 + safe-area). */}
-          <main className="flex-1 overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6">
+          <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6">
             {children}
           </main>
         </div>

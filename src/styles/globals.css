@@ -81,6 +81,11 @@
   html, body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Evita el desbordamiento horizontal en móvil (contenido que se salía y se
+     *  cortaba sin poder desplazar). `clip` recorta sin crear contenedor de
+     *  scroll, así que NO rompe el `position: sticky` de la barra superior. */
+    overflow-x: clip;
+    max-width: 100%;
   }
   h1, h2, h3 {
     font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
