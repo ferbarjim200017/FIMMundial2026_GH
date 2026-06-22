@@ -71,6 +71,10 @@ export interface AppUser {
    *  dashboard. Las que tienen actividad (apuestas/movimientos) se muestran
    *  solas aunque no estén aquí. */
   shownBookmakers?: Bookmaker[];
+  /** Casas opcionales que el usuario ha OCULTADO a mano. Tiene prioridad sobre la
+   *  actividad: si está aquí, su panel no se muestra aunque tenga apuestas/saldo
+   *  (los datos siguen contando en las estadísticas). */
+  hiddenBookmakers?: Bookmaker[];
   /** Stake medio/por defecto que el usuario configura una vez. Se pre-rellena
    *  automáticamente en el formulario de crear apuesta. No afecta al
    *  beneficio/ROI ni a ningún cálculo: es solo una comodidad. */

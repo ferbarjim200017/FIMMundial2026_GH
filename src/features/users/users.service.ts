@@ -294,6 +294,32 @@ export async function removeShownBookmaker(
   });
 }
 
+/**
+ * Oculta una casa opcional del dashboard AUNQUE tenga actividad (apuestas, saldo
+ * o movimientos). Solo quita el PANEL; las apuestas y datos siguen contando en
+ * las estadísticas. `hiddenBookmakers` tiene prioridad sobre la actividad.
+ */
+export async function hideBookmaker(
+  uid: string,
+  bookmaker: Bookmaker
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    hiddenBookmakers: arrayUnion(bookmaker),
+    shownBookmakers: arrayRemove(bookmaker),
+  });
+}
+
+/** Vuelve a mostrar una casa que se había ocultado. */
+export async function unhideBookmaker(
+  uid: string,
+  bookmaker: Bookmaker
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    hiddenBookmakers: arrayRemove(bookmaker),
+    shownBookmakers: arrayUnion(bookmaker),
+  });
+}
+
 // ---------- Stake medio / por defecto ----------
 
 /**

@@ -78,9 +78,9 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
   const { activeGroup, userGroups } = useGroup();
   const { appUser } = useAuth();
-  // Casa por defecto al crear una apuesta nueva: Bet365 para todos. (Al
-  // editar/copiar se respeta la de la apuesta original.)
-  const defaultBookmaker: BetFormValues["bookmaker"] = "bet365";
+  // Casa por defecto al crear una apuesta nueva: Winamax. (Al editar/copiar se
+  // respeta la de la apuesta original.)
+  const defaultBookmaker: BetFormValues["bookmaker"] = "winamax";
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.

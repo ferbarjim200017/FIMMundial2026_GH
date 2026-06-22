@@ -46,8 +46,8 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
 import { CashMovementDialog } from "@/components/dashboard/cash-movement-dialog";
 import {
-  addShownBookmaker,
-  removeShownBookmaker,
+  hideBookmaker,
+  unhideBookmaker,
   updateInitialBalances,
 } from "@/features/users/users.service";
 import {
@@ -195,12 +195,15 @@ export default function DashboardPage() {
   // (apuestas, dinero o saldo inicial) o si el usuario las ha añadido a mano.
   const OPTIONAL_HOUSES = ["betfair", "luckia"] as const;
   const shownHouses = appUser.shownBookmakers ?? [];
+  const userHidden = appUser.hiddenBookmakers ?? [];
   const houseHasActivity = (b: "betfair" | "luckia") =>
     summary[b].betsCount > 0 ||
     summary[b].netCash !== 0 ||
     summary[b].initial !== 0;
+  // Ocultada a mano (hiddenBookmakers) tiene prioridad: no se muestra aunque
+  // tenga actividad (las apuestas siguen contando en las estadísticas).
   const showHouse = (b: "betfair" | "luckia") =>
-    houseHasActivity(b) || shownHouses.includes(b);
+    !userHidden.includes(b) && (houseHasActivity(b) || shownHouses.includes(b));
   const hiddenHouses = OPTIONAL_HOUSES.filter((b) => !showHouse(b));
 
   return (
@@ -364,13 +367,8 @@ export default function DashboardPage() {
               current={summary.betfair.current}
               pendingStake={summary.betfair.pendingStake}
               betsCount={summary.betfair.betsCount}
-              onHide={
-                houseHasActivity("betfair")
-                  ? undefined
-                  : () =>
-                      removeShownBookmaker(appUser.uid, "betfair").catch(
-                        console.error
-                      )
+              onHide={() =>
+                hideBookmaker(appUser.uid, "betfair").catch(console.error)
               }
             />
           )}
@@ -384,13 +382,8 @@ export default function DashboardPage() {
               current={summary.luckia.current}
               pendingStake={summary.luckia.pendingStake}
               betsCount={summary.luckia.betsCount}
-              onHide={
-                houseHasActivity("luckia")
-                  ? undefined
-                  : () =>
-                      removeShownBookmaker(appUser.uid, "luckia").catch(
-                        console.error
-                      )
+              onHide={() =>
+                hideBookmaker(appUser.uid, "luckia").catch(console.error)
               }
             />
           )}
@@ -415,7 +408,7 @@ export default function DashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  addShownBookmaker(appUser.uid, b).catch(console.error)
+                  unhideBookmaker(appUser.uid, b).catch(console.error)
                 }
                 className="h-8 gap-1.5"
               >
@@ -716,8 +709,9 @@ function BookmakerCard({
   current: number;
   pendingStake: number;
   betsCount: number;
-  /** Si se pasa, muestra un botón para ocultar la tarjeta (casas opcionales
-   *  sin actividad). */
+  /** Si se pasa, muestra un botón para ocultar la tarjeta. Para casas opcionales
+   *  (Betfair/Luckia) está siempre disponible; oculta solo el panel, los datos
+   *  siguen contando. Se vuelve a mostrar desde "Añadir casa". */
   onHide?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
