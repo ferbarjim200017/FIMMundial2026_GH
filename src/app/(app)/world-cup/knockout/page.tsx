@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { subscribeToMatches } from "@/features/matches/matches.service";
+import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
 import { STAGE_STYLES } from "@/features/matches/stage-styles";
 import { cn } from "@/lib/utils";
 import type { Match, MatchStage } from "@/types/domain";
@@ -63,6 +64,24 @@ export default function KnockoutPage() {
 
   const presentStages = BRACKET_STAGES.filter((s) => byStage[s].length > 0);
 
+  // Resolución PROVISIONAL del cuadro con la clasificación actual (se recalcula
+  // en cada render, así cada resultado nuevo actualiza los cruces). No persiste.
+  const overrides = resolveBracketProvisional(matches);
+  const displayProps = (m: Match) => {
+    const ov = overrides.get(m.id);
+    const sub = (s: { slot: string; provisional: boolean } | null | undefined) =>
+      s ? `${s.slot}${s.provisional ? " · prov." : ""}` : undefined;
+    return {
+      match: {
+        ...m,
+        homeLabel: ov?.home?.team ?? m.homeLabel,
+        awayLabel: ov?.away?.team ?? m.awayLabel,
+      },
+      homeSub: sub(ov?.home),
+      awaySub: sub(ov?.away),
+    };
+  };
+
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-yellow-500/40 bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-transparent">
@@ -71,8 +90,10 @@ export default function KnockoutPage() {
             🏆 Cuadro eliminatorio
           </CardTitle>
           <CardDescription>
-            Cada columna es una ronda. Las cards se alinean verticalmente con
-            el cruce de la siguiente fase.
+            Cada columna es una ronda. Los cruces se rellenan con la
+            clasificación <span className="font-medium">actual</span> de los
+            grupos (marcados «prov.»); se actualizan con cada resultado hasta
+            que terminen los grupos.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -112,7 +133,7 @@ export default function KnockoutPage() {
                       )}
                     >
                       <MatchCard
-                        match={m}
+                        {...displayProps(m)}
                         compact
                         className="bg-card"
                         onClick={setBetsFor}
@@ -140,7 +161,7 @@ export default function KnockoutPage() {
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-2">
               {byStage.third.map((m) => (
-                <MatchCard key={m.id} match={m} onClick={setBetsFor} />
+                <MatchCard key={m.id} {...displayProps(m)} onClick={setBetsFor} />
               ))}
             </div>
           </CardContent>

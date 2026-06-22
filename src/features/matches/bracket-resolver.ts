@@ -137,6 +137,117 @@ function assignThirds(matches: Match[]): Map<string, string> {
   return assignments;
 }
 
+/** Un hueco del cuadro resuelto PROVISIONALMENTE con la clasificación actual. */
+export interface ProvisionalSlot {
+  /** Equipo que va ahora mismo en esa posición. */
+  team: string;
+  /** Hueco original abreviado: "2.º A", "Mejor 3.º", "Gan. M1"… */
+  slot: string;
+  /** true si aún puede cambiar (el grupo no ha terminado). */
+  provisional: boolean;
+}
+
+/**
+ * Resuelve el cuadro con la clasificación ACTUAL (provisional), SIN esperar a
+ * que terminen los grupos. Solo para MOSTRAR (no se persiste): se recalcula en
+ * cada render, así cada resultado nuevo actualiza los cruces. Devuelve, por
+ * partido, el equipo provisional de cada lado (o null si ese hueco aún no se
+ * puede resolver, p. ej. "Mejor 3.º" antes de tener terceros).
+ */
+export function resolveBracketProvisional(
+  matches: Match[]
+): Map<string, { home: ProvisionalSlot | null; away: ProvisionalSlot | null }> {
+  // Rangos ACTUALES por grupo (1.º/2.º de la clasificación de ahora mismo).
+  const ranks = {} as Record<
+    GroupId,
+    { first: string | null; second: string | null; final: boolean }
+  >;
+  for (const g of GROUP_IDS_LOCAL) {
+    const gm = matches.filter((m) => m.stage === "group" && m.groupId === g);
+    const final = gm.length > 0 && gm.every((m) => m.status === "finished");
+    const st = computeGroupStandings(g, matches);
+    ranks[g] = {
+      first: st[0]?.teamLabel ?? null,
+      second: st[1]?.teamLabel ?? null,
+      final,
+    };
+  }
+  const allGroupsFinal = GROUP_IDS_LOCAL.every((g) => ranks[g].final);
+
+  // Mejores terceros ACTUALES, asignados greedy a sus huecos "Mejor 3.º X/Y/Z".
+  const thirdAssign = new Map<string, string>();
+  const thirdSlots: { key: string; allowed: Set<string> }[] = [];
+  for (const m of matches) {
+    if (m.stage !== "r32") continue;
+    for (const field of ["homeLabel", "awayLabel"] as const) {
+      const mt = m[field].match(BEST3_RE);
+      if (mt) thirdSlots.push({ key: `${m.id}:${field}`, allowed: new Set(mt[1].split("/")) });
+    }
+  }
+  if (thirdSlots.length > 0) {
+    const thirds = computeBestThirds(GROUP_IDS_LOCAL, matches).filter((t) => t.qualified);
+    const used = new Set<string>();
+    for (const t of thirds) {
+      if (used.has(t.teamLabel)) continue;
+      const slot = thirdSlots.find(
+        (s) => !thirdAssign.has(s.key) && s.allowed.has(t.groupId)
+      );
+      if (slot) {
+        thirdAssign.set(slot.key, t.teamLabel);
+        used.add(t.teamLabel);
+      }
+    }
+  }
+
+  const resolveField = (
+    label: string,
+    matchId: string,
+    field: "homeLabel" | "awayLabel"
+  ): ProvisionalSlot | null => {
+    let mt: RegExpMatchArray | null;
+    if ((mt = label.match(FIRST_RE))) {
+      const g = mt[1] as GroupId;
+      return ranks[g]?.first
+        ? { team: ranks[g].first!, slot: `1.º ${g}`, provisional: !ranks[g].final }
+        : null;
+    }
+    if ((mt = label.match(SECOND_RE))) {
+      const g = mt[1] as GroupId;
+      return ranks[g]?.second
+        ? { team: ranks[g].second!, slot: `2.º ${g}`, provisional: !ranks[g].final }
+        : null;
+    }
+    if (label.match(BEST3_RE)) {
+      const t = thirdAssign.get(`${matchId}:${field}`);
+      return t ? { team: t, slot: "Mejor 3.º", provisional: !allGroupsFinal } : null;
+    }
+    if ((mt = label.match(WINNER_RE))) {
+      const src = matches.find((x) => x.id === `wc26-m${mt![1]}`);
+      const w = src ? getWinnerLabel(src) : null;
+      return w ? { team: w, slot: `Gan. M${mt[1]}`, provisional: false } : null;
+    }
+    if ((mt = label.match(LOSER_RE))) {
+      const src = matches.find((x) => x.id === `wc26-m${mt![1]}`);
+      const l = src ? getLoserLabel(src) : null;
+      return l ? { team: l, slot: `Perd. M${mt[1]}`, provisional: false } : null;
+    }
+    return null;
+  };
+
+  const out = new Map<
+    string,
+    { home: ProvisionalSlot | null; away: ProvisionalSlot | null }
+  >();
+  for (const m of matches) {
+    if (m.stage === "group") continue;
+    out.set(m.id, {
+      home: resolveField(m.homeLabel, m.id, "homeLabel"),
+      away: resolveField(m.awayLabel, m.id, "awayLabel"),
+    });
+  }
+  return out;
+}
+
 /**
  * Resuelve placeholders de los partidos eliminatorios a equipos reales,
  * iterando hasta que no haya más cambios. Cada pasada propaga ganadores

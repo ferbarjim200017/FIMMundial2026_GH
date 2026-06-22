@@ -16,6 +16,9 @@ interface Props {
   compact?: boolean;
   /** Si se pasa, la tarjeta es clicable y dispara este callback. */
   onClick?: (match: Match) => void;
+  /** Subtítulo bajo cada equipo (p. ej. el hueco del cuadro: "2.º A · prov."). */
+  homeSub?: string;
+  awaySub?: string;
 }
 
 export function MatchCard({
@@ -24,6 +27,8 @@ export function MatchCard({
   className,
   compact,
   onClick,
+  homeSub,
+  awaySub,
 }: Props) {
   const kickoff = new Date(match.kickoffUtc.toMillis());
   const finished = match.status === "finished" && match.result;
@@ -140,9 +145,16 @@ export function MatchCard({
           )}
           title={match.homeLabel}
         >
-          <span className="inline-flex items-center gap-1 truncate">
+          <span className="inline-flex min-w-0 items-center gap-1">
             <TeamFlag name={match.homeLabel} />
-            <span className="truncate">{match.homeLabel}</span>
+            <span className="inline-flex min-w-0 flex-col text-right">
+              <span className="truncate">{match.homeLabel}</span>
+              {homeSub && (
+                <span className="truncate text-[9px] font-normal leading-tight text-muted-foreground">
+                  {homeSub}
+                </span>
+              )}
+            </span>
           </span>
           {homeIsSpain && spainStar}
         </div>
@@ -189,9 +201,16 @@ export function MatchCard({
           title={match.awayLabel}
         >
           {awayIsSpain && spainStar}
-          <span className="inline-flex items-center gap-1 truncate">
+          <span className="inline-flex min-w-0 items-center gap-1">
             <TeamFlag name={match.awayLabel} />
-            <span className="truncate">{match.awayLabel}</span>
+            <span className="inline-flex min-w-0 flex-col text-left">
+              <span className="truncate">{match.awayLabel}</span>
+              {awaySub && (
+                <span className="truncate text-[9px] font-normal leading-tight text-muted-foreground">
+                  {awaySub}
+                </span>
+              )}
+            </span>
           </span>
         </div>
       </div>
