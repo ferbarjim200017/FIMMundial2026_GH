@@ -14,8 +14,83 @@ import { subscribeToMatches } from "@/features/matches/matches.service";
 import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
 import { WORLDCUP_2026_MATCHES } from "@/features/matches/worldcup-fixtures";
 import { STAGE_STYLES } from "@/features/matches/stage-styles";
+import { TeamFlag } from "@/components/matches/team-flag";
+import { teamFlagCode } from "@/features/matches/teams-2026";
 import { cn } from "@/lib/utils";
 import type { Match, MatchStage } from "@/types/domain";
+
+/** Código corto para la vista mini: ARG, 2ºA, G73… */
+function abbrev(label: string): string {
+  if (teamFlagCode(label)) {
+    return label
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z]/g, "")
+      .slice(0, 3)
+      .toUpperCase();
+  }
+  let mt: RegExpMatchArray | null;
+  if ((mt = label.match(/^1\.º Grupo ([A-L])$/))) return `1º${mt[1]}`;
+  if ((mt = label.match(/^2\.º Grupo ([A-L])$/))) return `2º${mt[1]}`;
+  if (label.match(/^Mejor 3\.º/)) return "3º";
+  if ((mt = label.match(/^Ganador M(\d+)$/))) return `G${mt[1]}`;
+  if ((mt = label.match(/^Perdedor M(\d+)$/))) return `P${mt[1]}`;
+  return label.slice(0, 4);
+}
+
+/** Tarjeta minúscula para el cuadro a dos lados (cabe entero sin scroll). */
+function MiniBracketCard({
+  match,
+  onClick,
+}: {
+  match: Match;
+  onClick: (m: Match) => void;
+}) {
+  const finished = match.status === "finished" && match.result;
+  const r = match.result;
+  const row = (label: string, score: number | null, win: boolean) => {
+    const hasFlag = !!teamFlagCode(label);
+    return (
+      <div className="flex items-center justify-between gap-0.5">
+        <span className="flex min-w-0 items-center gap-0.5">
+          <TeamFlag name={label} className="h-2.5 w-3.5" />
+          {/* Con bandera, el código solo en PC; sin bandera (placeholders),
+              siempre (si no, la celda quedaría vacía en móvil). */}
+          <span
+            className={cn(
+              "truncate",
+              hasFlag ? "hidden sm:inline" : "inline",
+              win && "font-bold"
+            )}
+          >
+            {abbrev(label)}
+          </span>
+        </span>
+        {score != null && (
+          <span className={cn("font-mono", win && "font-bold text-profit")}>{score}</span>
+        )}
+      </div>
+    );
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(match)}
+      className="w-full rounded border bg-card px-1 py-0.5 text-left text-[9px] leading-tight transition-colors hover:bg-accent/40"
+    >
+      {row(
+        match.homeLabel,
+        finished ? r!.homeGoals : null,
+        !!finished && r!.homeGoals > r!.awayGoals
+      )}
+      {row(
+        match.awayLabel,
+        finished ? r!.awayGoals : null,
+        !!finished && r!.awayGoals > r!.homeGoals
+      )}
+    </button>
+  );
+}
 
 const BRACKET_STAGES: MatchStage[] = ["r32", "r16", "qf", "sf", "final"];
 
@@ -240,53 +315,39 @@ export default function KnockoutPage() {
       </div>
       )}
 
-      {/* ──────────── Vista cuadro a dos lados (final en el centro) ──────────── */}
+      {/* ──── Vista cuadro a dos lados: final en el centro, cabe sin scroll ──── */}
       {view === "bracket" && (
-        <div className="overflow-x-auto rounded-xl border bg-card/40 p-4">
-          <div
-            className="flex gap-3"
-            style={{
-              minWidth: `${bracketCols.length * 210}px`,
-              minHeight: "640px",
-            }}
-          >
+        <div className="rounded-xl border bg-card/40 p-1.5 sm:p-3">
+          <div className="flex w-full gap-0.5 sm:gap-1.5" style={{ minHeight: "440px" }}>
             {bracketCols.map((col, i) => {
               const style = STAGE_STYLES[col.stage];
               const arrow =
-                col.side === "left" ? " →" : col.side === "right" ? " ←" : "";
+                col.side === "left" ? "→" : col.side === "right" ? "←" : "";
               return (
                 <div
                   key={`${col.stage}-${col.side}-${i}`}
-                  className="flex min-w-[200px] flex-1 flex-col"
+                  className="flex min-w-0 flex-1 flex-col"
                 >
                   <div
                     className={cn(
-                      "mb-3 flex items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wider",
+                      "mb-1.5 truncate rounded px-0.5 py-0.5 text-center text-[8px] font-bold uppercase tracking-tight sm:text-[10px]",
                       style.chip
                     )}
                   >
-                    <span>
-                      {style.emoji} {style.label}
-                      {arrow}
+                    {style.emoji}
+                    <span className="hidden sm:inline">
+                      {" "}
+                      {style.shortLabel ?? style.label}
                     </span>
-                    <span className="opacity-70">({col.items.length})</span>
+                    {arrow && <span className="ml-0.5">{arrow}</span>}
                   </div>
-                  <div className="relative flex flex-1 flex-col justify-around gap-2">
+                  <div className="relative flex flex-1 flex-col justify-around gap-1">
                     {col.items.map((m) => (
-                      <div
+                      <MiniBracketCard
                         key={m.id}
-                        className={cn(
-                          "relative rounded-lg bg-gradient-to-br p-[1px]",
-                          style.gradient
-                        )}
-                      >
-                        <MatchCard
-                          {...displayProps(m)}
-                          compact
-                          className="bg-card"
-                          onClick={setBetsFor}
-                        />
-                      </div>
+                        match={displayProps(m).match}
+                        onClick={setBetsFor}
+                      />
                     ))}
                   </div>
                 </div>
