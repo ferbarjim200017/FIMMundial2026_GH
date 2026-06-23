@@ -202,6 +202,103 @@ export function eliminatedFromTop2(
   return out;
 }
 
+/**
+ * Equipos del grupo REALMENTE eliminados del Mundial (no solo de la directa).
+ * Como en el formato 2026 los 8 MEJORES TERCEROS también pasan, un equipo solo
+ * está eliminado si:
+ *  - no puede acabar ni 3.º de su grupo en ningún escenario posible (queda
+ *    encerrado en el 4.º), o
+ *  - ya terminaron TODOS los grupos y es 4.º, o 3.º fuera de los 8 mejores.
+ * Así, un 3.º con un partido por jugar (p. ej. Senegal) NO se marca eliminado:
+ * aún puede ganar y/o colarse como mejor tercero.
+ */
+export function eliminatedFromKnockout(
+  groupId: GroupId,
+  matches: Match[]
+): Set<string> {
+  const groupMatches = matches.filter(
+    (m) => m.stage === "group" && m.groupId === groupId
+  );
+  const labels = [
+    ...new Set(groupMatches.flatMap((m) => [m.homeLabel, m.awayLabel])),
+  ];
+  if (labels.length < 4) return new Set();
+
+  const finished = groupMatches.filter((m) => m.status === "finished" && m.result);
+  if (finished.length === 0) return new Set();
+  const remaining = groupMatches.filter(
+    (m) => !(m.status === "finished" && m.result)
+  );
+
+  const base: Record<string, number> = {};
+  for (const l of labels) base[l] = 0;
+  for (const m of finished) {
+    const r = m.result!;
+    if (r.homeGoals > r.awayGoals) base[m.homeLabel] += 3;
+    else if (r.homeGoals === r.awayGoals) {
+      base[m.homeLabel] += 1;
+      base[m.awayLabel] += 1;
+    } else base[m.awayLabel] += 3;
+  }
+
+  // ¿Puede acabar en el top-3 del grupo en ALGÚN escenario de los pendientes?
+  const canTop3: Record<string, boolean> = {};
+  for (const l of labels) canTop3[l] = false;
+  const total = 3 ** remaining.length;
+  for (let mask = 0; mask < total; mask++) {
+    const pts = { ...base };
+    let x = mask;
+    for (const m of remaining) {
+      const outcome = x % 3;
+      x = Math.floor(x / 3);
+      if (outcome === 0) pts[m.homeLabel] += 3;
+      else if (outcome === 1) {
+        pts[m.homeLabel] += 1;
+        pts[m.awayLabel] += 1;
+      } else pts[m.awayLabel] += 3;
+    }
+    for (const l of labels) {
+      // Menos de 3 equipos estrictamente por encima ⇒ podría ser 3.º o mejor
+      // (le damos el beneficio del empate en los desempates).
+      const strictlyAbove = labels.filter((o) => o !== l && pts[o] > pts[l]).length;
+      if (strictlyAbove < 3) canTop3[l] = true;
+    }
+  }
+
+  const out = new Set<string>();
+  for (const l of labels) if (!canTop3[l]) out.add(l);
+
+  // Si TODOS los grupos han terminado, ya se sabe quién pasa: el 4.º está fuera
+  // y el 3.º solo pasa si está entre los 8 mejores terceros.
+  if (remaining.length === 0) {
+    const allGroupIds = [
+      ...new Set(
+        matches
+          .filter((m) => m.stage === "group" && m.groupId)
+          .map((m) => m.groupId as GroupId)
+      ),
+    ];
+    const allFinished =
+      allGroupIds.length > 0 &&
+      matches
+        .filter((m) => m.stage === "group")
+        .every((m) => m.status === "finished");
+    if (allFinished) {
+      const st = computeGroupStandings(groupId, matches);
+      if (st[3]) out.add(st[3].teamLabel); // 4.º fuera
+      const third = st[2];
+      if (third) {
+        const me = computeBestThirds(allGroupIds, matches).find(
+          (t) => t.teamLabel === third.teamLabel
+        );
+        if (me && !me.qualified) out.add(third.teamLabel);
+      }
+    }
+  }
+
+  return out;
+}
+
 // ============================================================
 // Tabla de los 12 terceros (criterios FIFA)
 // ============================================================

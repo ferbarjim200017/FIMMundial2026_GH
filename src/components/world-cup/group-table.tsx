@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { GroupId, Match } from "@/types/domain";
 import {
   computeGroupStandings,
-  eliminatedFromTop2,
+  eliminatedFromKnockout,
   type TeamStanding,
 } from "@/features/standings/standings.utils";
 
@@ -18,7 +18,7 @@ interface Props {
 
 export function GroupTable({ groupId, matches, compact }: Props) {
   const standings = computeGroupStandings(groupId, matches);
-  const eliminated = eliminatedFromTop2(groupId, matches);
+  const eliminated = eliminatedFromKnockout(groupId, matches);
   const hasAny = standings.some((s) => s.played > 0);
   const groupStyle = GROUP_COLORS[groupId];
 
