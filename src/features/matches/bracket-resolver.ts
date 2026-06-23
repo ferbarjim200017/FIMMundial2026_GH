@@ -55,6 +55,41 @@ function getLoserLabel(m: Match): string | null {
 }
 
 /**
+ * Empareja terceros clasificados con sus huecos "Mejor 3.º X/Y/Z" mediante un
+ * matching bipartito MÁXIMO (algoritmo de Kuhn por caminos aumentantes). El
+ * greedy anterior podía dejar huecos vacíos aunque existiera una asignación
+ * válida; esto garantiza llenar el máximo de huecos posible respetando los
+ * grupos permitidos de cada uno. `thirds` debe venir de mejor a peor.
+ */
+function matchThirds(
+  slots: { key: string; allowed: Set<string> }[],
+  thirds: { teamLabel: string; groupId: string }[]
+): Map<string, string> {
+  const slotMatch: (number | null)[] = slots.map(() => null);
+  const augment = (ti: number, seen: boolean[]): boolean => {
+    for (let si = 0; si < slots.length; si++) {
+      if (seen[si] || !slots[si].allowed.has(thirds[ti].groupId)) continue;
+      seen[si] = true;
+      const cur = slotMatch[si];
+      if (cur === null || augment(cur, seen)) {
+        slotMatch[si] = ti;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let ti = 0; ti < thirds.length; ti++) {
+    augment(ti, new Array(slots.length).fill(false));
+  }
+  const assign = new Map<string, string>();
+  slots.forEach((s, si) => {
+    const ti = slotMatch[si];
+    if (ti !== null) assign.set(s.key, thirds[ti].teamLabel);
+  });
+  return assign;
+}
+
+/**
  * Calcula los 1.º/2.º clasificados de cada grupo SOLO si ya terminaron
  * los 6 partidos del grupo. Si falta cualquier resultado, devuelve null
  * para ese grupo para evitar resolver con datos incompletos.
@@ -91,9 +126,6 @@ function computeFinalGroupRanks(matches: Match[]): Record<GroupId, {
  * asignación válida y determinista.
  */
 function assignThirds(matches: Match[]): Map<string, string> {
-  const assignments = new Map<string, string>();
-  const usedTeams = new Set<string>();
-
   const slots: Array<{
     key: string;
     allowed: Set<string>;
@@ -112,29 +144,18 @@ function assignThirds(matches: Match[]): Map<string, string> {
     }
   }
 
-  if (slots.length === 0) return assignments;
+  if (slots.length === 0) return new Map();
 
   // ¿Acabaron TODOS los grupos? Si no, no asignamos terceros (datos parciales).
   const groupRanks = computeFinalGroupRanks(matches);
   const allGroupsFinished = GROUP_IDS_LOCAL.every((g) => groupRanks[g].isFinal);
-  if (!allGroupsFinished) return assignments;
+  if (!allGroupsFinished) return new Map();
 
   const thirds = computeBestThirds(GROUP_IDS_LOCAL, matches).filter(
     (t) => t.qualified
   );
 
-  for (const third of thirds) {
-    if (usedTeams.has(third.teamLabel)) continue;
-    const slot = slots.find(
-      (s) => !assignments.has(s.key) && s.allowed.has(third.groupId)
-    );
-    if (slot) {
-      assignments.set(slot.key, third.teamLabel);
-      usedTeams.add(third.teamLabel);
-    }
-  }
-
-  return assignments;
+  return matchThirds(slots, thirds);
 }
 
 /** Un hueco del cuadro resuelto PROVISIONALMENTE con la clasificación actual. */
@@ -174,8 +195,9 @@ export function resolveBracketProvisional(
   }
   const allGroupsFinal = GROUP_IDS_LOCAL.every((g) => ranks[g].final);
 
-  // Mejores terceros ACTUALES, asignados greedy a sus huecos "Mejor 3.º X/Y/Z".
-  const thirdAssign = new Map<string, string>();
+  // Mejores terceros ACTUALES, asignados a sus huecos "Mejor 3.º X/Y/Z" con
+  // matching máximo (rellena el máximo de huecos posible).
+  let thirdAssign = new Map<string, string>();
   const thirdSlots: { key: string; allowed: Set<string> }[] = [];
   for (const m of matches) {
     if (m.stage !== "r32") continue;
@@ -186,17 +208,7 @@ export function resolveBracketProvisional(
   }
   if (thirdSlots.length > 0) {
     const thirds = computeBestThirds(GROUP_IDS_LOCAL, matches).filter((t) => t.qualified);
-    const used = new Set<string>();
-    for (const t of thirds) {
-      if (used.has(t.teamLabel)) continue;
-      const slot = thirdSlots.find(
-        (s) => !thirdAssign.has(s.key) && s.allowed.has(t.groupId)
-      );
-      if (slot) {
-        thirdAssign.set(slot.key, t.teamLabel);
-        used.add(t.teamLabel);
-      }
-    }
+    thirdAssign = matchThirds(thirdSlots, thirds);
   }
 
   const resolveField = (
