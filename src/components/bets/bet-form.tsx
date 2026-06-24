@@ -23,7 +23,10 @@ import {
   type BetFormValues,
 } from "@/features/bets/bets.schema";
 import { createBet, updateBet } from "@/features/bets/bets.service";
-import { updateDefaultStake } from "@/features/users/users.service";
+import {
+  updateDefaultBookmaker,
+  updateDefaultStake,
+} from "@/features/users/users.service";
 import {
   STAGE_LABELS,
   getMatch,
@@ -78,9 +81,11 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
   const router = useRouter();
   const { activeGroup, userGroups } = useGroup();
   const { appUser } = useAuth();
-  // Casa por defecto al crear una apuesta nueva: Winamax. (Al editar/copiar se
-  // respeta la de la apuesta original.)
-  const defaultBookmaker: BetFormValues["bookmaker"] = "winamax";
+  // Casa por defecto al crear una apuesta nueva: la que el usuario haya
+  // marcado como predeterminada (si tiene), si no Winamax. (Al editar/copiar
+  // se respeta la de la apuesta original vía `seed`.)
+  const defaultBookmaker: BetFormValues["bookmaker"] =
+    appUser?.defaultBookmaker ?? "winamax";
   // Seed para los defaults: si estamos editando, partimos de `initial`; si no,
   // de `prefill` cuando se está copiando una apuesta ajena. Si no hay ninguno,
   // valores por defecto en blanco.
@@ -328,6 +333,19 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     }
   }
 
+  // Guarda la casa actualmente seleccionada como predeterminada del usuario
+  // (1 escritura). A partir de aquí, las próximas apuestas nuevas la traen ya
+  // seleccionada. `appUser` se actualiza solo (lo suscribe el AuthContext), así
+  // que la etiqueta "Predeterminada ✓" aparece al instante.
+  async function saveDefaultBookmaker() {
+    try {
+      await withTimeout(updateDefaultBookmaker(userId, values.bookmaker), 9000);
+    } catch (err) {
+      // Red lenta: la escritura se sincroniza en segundo plano; no bloqueamos.
+      if (!(err instanceof TimeoutError)) console.error("[default-bookmaker]", err);
+    }
+  }
+
   /** Crea una apuesta por cada peldaño válido de la escalera. */
   async function handleLadderSubmit() {
     setServerError(null);
@@ -498,7 +516,23 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Casa de apuestas</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Casa de apuestas</Label>
+              {values.bookmaker !== "other" &&
+                (appUser?.defaultBookmaker === values.bookmaker ? (
+                  <span className="text-[11px] text-muted-foreground">
+                    Predeterminada ✓
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={saveDefaultBookmaker}
+                    className="text-[11px] text-primary hover:underline"
+                  >
+                    Hacer predeterminada
+                  </button>
+                ))}
+            </div>
             <Select
               value={values.bookmaker}
               onValueChange={(v) => update("bookmaker", v as BetFormValues["bookmaker"])}

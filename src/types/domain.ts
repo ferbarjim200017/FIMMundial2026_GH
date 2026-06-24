@@ -79,6 +79,10 @@ export interface AppUser {
    *  automáticamente en el formulario de crear apuesta. No afecta al
    *  beneficio/ROI ni a ningún cálculo: es solo una comodidad. */
   defaultStake?: number;
+  /** Casa de apuestas que sale seleccionada por defecto al crear una apuesta
+   *  nueva. Preferencia por usuario; si no está, se usa "winamax". Igual que
+   *  `defaultStake`, es solo comodidad de UI. */
+  defaultBookmaker?: Bookmaker;
 }
 
 /** Última posición conocida de un usuario en un grupo + dirección del último

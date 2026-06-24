@@ -340,6 +340,20 @@ export async function updateDefaultStake(
 }
 
 /**
+ * Guarda la casa de apuestas por defecto del usuario. 1 sola escritura en su
+ * propio documento (ya suscrito por el AuthContext), así que se refleja al
+ * instante. Solo sirve para pre-seleccionar la casa al crear una apuesta.
+ */
+export async function updateDefaultBookmaker(
+  uid: string,
+  bookmaker: Bookmaker
+): Promise<void> {
+  await updateDoc(doc(db, USERS, uid), {
+    defaultBookmaker: bookmaker,
+  });
+}
+
+/**
  * Suscripción al snapshot de movimiento de posiciones de un grupo
  * (`rankMovements/{groupId}` → { [uid]: RankMovement }). Si las reglas aún no
  * permiten leerlo, devuelve un mapa vacío en vez de romper (flechas en guion).
