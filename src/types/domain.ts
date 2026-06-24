@@ -309,3 +309,26 @@ export interface Match {
   result?: MatchResult | null;
   enteredBy?: string | null;    // uid del admin que metió el resultado
 }
+
+// ============================================================
+// RANKING PRECALCULADO (por grupo)
+// ============================================================
+/**
+ * Entrada del ranking precalculado de un usuario en un grupo. Vive en el
+ * documento compartido `rankings/{groupId}` indexado por uid. Permite que el
+ * carrusel (montado en TODAS las páginas) pinte la clasificación leyendo UN
+ * solo documento en vez de releer toda la colección `bets`.
+ *
+ * Cada usuario escribe SU PROPIA entrada (su ROI y saldo solo dependen de sus
+ * apuestas), así el documento se mantiene correcto y en tiempo real sin que
+ * nadie tenga que leer las apuestas de los demás.
+ */
+export interface RankingEntry {
+  username: string;
+  roi: number;
+  balance: number;
+  updatedAt: Timestamp;
+}
+
+/** Snapshot del ranking de un grupo: { [uid]: RankingEntry }. */
+export type GroupRanking = Record<string, RankingEntry>;

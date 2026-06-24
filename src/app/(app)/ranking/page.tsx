@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import {
   subscribeToRankMovements,
+  writeRankingEntries,
   writeRankMovements,
 } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
@@ -36,6 +37,7 @@ import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   betInGroup,
   computeCashSummary,
+  computeRankingStanding,
   computeSuperaumentoSummary,
   computeUserStats,
   getInitialBalances,
@@ -341,6 +343,42 @@ export default function RankingPage() {
       lastMovementWrite.current = ""; // permite reintentar
     });
   }, [activeGroup, users, canonicalRankByUid, movements]);
+
+  // Mantiene el ranking PRECALCULADO (`rankings/{groupId}`) que lee el carrusel
+  // en TODAS las páginas con una sola lectura. Al abrir/recalcular el ranking
+  // reescribimos las entradas de todos los miembros (bootstrap + refresco), con
+  // la MISMA fórmula que el carrusel (computeRankingStanding). Dedup optimista
+  // por firma; si falla (reglas sin desplegar) se resetea para reintentar.
+  const lastRankingWrite = useRef<string>("");
+  useEffect(() => {
+    if (!activeGroup || !users || users.length === 0) return;
+    const gid = activeGroup.id;
+    const entries: Record<
+      string,
+      { username: string; roi: number; balance: number }
+    > = {};
+    for (const u of users) {
+      const userBets = bets.filter((b) => b.userId === u.uid);
+      const { roi, balance } = computeRankingStanding(u, userBets, gid);
+      entries[u.uid] = { username: u.username, roi, balance };
+    }
+    const sig =
+      gid +
+      "|" +
+      Object.keys(entries)
+        .sort()
+        .map(
+          (id) =>
+            `${id}:${entries[id].roi.toFixed(2)}:${entries[id].balance.toFixed(2)}`
+        )
+        .join(",");
+    if (lastRankingWrite.current === sig) return;
+    lastRankingWrite.current = sig;
+    writeRankingEntries(gid, entries).catch((e) => {
+      console.error("[ranking] writeEntries", e);
+      lastRankingWrite.current = ""; // permite reintentar
+    });
+  }, [activeGroup, users, bets]);
 
   // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
   const maxAbsRoi = useMemo(() => {

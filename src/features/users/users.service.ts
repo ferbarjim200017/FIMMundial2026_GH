@@ -25,6 +25,7 @@ import {
   type Bookmaker,
   type BookmakerBalances,
   type CashMovement,
+  type GroupRanking,
   type RankMovementMap,
   type UserRole,
 } from "@/types/domain";
@@ -32,6 +33,7 @@ import { ADMIN_EMAILS } from "@/lib/constants";
 
 const USERS = "users";
 const RANK_MOVEMENTS = "rankMovements";
+const RANKINGS = "rankings";
 
 export function usersCol() {
   return collection(db, USERS).withConverter(userConverter);
@@ -374,6 +376,62 @@ export async function writeRankMovements(
     payload[uid] = { rank: changes[uid].rank, dir: changes[uid].dir, changedAt: now };
   }
   await setDoc(doc(db, RANK_MOVEMENTS, groupId), payload, { merge: true });
+}
+
+// ---------- Ranking precalculado por grupo (`rankings/{groupId}`) ----------
+//
+// El carrusel (montado en TODAS las páginas) lee ESTE documento — UNA lectura —
+// en vez de releer la colección `bets` entera. Cada usuario escribe su propia
+// entrada al liquidar/editar (su ROI y saldo solo dependen de sus apuestas) y
+// la página de ranking reescribe TODAS las entradas al abrirse (bootstrap), así
+// el documento se mantiene completo y en tiempo real.
+
+/** Tipo de entrada que escriben los callers (sin `updatedAt`, que lo sella el
+ *  servidor aquí). */
+type RankingEntryInput = { username: string; roi: number; balance: number };
+
+/** Suscripción en vivo al ranking precalculado de un grupo. Si las reglas aún
+ *  no permiten leerlo, devuelve un mapa vacío en vez de romper. */
+export function subscribeToGroupRanking(
+  groupId: string,
+  callback: (ranking: GroupRanking) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, RANKINGS, groupId),
+    (snap) => callback((snap.data() as GroupRanking) ?? {}),
+    (err) => {
+      console.error("[ranking] subscribe", err);
+      callback({});
+    }
+  );
+}
+
+/** Escribe (merge) la entrada de UN usuario en el ranking del grupo. */
+export async function writeRankingEntry(
+  groupId: string,
+  uid: string,
+  entry: RankingEntryInput
+): Promise<void> {
+  await setDoc(
+    doc(db, RANKINGS, groupId),
+    { [uid]: { ...entry, updatedAt: serverTimestamp() } },
+    { merge: true }
+  );
+}
+
+/** Escribe (merge) varias entradas a la vez. Lo usa la página de ranking para
+ *  rellenar/refrescar el documento completo cuando alguien la abre. */
+export async function writeRankingEntries(
+  groupId: string,
+  entries: Record<string, RankingEntryInput>
+): Promise<void> {
+  const uids = Object.keys(entries);
+  if (uids.length === 0) return;
+  const payload: Record<string, unknown> = {};
+  for (const uid of uids) {
+    payload[uid] = { ...entries[uid], updatedAt: serverTimestamp() };
+  }
+  await setDoc(doc(db, RANKINGS, groupId), payload, { merge: true });
 }
 
 export async function ensureUserDoc(input: CreateUserInput): Promise<AppUser> {

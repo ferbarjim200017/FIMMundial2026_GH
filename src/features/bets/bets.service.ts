@@ -28,7 +28,14 @@ import type {
   BetStatus,
 } from "@/types/domain";
 import type { BetFormValues } from "./bets.schema";
-import { calcProfit, computeUserStats, round2 } from "./bets.utils";
+import {
+  betInGroup,
+  calcProfit,
+  computeRankingStanding,
+  computeUserStats,
+  round2,
+} from "./bets.utils";
+import { writeRankingEntry } from "@/features/users/users.service";
 
 const BETS = "bets";
 
@@ -589,6 +596,26 @@ export async function recomputeAndPersistStats(userId: string): Promise<void> {
     initialBalance,
     currentBalance,
   });
+
+  // Mantener al día el ranking PRECALCULADO por grupo (`rankings/{groupId}`),
+  // que lee el carrusel con UNA lectura en vez de releer toda la colección de
+  // apuestas. Cada usuario escribe su propia entrada (su ROI y saldo solo
+  // dependen de SUS apuestas) en cada grupo al que pertenece, así el documento
+  // queda correcto y en tiempo real sin leer las apuestas de los demás. Si las
+  // reglas de `rankings` aún no están desplegadas, ignoramos el error: el
+  // carrusel sigue funcionando con su fallback desde apuestas.
+  const groups = user.groups ?? [];
+  await Promise.all(
+    groups.map(async (gid) => {
+      const groupBets = userBets.filter((b) => betInGroup(b, gid));
+      const { roi, balance } = computeRankingStanding(user, groupBets, gid);
+      try {
+        await writeRankingEntry(gid, userId, { username: user.username, roi, balance });
+      } catch (err) {
+        console.error("[ranking] writeEntry", gid, err);
+      }
+    })
+  );
 }
 
 export interface RecomputeAllResult {

@@ -415,6 +415,31 @@ export function getInitialBalances(
 }
 
 /**
+ * Calcula la posición de un usuario en el ranking de un grupo: su ROI y su
+ * saldo actual en ese grupo, a partir de SUS apuestas del grupo. Es la fórmula
+ * exacta que usaban el carrusel y la página de ranking, extraída a un único
+ * sitio para que el ranking precalculado (`rankings/{groupId}`) y la UI siempre
+ * cuadren. `userGroupBets` deben ser ya las apuestas del usuario en ese grupo.
+ */
+export function computeRankingStanding(
+  user: AppUser,
+  userGroupBets: Bet[],
+  groupId: string
+): { roi: number; balance: number; profit: number } {
+  const stats = computeUserStats(userGroupBets);
+  const initial = getInitialBalances(user, groupId);
+  const balance =
+    initial.bet365 +
+    initial.winamax +
+    (initial.betfair ?? 0) +
+    (initial.luckia ?? 0) +
+    initial.other +
+    stats.totalProfit +
+    computeCashSummary(user, groupId).net;
+  return { roi: stats.roi, balance: round2(balance), profit: stats.totalProfit };
+}
+
+/**
  * Calcula el saldo (inicial, profit, actual) por casa de apuestas para un
  * usuario. El profit por casa es la suma del campo `profit` de sus apuestas
  * liquidadas en esa casa; el saldo actual = inicial + profit.

@@ -47,7 +47,16 @@ service cloud.firestore {
     match /groups/{id}       { allow read: if isSignedIn(); allow write: if isAdmin(); }
     match /playerStats/{id}  { allow read: if isSignedIn(); allow write: if isAdmin(); }
     match /thirdPlaceTable/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /rankings/{id}     { allow read: if isSignedIn(); allow write: if false; }
+    // Ranking PRECALCULADO por grupo: { [uid]: { username, roi, balance, updatedAt } }.
+    // Lo mantiene el cliente de cualquier miembro (cada uno escribe su entrada
+    // al liquidar; la página de ranking refresca todas al abrirse) para que el
+    // carrusel lo lea con UNA lectura en vez de releer la colección `bets`.
+    // Dato no sensible (ROI y saldo ya visibles en la app), igual criterio que
+    // rankMovements: lectura/escritura para cualquier usuario autenticado.
+    match /rankings/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
 
     // Movimiento de posición del ranking, por grupo. Lo mantiene el cliente de
     // cualquier miembro que abra la clasificación (recalcula la posición de
