@@ -15,6 +15,7 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { deleteBet, settleManyBets, unsettleBet } from "@/features/bets/bets.service";
+import { queueSettle } from "@/features/bets/pending-settles";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
 import type { Bet } from "@/types/domain";
@@ -23,13 +24,15 @@ interface Props {
   bets: Bet[];
   ownerUid: string;
   isAdmin?: boolean;
+  /** Apuestas cuya liquidación está guardada en local sin subir (badge). */
+  pendingIds?: Set<string>;
 }
 
 function marketLabel(value: string): string {
   return MARKET_OPTIONS.find((m) => m.value === value)?.label ?? value;
 }
 
-export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
+export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
   const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
   // Selección múltiple para liquidar en bloque.
@@ -74,8 +77,19 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
     try {
       await settleManyBets(ids, status);
       setSelected(new Set());
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al actualizar");
+    } catch {
+      // No se pudo subir (p. ej. "quota exceeded"): guardamos cada liquidación
+      // en LOCAL para subirla luego. Se ven marcadas "sin subir".
+      for (const id of ids) {
+        const b = bets.find((x) => x.id === id);
+        queueSettle({
+          betId: id,
+          status,
+          label: b ? `${b.matchLabel} · ${b.selection}` : id,
+          queuedAt: Date.now(),
+        });
+      }
+      setSelected(new Set());
     } finally {
       setBulkBusy(false);
     }
@@ -262,7 +276,17 @@ export function BetsTable({ bets, ownerUid, isAdmin }: Props) {
                     : `${b.profit >= 0 ? "+" : ""}${formatCurrency(b.profit)}`}
                 </td>
                 <td className="px-3 py-2">
-                  <BetStatusBadge status={b.status} />
+                  <div className="flex flex-col items-start gap-1">
+                    <BetStatusBadge status={b.status} />
+                    {pendingIds?.has(b.id) && (
+                      <span
+                        className="rounded bg-amber-500/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                        title="Guardada en este dispositivo, pendiente de subir"
+                      >
+                        ⏳ sin subir
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td
                   className="px-3 py-2 text-right"

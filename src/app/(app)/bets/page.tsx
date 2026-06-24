@@ -19,6 +19,11 @@ import { MatchFilter } from "@/components/bets/match-filter";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets, type BetsFilter } from "@/features/bets/bets.service";
+import {
+  usePendingSettles,
+  applyPendingToBets,
+  flushPendingSettles,
+} from "@/features/bets/pending-settles";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   BOOKMAKER_OPTIONS,
@@ -70,6 +75,9 @@ export default function BetsPage() {
     return unsub;
   }, [appUser, scope, status, bookmaker]);
 
+  // Liquidaciones guardadas en local (sin subir por falta de cuota de Firebase).
+  const pending = usePendingSettles();
+
   // Filtrado adicional por grupo activo + búsqueda de texto en tiempo real.
   const normalizedQuery = query.trim().toLowerCase();
   const bets = useMemo(() => {
@@ -107,11 +115,18 @@ export default function BetsPage() {
     normalizedQuery,
   ]);
 
+  // Superponemos las liquidaciones locales sin subir: las apuestas se ven ya
+  // ganadas/perdidas (con su beneficio) y marcadas "sin subir".
+  const { bets: displayBets, pendingIds } = useMemo(
+    () => applyPendingToBets(bets, pending),
+    [bets, pending]
+  );
+
   // La query ya viene por createdAt desc; reordenamos en cliente si el usuario
   // elige "por registro" (addedAt, con createdAt como desempate para que las
   // escaleras queden juntas y en orden).
   const sortedBets = useMemo(() => {
-    const arr = [...bets];
+    const arr = [...displayBets];
     if (sortBy === "added") {
       arr.sort((a, b) => {
         const av = (a.addedAt ?? a.createdAt).toMillis();
@@ -123,9 +138,9 @@ export default function BetsPage() {
       arr.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
     }
     return arr;
-  }, [bets, sortBy]);
+  }, [displayBets, sortBy]);
 
-  const stats = useMemo(() => summarize(bets), [bets]);
+  const stats = useMemo(() => summarize(displayBets), [displayBets]);
 
   if (!appUser) return null;
 
@@ -281,10 +296,34 @@ export default function BetsPage() {
         </CardContent>
       </Card>
 
+      {pending.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+          <span className="text-amber-700 dark:text-amber-400">
+            ⏳ <strong>{pending.length}</strong> liquidación
+            {pending.length > 1 ? "es" : ""} sin subir (guardada
+            {pending.length > 1 ? "s" : ""} en este dispositivo). Se subirán solas
+            cuando vuelva la cuota.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-8"
+            onClick={() => flushPendingSettles()}
+          >
+            Subir ahora
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando apuestas…</p>
       ) : (
-        <BetsTable bets={sortedBets} ownerUid={appUser.uid} isAdmin={isAdmin} />
+        <BetsTable
+          bets={sortedBets}
+          ownerUid={appUser.uid}
+          isAdmin={isAdmin}
+          pendingIds={pendingIds}
+        />
       )}
     </div>
   );

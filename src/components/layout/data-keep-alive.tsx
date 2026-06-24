@@ -3,6 +3,10 @@
 import { useEffect } from "react";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
+import {
+  flushPendingSettles,
+  getPendingSettles,
+} from "@/features/bets/pending-settles";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 
 /**
@@ -25,6 +29,20 @@ export function DataKeepAlive() {
       unsubBets();
       unsubMatches();
     };
+  }, []);
+
+  // Sube las liquidaciones guardadas en local (sin subir por falta de cuota) en
+  // cuanto se pueda: al abrir la app y cada 5 minutos. Así capta el reset diario
+  // de la cuota gratuita de Firebase (≈ 9:00 en España) sin que el usuario haga
+  // nada.
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const tryFlush = () => {
+      if (getPendingSettles().length > 0) void flushPendingSettles();
+    };
+    tryFlush();
+    const id = setInterval(tryFlush, 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, []);
 
   return null;

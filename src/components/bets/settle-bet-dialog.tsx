@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { settleBet } from "@/features/bets/bets.service";
+import { queueSettle } from "@/features/bets/pending-settles";
 import { calcProfit } from "@/features/bets/bets.utils";
 import { formatCurrency, profitClass, TimeoutError, withTimeout } from "@/lib/utils";
 import type { Bet, BetStatus } from "@/types/domain";
@@ -89,7 +90,19 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
         onOpenChange(false);
         onSettled?.();
       } else {
-        setError(err instanceof Error ? err.message : "Error al liquidar");
+        // No se pudo subir (p. ej. "quota exceeded" del plan gratuito de
+        // Firebase): guardamos la liquidación en LOCAL. La apuesta se marca al
+        // instante como ganada/perdida con un distintivo "sin subir" y se
+        // reintenta subir sola en cuanto vuelva la cuota (≈ 9:00).
+        queueSettle({
+          betId: bet.id,
+          status: choice,
+          cashoutProfit: choice === "cashout" ? cashoutProfit : undefined,
+          label: `${bet.matchLabel} · ${bet.selection}`,
+          queuedAt: Date.now(),
+        });
+        onOpenChange(false);
+        onSettled?.();
       }
     } finally {
       setSubmitting(false);
