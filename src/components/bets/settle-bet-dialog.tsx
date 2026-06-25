@@ -12,10 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { settleBet } from "@/features/bets/bets.service";
 import { queueSettle } from "@/features/bets/pending-settles";
 import { calcProfit } from "@/features/bets/bets.utils";
-import { formatCurrency, profitClass, TimeoutError, withTimeout } from "@/lib/utils";
+import { formatCurrency, profitClass } from "@/lib/utils";
 import type { Bet, BetStatus } from "@/types/domain";
 
 interface Props {
@@ -47,7 +46,6 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
   const [cashoutAmount, setCashoutAmount] = useState<string>(
     bet.isFreebet ? "0" : bet.stake.toFixed(2)
   );
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cashoutAmountNum = Number(cashoutAmount.replace(",", "."));
@@ -65,9 +63,14 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
     !!bet.isFreebet
   );
 
-  /** Guarda la liquidación en LOCAL (cola "sin subir") y cierra. Se usa tanto
-   *  cuando la subida falla/tarda como cuando el usuario lo pide a mano. */
-  function queueOffline() {
+  /** Guarda la liquidación en la cola LOCAL ("sin subir") y cierra. No sube al
+   *  momento: se acumula y se sube en lote (una sola llamada) desde la lista de
+   *  apuestas con el botón "Subir". */
+  function handleConfirm() {
+    if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
+      setError("Introduce un importe de cashout válido");
+      return;
+    }
     queueSettle({
       betId: bet.id,
       status: choice,
@@ -77,45 +80,6 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
     });
     onOpenChange(false);
     onSettled?.();
-  }
-
-  /** Botón "Sin subir": el usuario sabe que la cuota está saturada y no quiere
-   *  esperar; lo guardamos en local directamente, sin intentar subirlo. */
-  function handleQueueOffline() {
-    if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
-      setError("Introduce un importe de cashout válido");
-      return;
-    }
-    queueOffline();
-  }
-
-  async function handleConfirm() {
-    if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
-      setError("Introduce un importe de cashout válido");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await withTimeout(
-        settleBet(
-          bet.id,
-          choice,
-          choice === "cashout" ? cashoutProfit : undefined
-        ),
-        9000
-      );
-      onOpenChange(false);
-      onSettled?.();
-    } catch {
-      // Tanto si tarda demasiado (TimeoutError) como si Firebase la rechaza
-      // (quota), la guardamos en LOCAL para NO perderla: se marca "sin subir" y
-      // se reintenta subir sola. Si la escritura sí llegó a aplicarse, el
-      // reintento es idempotente (no duplica el beneficio).
-      queueOffline();
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   return (
@@ -191,17 +155,14 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={submitting}
-          >
+        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <p className="mr-auto text-xs text-muted-foreground">
+            Se guarda en la cola y se sube en lote desde la lista.
+          </p>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleConfirm} disabled={submitting}>
-            {submitting ? "Liquidando…" : "Confirmar"}
-          </Button>
+          <Button onClick={handleConfirm}>Confirmar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

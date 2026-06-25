@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { updateBet, type UpdateBetInput } from "@/features/bets/bets.service";
+import {
+  getCachedAllBets,
+  updateBet,
+  updateBetsBatch,
+  type UpdateBetInput,
+} from "@/features/bets/bets.service";
 import { calcProfit } from "@/features/bets/bets.utils";
 import { Timestamp } from "firebase/firestore";
 import type { Bet } from "@/types/domain";
@@ -78,8 +83,10 @@ export function subscribePendingEdits(l: Listener): () => void {
 let flushing = false;
 
 /**
- * Intenta subir todas las ediciones pendientes. Las que suben bien se quitan de
- * la cola; las que fallan (sigue sin cuota) se quedan. Idempotente.
+ * Sube todas las ediciones pendientes en UNA sola escritura (`writeBatch`) + un
+ * recálculo por usuario, usando la apuesta cacheada del listener global. Las que
+ * no estén en caché caen a subida individual. Las que suben bien se quitan de la
+ * cola; las que fallan se quedan. Idempotente.
  */
 export async function flushPendingEdits(): Promise<{
   flushed: number;
@@ -89,13 +96,35 @@ export async function flushPendingEdits(): Promise<{
   flushing = true;
   let flushed = 0;
   try {
-    for (const p of read()) {
+    const pending = read();
+    if (pending.length === 0) return { flushed: 0, remaining: 0 };
+
+    const byId = new Map((getCachedAllBets() ?? []).map((b) => [b.id, b]));
+    const batchItems: { input: UpdateBetInput; bet: Bet; betId: string }[] = [];
+    const fallback: PendingEdit[] = [];
+    for (const p of pending) {
+      const bet = byId.get(p.betId);
+      if (bet) batchItems.push({ input: p.input, bet, betId: p.betId });
+      else fallback.push(p);
+    }
+
+    if (batchItems.length > 0) {
+      try {
+        await updateBetsBatch(batchItems);
+        for (const it of batchItems) removePendingEdit(it.betId);
+        flushed += batchItems.length;
+      } catch {
+        // Sigue sin poder subir: las dejamos en la cola.
+      }
+    }
+
+    for (const p of fallback) {
       try {
         await updateBet(p.input);
         removePendingEdit(p.betId);
         flushed += 1;
       } catch {
-        // Sigue sin poder subir: lo dejamos en la cola para el próximo intento.
+        // Lo dejamos en la cola para el próximo intento.
       }
     }
   } finally {

@@ -250,7 +250,10 @@ export interface CreateBetInput extends BetFormValues {
   userId: string;
 }
 
-export async function createBet(input: CreateBetInput): Promise<string> {
+/** Construye el documento Firestore de una apuesta nueva a partir del input del
+ *  formulario. Lo comparten `createBet` (alta individual) y `createManyBets`
+ *  (alta en lote con un solo `writeBatch`). Lanza si no hay grupo. */
+function buildCreatePayload(input: CreateBetInput): Record<string, unknown> {
   const placedAtDate = new Date(input.placedAt);
   const stake = round2(input.stake);
   const odds = round2(input.odds);
@@ -260,7 +263,7 @@ export async function createBet(input: CreateBetInput): Promise<string> {
     throw new Error("La apuesta necesita pertenecer al menos a un grupo.");
   }
 
-  const payload = {
+  return {
     userId: input.userId,
     // Legacy denormalizado: el primer grupo se sigue escribiendo en
     // `groupId` para que consumidores antiguos no se rompan.
@@ -295,23 +298,48 @@ export async function createBet(input: CreateBetInput): Promise<string> {
       ? { teams: input.teams }
       : {}),
   };
+}
 
+export async function createBet(input: CreateBetInput): Promise<string> {
   // Ignoramos converter aquí porque queremos pasar serverTimestamp si quisiéramos
-  const ref = await addDoc(collection(db, BETS), payload);
+  const ref = await addDoc(collection(db, BETS), buildCreatePayload(input));
   return ref.id;
+}
+
+/**
+ * Crea VARIAS apuestas en una sola llamada (`writeBatch`): un único viaje a
+ * Firestore en vez de N `addDoc`. Pensado para subir de golpe los borradores
+ * que el usuario fue acumulando en local. No recalcula stats (las apuestas
+ * nacen pendientes con profit 0, igual que `createBet`); el ranking se refresca
+ * solo con el listener en tiempo real. Devuelve los ids creados.
+ */
+export async function createManyBets(inputs: CreateBetInput[]): Promise<string[]> {
+  if (inputs.length === 0) return [];
+  const batch = writeBatch(db);
+  const ids: string[] = [];
+  for (const input of inputs) {
+    const ref = doc(collection(db, BETS));
+    batch.set(ref, buildCreatePayload(input));
+    ids.push(ref.id);
+  }
+  await batch.commit();
+  return ids;
+}
+
+/** Bets actualmente en la caché del listener global compartido (sin leer de
+ *  Firestore). `null` si todavía no hay snapshot. Lo usan los flush por lote
+ *  para resolver stake/odds/usuario sin lecturas extra. */
+export function getCachedAllBets(): Bet[] | null {
+  return sharedLatest;
 }
 
 export interface UpdateBetInput extends BetFormValues {
   betId: string;
 }
 
-/**
- * Edita una apuesta existente. Si la apuesta ya está liquidada (won/lost/
- * cashout/void), recalcula su profit con la nueva combinación stake/odds
- * y aplica el delta al saldo del usuario, todo en una transacción. Para
- * cashout mantiene el profit que el usuario introdujo (es manual).
- */
-export async function updateBet(input: UpdateBetInput): Promise<void> {
+/** Campos estáticos del patch de edición (sin profit ni history). Compartidos
+ *  por `updateBet` y `updateManyBets`. */
+function buildUpdateFields(input: UpdateBetInput): Record<string, unknown> {
   const stake = round2(input.stake);
   const odds = round2(input.odds);
   const matchIds = input.matchIds ?? [];
@@ -319,8 +347,7 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
   if (groupIds.length === 0) {
     throw new Error("La apuesta necesita pertenecer al menos a un grupo.");
   }
-
-  const patch: Record<string, unknown> = {
+  return {
     bookmaker: input.bookmaker,
     bookmakerLabel:
       input.bookmaker === "other" ? input.bookmakerLabel?.trim() ?? "" : "",
@@ -342,6 +369,35 @@ export async function updateBet(input: UpdateBetInput): Promise<void> {
     // En edición sobrescribimos siempre el campo (incluyendo array vacío) para
     // que si el usuario quita todos los equipos también se borre.
     teams: input.market === "outright" ? input.teams ?? [] : [],
+  };
+}
+
+/** Profit que debe quedar tras editar una apuesta, según su estado actual:
+ *  pending → 0; cashout → se mantiene (es manual); won/lost → se recalcula con
+ *  la nueva stake/odds. */
+function editedProfit(bet: Bet, input: UpdateBetInput): number {
+  const oldProfit = bet.profit ?? 0;
+  if (bet.status === "pending") return 0;
+  if (bet.status === "cashout") return round2(oldProfit);
+  const isFreebet =
+    input.isFreebet !== undefined ? !!input.isFreebet : !!bet.isFreebet;
+  return round2(
+    calcProfit(round2(input.stake), round2(input.odds), bet.status, undefined, isFreebet)
+  );
+}
+
+/**
+ * Edita una apuesta existente. Si la apuesta ya está liquidada (won/lost/
+ * cashout/void), recalcula su profit con la nueva combinación stake/odds
+ * y aplica el delta al saldo del usuario, todo en una transacción. Para
+ * cashout mantiene el profit que el usuario introdujo (es manual).
+ */
+export async function updateBet(input: UpdateBetInput): Promise<void> {
+  const stake = round2(input.stake);
+  const odds = round2(input.odds);
+
+  const patch: Record<string, unknown> = {
+    ...buildUpdateFields(input),
     history: arrayUnion(historyEntry("edited")),
   };
 
@@ -498,6 +554,81 @@ export async function settleManyBets(
   }
 
   for (const uid of affectedUsers) {
+    await recomputeAndPersistStats(uid);
+  }
+}
+
+export interface BatchSettleItem {
+  /** Apuesta tal como está en la caché del cliente (para no leerla de nuevo). */
+  bet: Bet;
+  status: Exclude<BetStatus, "pending">;
+  /** Solo en cashout: beneficio introducido por el usuario. */
+  cashoutProfit?: number;
+}
+
+/**
+ * Liquida varias apuestas en UNA sola escritura (`writeBatch`) sin leer nada de
+ * Firestore: el profit se calcula en cliente a partir de la apuesta cacheada y
+ * el saldo/stats se recalculan UNA vez por usuario al final (autoritativo). Es
+ * la versión "en lote" de `settleBet`, pensada para subir de golpe la cola de
+ * liquidaciones acumuladas. Solo aplica a las que siguen `pending`.
+ */
+export async function settleBetsBatch(items: BatchSettleItem[]): Promise<void> {
+  const valid = items.filter((it) => it.bet.status === "pending");
+  if (valid.length === 0) return;
+
+  const batch = writeBatch(db);
+  const affected = new Set<string>();
+  for (const { bet, status, cashoutProfit } of valid) {
+    const newProfit = calcProfit(
+      bet.stake,
+      bet.odds,
+      status,
+      cashoutProfit,
+      !!bet.isFreebet
+    );
+    batch.update(doc(db, BETS, bet.id), {
+      status,
+      profit: round2(newProfit),
+      settledAt: serverTimestamp(),
+      history: arrayUnion(historyEntry("settled", status)),
+    });
+    affected.add(bet.userId);
+  }
+  await batch.commit();
+
+  for (const uid of affected) {
+    await recomputeAndPersistStats(uid);
+  }
+}
+
+export interface BatchEditItem {
+  input: UpdateBetInput;
+  /** Apuesta cacheada (para conocer su estado y usuario sin leer Firestore). */
+  bet: Bet;
+}
+
+/**
+ * Edita varias apuestas en UNA sola escritura (`writeBatch`). El nuevo profit se
+ * deriva del estado de la apuesta cacheada (mismo criterio que `updateBet`) y
+ * las stats/saldo se recalculan UNA vez por usuario al final.
+ */
+export async function updateBetsBatch(items: BatchEditItem[]): Promise<void> {
+  if (items.length === 0) return;
+
+  const batch = writeBatch(db);
+  const affected = new Set<string>();
+  for (const { input, bet } of items) {
+    batch.update(doc(db, BETS, input.betId), {
+      ...buildUpdateFields(input),
+      profit: editedProfit(bet, input),
+      history: arrayUnion(historyEntry("edited")),
+    });
+    affected.add(bet.userId);
+  }
+  await batch.commit();
+
+  for (const uid of affected) {
     await recomputeAndPersistStats(uid);
   }
 }

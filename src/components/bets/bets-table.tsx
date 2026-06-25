@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
-import { deleteBet, settleManyBets, unsettleBet } from "@/features/bets/bets.service";
+import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
 import { queueSettle } from "@/features/bets/pending-settles";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
@@ -26,18 +26,29 @@ interface Props {
   isAdmin?: boolean;
   /** Apuestas cuya liquidación está guardada en local sin subir (badge). */
   pendingIds?: Set<string>;
+  /** Quita un borrador local (apuesta aún sin subir) de la cola. Recibe el
+   *  localId (el id de la fila es "local:<localId>"). */
+  onRemoveDraft?: (localId: string) => void;
 }
 
 function marketLabel(value: string): string {
   return MARKET_OPTIONS.find((m) => m.value === value)?.label ?? value;
 }
 
-export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
+/** Una fila es un borrador local (aún no subido) si su id empieza por "local:". */
+const isDraft = (b: Bet) => b.id.startsWith("local:");
+
+export function BetsTable({
+  bets,
+  ownerUid,
+  isAdmin,
+  pendingIds,
+  onRemoveDraft,
+}: Props) {
   const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
   // Selección múltiple para liquidar en bloque.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
 
   function canManage(bet: Bet): boolean {
     return isAdmin || bet.userId === ownerUid;
@@ -46,7 +57,7 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
   // Solo se pueden seleccionar las que el usuario puede gestionar y están
   // pendientes (la liquidación en bloque es ganada/perdida/nula).
   const selectableIds = bets
-    .filter((b) => canManage(b) && b.status === "pending")
+    .filter((b) => canManage(b) && b.status === "pending" && !isDraft(b))
     .map((b) => b.id);
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
@@ -68,31 +79,28 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
     );
   }
 
-  async function handleBulk(status: "won" | "lost" | "void") {
+  function handleBulk(status: "won" | "lost" | "void") {
     const ids = [...selected];
     if (ids.length === 0) return;
     const label = { won: "ganadas", lost: "perdidas", void: "nulas" }[status];
-    if (!confirm(`¿Marcar ${ids.length} apuesta(s) como ${label}?`)) return;
-    setBulkBusy(true);
-    try {
-      await settleManyBets(ids, status);
-      setSelected(new Set());
-    } catch {
-      // No se pudo subir (p. ej. "quota exceeded"): guardamos cada liquidación
-      // en LOCAL para subirla luego. Se ven marcadas "sin subir".
-      for (const id of ids) {
-        const b = bets.find((x) => x.id === id);
-        queueSettle({
-          betId: id,
-          status,
-          label: b ? `${b.matchLabel} · ${b.selection}` : id,
-          queuedAt: Date.now(),
-        });
-      }
-      setSelected(new Set());
-    } finally {
-      setBulkBusy(false);
+    if (
+      !confirm(
+        `¿Marcar ${ids.length} apuesta(s) como ${label}? Se añaden a la cola y se suben en lote desde "Subir".`
+      )
+    )
+      return;
+    // Acumula en LOCAL (no sube al momento); el botón "Subir" las manda todas
+    // en una sola escritura.
+    for (const id of ids) {
+      const b = bets.find((x) => x.id === id);
+      queueSettle({
+        betId: id,
+        status,
+        label: b ? `${b.matchLabel} · ${b.selection}` : id,
+        queuedAt: Date.now(),
+      });
     }
+    setSelected(new Set());
   }
 
   async function handleDelete(bet: Bet) {
@@ -151,7 +159,6 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
             <Button
               size="sm"
               onClick={() => handleBulk("won")}
-              disabled={bulkBusy}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               Ganadas
@@ -160,7 +167,6 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
               size="sm"
               variant="destructive"
               onClick={() => handleBulk("lost")}
-              disabled={bulkBusy}
             >
               Perdidas
             </Button>
@@ -168,7 +174,6 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
               size="sm"
               variant="outline"
               onClick={() => handleBulk("void")}
-              disabled={bulkBusy}
             >
               Nulas
             </Button>
@@ -176,7 +181,6 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
               size="sm"
               variant="ghost"
               onClick={() => setSelected(new Set())}
-              disabled={bulkBusy}
             >
               Cancelar
             </Button>
@@ -218,6 +222,9 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
                   selected.has(b.id) ? "bg-primary/10" : ""
                 }`}
                 onClick={() => {
+                  // Los borradores locales aún no existen en Firestore: no abren
+                  // detalle (sus enlaces de ficha/edición no resolverían).
+                  if (isDraft(b)) return;
                   // En modo selección (ya hay algo marcado) un clic en cualquier
                   // parte de la fila la marca/desmarca, si es seleccionable. Si no
                   // hay nada marcado, se comporta como antes: abre el detalle.
@@ -229,7 +236,7 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
                 }}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  {canManage(b) && b.status === "pending" && (
+                  {canManage(b) && b.status === "pending" && !isDraft(b) && (
                     <input
                       type="checkbox"
                       checked={selected.has(b.id)}
@@ -292,7 +299,18 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
                   className="px-3 py-2 text-right"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {canManage(b) && (
+                  {isDraft(b) ? (
+                    onRemoveDraft && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onRemoveDraft(b.id.slice("local:".length))}
+                        title="Quitar borrador (no subido)"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )
+                  ) : canManage(b) ? (
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="sm"
@@ -333,7 +351,7 @@ export function BetsTable({ bets, ownerUid, isAdmin, pendingIds }: Props) {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  )}
+                  ) : null}
                 </td>
               </tr>
             ))}

@@ -22,8 +22,8 @@ import {
   MARKET_OPTIONS,
   type BetFormValues,
 } from "@/features/bets/bets.schema";
-import { createBet, updateBet } from "@/features/bets/bets.service";
 import { queueEdit } from "@/features/bets/pending-edits";
+import { queueCreate, newLocalId } from "@/features/bets/pending-creates";
 import {
   updateDefaultBookmaker,
   updateDefaultStake,
@@ -126,7 +126,6 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     groupIds: initialGroupIds,
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   // ---------- Escalera (solo al CREAR) ----------
@@ -347,8 +346,8 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
     }
   }
 
-  /** Crea una apuesta por cada peldaño válido de la escalera. */
-  async function handleLadderSubmit() {
+  /** Encola un borrador por cada peldaño válido de la escalera. */
+  function handleLadderSubmit() {
     setServerError(null);
     const items: BetFormValues[] = [];
     const issues: string[] = [];
@@ -389,35 +388,26 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       placedAt: toLocalMsString(new Date(baseMs + (n - i))),
     }));
 
-    setSubmitting(true);
-    const finish = () => (onDone ? onDone() : router.push(ROUTES.bets));
-    try {
-      // Secuencial en orden inverso: el peldaño 1 se guarda el último, así también
-      // queda arriba al ordenar por "registro" (addedAt = hora real de guardado).
-      await withTimeout(
-        (async () => {
-          for (let i = ordered.length - 1; i >= 0; i--) {
-            await createBet({ ...ordered[i], userId });
-          }
-        })(),
-        20000
-      );
-      finish();
-    } catch (err) {
-      if (err instanceof TimeoutError) {
-        finish();
-      } else {
-        setServerError(err instanceof Error ? err.message : "Error al guardar la escalera");
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    // Encolamos cada peldaño como borrador local; se suben todos en una sola
+    // llamada desde la lista. `queuedAt` decreciente para que el peldaño 1 quede
+    // arriba también al ordenar por registro (addedAt desc).
+    const now = Date.now();
+    ordered.forEach((it, i) => {
+      queueCreate({
+        localId: newLocalId(),
+        input: { ...it, userId },
+        label: `${it.matchLabel} · ${it.selection}`,
+        queuedAt: now + (n - i),
+      });
+    });
+    if (onDone) onDone();
+    else router.push(ROUTES.bets);
   }
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (ladder && !isEditing) {
-      await handleLadderSubmit();
+      handleLadderSubmit();
       return;
     }
     const parsed = betFormSchema.safeParse(values);
@@ -436,38 +426,28 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       return;
     }
 
-    setSubmitting(true);
     setServerError(null);
-    const finish = () => (onDone ? onDone() : router.push(ROUTES.bets));
-    try {
-      const op: Promise<unknown> = initial
-        ? updateBet({ ...parsed.data, betId: initial.id })
-        : createBet({ ...parsed.data, userId });
-      await withTimeout(op, 9000);
-      finish();
-    } catch (err) {
-      if (initial) {
-        // EDICIÓN: tanto si tarda (TimeoutError) como si Firebase la rechaza
-        // ("quota exceeded"), guardamos el cambio en LOCAL para NO perderlo: se
-        // muestra al instante con el distintivo "sin subir" y se reintenta solo.
-        // Reaplicarlo es idempotente (updateBet recalcula el profit).
-        queueEdit({
-          betId: initial.id,
-          input: { ...parsed.data, betId: initial.id },
-          label: `${parsed.data.matchLabel} · ${parsed.data.selection}`,
-          queuedAt: Date.now(),
-        });
-        finish();
-      } else if (err instanceof TimeoutError) {
-        // Red lenta: se guarda y sincroniza en segundo plano. Continuamos
-        // para no dejar el botón en "Guardando…" eternamente.
-        finish();
-      } else {
-        setServerError(err instanceof Error ? err.message : "Error al guardar");
-      }
-    } finally {
-      setSubmitting(false);
+    const label = `${parsed.data.matchLabel} · ${parsed.data.selection}`;
+    // Ni la creación ni la edición suben al momento: se guardan en LOCAL (cola
+    // "sin subir") y se suben TODAS juntas en una sola llamada desde la lista
+    // de apuestas. Así se reducen las llamadas a Firestore.
+    if (initial) {
+      queueEdit({
+        betId: initial.id,
+        input: { ...parsed.data, betId: initial.id },
+        label,
+        queuedAt: Date.now(),
+      });
+    } else {
+      queueCreate({
+        localId: newLocalId(),
+        input: { ...parsed.data, userId },
+        label,
+        queuedAt: Date.now(),
+      });
     }
+    if (onDone) onDone();
+    else router.push(ROUTES.bets);
   }
 
   // Toggle de un grupo en la selección
@@ -1069,18 +1049,15 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
               type="button"
               variant="outline"
               onClick={() => (onDone ? onDone() : router.back())}
-              disabled={submitting}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting
-                ? "Guardando…"
-                : isEditing
+            <Button type="submit">
+              {isEditing
                 ? "Guardar cambios"
                 : ladder
-                ? `Crear escalera (${ladderTotals.count})`
-                : "Registrar apuesta"}
+                ? `Añadir escalera (${ladderTotals.count})`
+                : "Añadir a la cola"}
             </Button>
           </div>
         </CardContent>

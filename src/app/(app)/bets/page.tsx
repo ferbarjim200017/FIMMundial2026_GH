@@ -27,7 +27,14 @@ import {
 import {
   usePendingEdits,
   applyPendingEditsToBets,
+  flushPendingEdits,
 } from "@/features/bets/pending-edits";
+import {
+  usePendingCreates,
+  applyPendingCreatesToBets,
+  flushPendingCreates,
+  removePendingCreate,
+} from "@/features/bets/pending-creates";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   BOOKMAKER_OPTIONS,
@@ -79,9 +86,24 @@ export default function BetsPage() {
     return unsub;
   }, [appUser, scope, status, bookmaker]);
 
-  // Liquidaciones y ediciones guardadas en local (sin subir por falta de cuota).
+  // Cola local (sin subir): borradores nuevos, liquidaciones y ediciones.
   const pending = usePendingSettles();
   const pendingEdits = usePendingEdits();
+  const pendingCreates = usePendingCreates();
+  const [uploading, setUploading] = useState(false);
+
+  // Sube TODO lo acumulado en local en lotes (una llamada por tipo) + un
+  // recálculo por usuario. Cada flush es idempotente y tolera fallos parciales.
+  async function handleUploadAll() {
+    setUploading(true);
+    try {
+      await flushPendingCreates();
+      await flushPendingSettles();
+      await flushPendingEdits();
+    } finally {
+      setUploading(false);
+    }
+  }
 
   // Filtrado adicional por grupo activo + búsqueda de texto en tiempo real.
   const normalizedQuery = query.trim().toLowerCase();
@@ -120,16 +142,49 @@ export default function BetsPage() {
     normalizedQuery,
   ]);
 
+  // Borradores locales que encajan en la vista actual (grupo + filtros), para
+  // anteponerlos a la lista como apuestas "sin subir".
+  const visibleCreates = useMemo(() => {
+    return pendingCreates.filter((p) => {
+      if (!activeGroup) return false;
+      const inp = p.input;
+      if (!(inp.groupIds ?? []).includes(activeGroup.id)) return false;
+      // Los borradores son siempre "pendiente".
+      if (status !== "all" && status !== "pending") return false;
+      if (matchFilter !== "all" && !(inp.matchIds ?? []).includes(matchFilter))
+        return false;
+      if (normalizedQuery) {
+        const haystack = [
+          inp.matchLabel,
+          inp.selection,
+          inp.marketDetail ?? "",
+          inp.bookmakerLabel ?? "",
+          inp.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
+      return true;
+    });
+  }, [pendingCreates, activeGroup, status, matchFilter, normalizedQuery]);
+
   // Superponemos lo local sin subir: liquidaciones (ganada/perdida con su
-  // beneficio) y ediciones (datos ya cambiados). Ambas marcadas "sin subir".
+  // beneficio), ediciones (datos ya cambiados) y borradores nuevos. Todo
+  // marcado "sin subir".
   const { bets: displayBets, pendingIds } = useMemo(() => {
     const conSettles = applyPendingToBets(bets, pending);
-    return applyPendingEditsToBets(
+    const conEdits = applyPendingEditsToBets(
       conSettles.bets,
       pendingEdits,
       conSettles.pendingIds
     );
-  }, [bets, pending, pendingEdits]);
+    return applyPendingCreatesToBets(
+      conEdits.bets,
+      visibleCreates,
+      conEdits.pendingIds
+    );
+  }, [bets, pending, pendingEdits, visibleCreates]);
 
   // La query ya viene por createdAt desc; reordenamos en cliente si el usuario
   // elige "por registro" (addedAt, con createdAt como desempate para que las
@@ -150,6 +205,23 @@ export default function BetsPage() {
   }, [displayBets, sortBy]);
 
   const stats = useMemo(() => summarize(displayBets), [displayBets]);
+
+  // Resumen de lo que hay sin subir (todos los grupos) para el aviso superior.
+  const pendingTotal =
+    pendingCreates.length + pending.length + pendingEdits.length;
+  const pendingDetail = [
+    pendingCreates.length > 0
+      ? `${pendingCreates.length} nueva${pendingCreates.length > 1 ? "s" : ""}`
+      : null,
+    pending.length > 0
+      ? `${pending.length} liquidación${pending.length > 1 ? "es" : ""}`
+      : null,
+    pendingEdits.length > 0
+      ? `${pendingEdits.length} edición${pendingEdits.length > 1 ? "es" : ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (!appUser) return null;
 
@@ -305,21 +377,20 @@ export default function BetsPage() {
         </CardContent>
       </Card>
 
-      {pending.length > 0 && (
+      {pendingTotal > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
           <span className="text-amber-700 dark:text-amber-400">
-            ⏳ <strong>{pending.length}</strong> liquidación
-            {pending.length > 1 ? "es" : ""} sin subir (guardada
-            {pending.length > 1 ? "s" : ""} en este dispositivo). Se subirán solas
-            cuando vuelva la cuota.
+            ⏳ <strong>{pendingTotal}</strong> sin subir en este dispositivo
+            {pendingDetail && ` · ${pendingDetail}`}. Súbelas todas de golpe en
+            una sola llamada (o se subirán solas cuando vuelva la cuota).
           </span>
           <Button
             size="sm"
-            variant="outline"
             className="ml-auto h-8"
-            onClick={() => flushPendingSettles()}
+            onClick={handleUploadAll}
+            disabled={uploading}
           >
-            Subir ahora
+            {uploading ? "Subiendo…" : `Subir todo (${pendingTotal})`}
           </Button>
         </div>
       )}
@@ -332,6 +403,7 @@ export default function BetsPage() {
           ownerUid={appUser.uid}
           isAdmin={isAdmin}
           pendingIds={pendingIds}
+          onRemoveDraft={removePendingCreate}
         />
       )}
     </div>

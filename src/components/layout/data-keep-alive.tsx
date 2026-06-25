@@ -11,6 +11,10 @@ import {
   flushPendingEdits,
   getPendingEdits,
 } from "@/features/bets/pending-edits";
+import {
+  flushPendingCreates,
+  getPendingCreates,
+} from "@/features/bets/pending-creates";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 
 /**
@@ -42,6 +46,7 @@ export function DataKeepAlive() {
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     const tryFlush = () => {
+      if (getPendingCreates().length > 0) void flushPendingCreates();
       if (getPendingSettles().length > 0) void flushPendingSettles();
       if (getPendingEdits().length > 0) void flushPendingEdits();
     };
