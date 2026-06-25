@@ -28,6 +28,20 @@ import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  betInRankingPhase,
+  currentRankingPhase,
+  RANKING_PHASE_DESC,
+  RANKING_PHASE_LABELS,
+  type RankingPhase,
+} from "@/features/matches/phases";
+import {
   subscribeToRankMovements,
   writeRankingEntries,
   writeRankMovements,
@@ -56,6 +70,7 @@ import type {
   AppUser,
   Bet,
   Match,
+  MatchStage,
   RankMovement,
   RankMovementMap,
 } from "@/types/domain";
@@ -155,6 +170,12 @@ export default function RankingPage() {
     dir: "desc",
   });
 
+  // Fase del torneo que se está viendo (General / Grupos / Previa / Final).
+  // Empieza en la fase ACTUAL del torneo; el usuario puede cambiarla y, una vez
+  // que la toca a mano, dejamos de auto-seleccionar.
+  const [phase, setPhase] = useState<RankingPhase>("general");
+  const [phaseTouched, setPhaseTouched] = useState(false);
+
   function handleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key
@@ -216,17 +237,50 @@ export default function RankingPage() {
     );
   }, [allBets, memberUids, activeGroup]);
 
-  // Balance general del grupo en apuestas de tipo superaumento (todas las
-  // de los miembros del grupo activo).
-  const superaumento = useMemo(
-    () => computeSuperaumentoSummary(bets),
-    [bets]
+  // Preselección de la fase ACTUAL del torneo (mientras el usuario no elija una
+  // a mano). Se recalcula cuando llegan/cambian los partidos.
+  useEffect(() => {
+    if (phaseTouched || matches.length === 0) return;
+    setPhase(currentRankingPhase(matches));
+  }, [matches, phaseTouched]);
+
+  // Etapa de cada partido, para clasificar cada apuesta por fase.
+  const stageByMatchId = useMemo(() => {
+    const map = new Map<string, MatchStage>();
+    for (const m of matches) map.set(m.id, m.stage);
+    return map;
+  }, [matches]);
+
+  // Apuestas que cuentan en la fase seleccionada. En "general" son todas; en el
+  // resto, solo las cuyos partidos pertenecen a esa fase (knockout desde 0).
+  const phaseBets = useMemo(
+    () => bets.filter((b) => betInRankingPhase(b, phase, stageByMatchId)),
+    [bets, phase, stageByMatchId]
   );
 
-  // Stats por usuario calculadas a partir de las apuestas DEL GRUPO ACTIVO.
-  // Sustituyen al `user.stats` global para que el ranking refleje solo lo
-  // ocurrido en este grupo.
+  // Balance del grupo en apuestas de tipo superaumento, acotado a la fase
+  // seleccionada.
+  const superaumento = useMemo(
+    () => computeSuperaumentoSummary(phaseBets),
+    [phaseBets]
+  );
+
+  // Stats por usuario de la FASE seleccionada (las que se ven en pantalla:
+  // tabla, gráficas, saldo). En "general" coinciden con todo el torneo.
   const groupStatsByUid = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeUserStats>>();
+    for (const u of users ?? []) {
+      const userBets = phaseBets.filter((b) => b.userId === u.uid);
+      map.set(u.uid, computeUserStats(userBets));
+    }
+    return map;
+  }, [users, phaseBets]);
+
+  // Stats GENERALES (todas las apuestas del torneo), independientes de la fase.
+  // Solo se usan para la posición canónica que alimenta las flechas de
+  // movimiento y el ranking precalculado compartido (que deben ser estables y
+  // no cambiar según la fase que cada uno tenga seleccionada).
+  const generalStatsByUid = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeUserStats>>();
     for (const u of users ?? []) {
       const userBets = bets.filter((b) => b.userId === u.uid);
@@ -280,8 +334,8 @@ export default function RankingPage() {
     const map = new Map<string, number>();
     if (!users) return map;
     const ordered = [...users].sort((a, b) => {
-      const sa = groupStatsByUid.get(a.uid);
-      const sb = groupStatsByUid.get(b.uid);
+      const sa = generalStatsByUid.get(a.uid);
+      const sb = generalStatsByUid.get(b.uid);
       const ra = sa?.roi ?? 0;
       const rb = sb?.roi ?? 0;
       if (rb !== ra) return rb - ra;
@@ -289,7 +343,7 @@ export default function RankingPage() {
     });
     ordered.forEach((u, i) => map.set(u.uid, i + 1));
     return map;
-  }, [users, groupStatsByUid]);
+  }, [users, generalStatsByUid]);
 
   // Snapshot compartido de movimiento del grupo. Lo lee cualquier miembro, así
   // la flecha de TODOS se refresca en cuanto ALGUIEN abre el ranking (no solo
@@ -430,6 +484,44 @@ export default function RankingPage() {
 
   return (
     <div className="space-y-6">
+      {/* ─── Selector de fase (define el alcance de toda la página) ─── */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Trophy className="h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="text-sm font-semibold leading-tight">
+                Clasificación por fase
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {RANKING_PHASE_DESC[phase]}
+              </p>
+            </div>
+          </div>
+          <Select
+            value={phase}
+            onValueChange={(v) => {
+              setPhase(v as RankingPhase);
+              setPhaseTouched(true);
+            }}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-[250px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="general">General</SelectItem>
+              <SelectItem value="grupos">Fase de grupos</SelectItem>
+              <SelectItem value="previa">
+                Fase previa · 16avos y 8avos
+              </SelectItem>
+              <SelectItem value="final">
+                Fase final · cuartos, semis y final
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
       {/* ─── Balance general de superaumentos ─── */}
       <Card>
         <CardHeader>
@@ -525,7 +617,7 @@ export default function RankingPage() {
                 </div>
               </div>
             ) : (
-              <RankingChart users={users} bets={bets} matches={matches} />
+              <RankingChart users={users} bets={phaseBets} matches={matches} />
             )}
           </CardContent>
         </Card>
@@ -553,7 +645,7 @@ export default function RankingPage() {
                 </div>
               </div>
             ) : (
-              <BetsBarChart users={users} bets={bets} />
+              <BetsBarChart users={users} bets={phaseBets} />
             )}
           </CardContent>
         </Card>
@@ -562,7 +654,12 @@ export default function RankingPage() {
       {/* ─── Tabla de clasificación ─── */}
       <Card>
         <CardHeader>
-          <CardTitle>Clasificación</CardTitle>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            Clasificación
+            <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+              {RANKING_PHASE_LABELS[phase]}
+            </span>
+          </CardTitle>
           <CardDescription>
             Pulsa una columna para ordenar por ese campo (vuelve a pulsar para
             invertir). Por defecto, por <strong>ROI</strong>. Se actualiza en

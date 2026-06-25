@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { MatchCard } from "@/components/world-cup/match-card";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import {
@@ -14,6 +15,7 @@ import { subscribeToMatches } from "@/features/matches/matches.service";
 import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
 import { WORLDCUP_2026_MATCHES } from "@/features/matches/worldcup-fixtures";
 import { STAGE_STYLES } from "@/features/matches/stage-styles";
+import { PREVIA_STAGES, FINAL_STAGES } from "@/features/matches/phases";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { teamFlagCode } from "@/features/matches/teams-2026";
 import { cn } from "@/lib/utils";
@@ -92,6 +94,60 @@ function MiniBracketCard({
   );
 }
 
+/** Sección plegable para agrupar fases del cuadro (Fases previas / Fase final). */
+function CollapsibleSection({
+  open,
+  onToggle,
+  title,
+  subtitle,
+  emoji,
+  count,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  subtitle?: string;
+  emoji?: string;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card/40">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/30"
+      >
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+            !open && "-rotate-90"
+          )}
+        />
+        {emoji && <span className="text-base">{emoji}</span>}
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold leading-tight">
+            {title}
+          </span>
+          {subtitle && (
+            <span className="block text-xs text-muted-foreground">
+              {subtitle}
+            </span>
+          )}
+        </span>
+        {count != null && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && <div className="border-t p-3">{children}</div>}
+    </div>
+  );
+}
+
 const BRACKET_STAGES: MatchStage[] = ["r32", "r16", "qf", "sf", "final"];
 
 // ── Lados del cuadro (izquierda / derecha) ──────────────────────────────────
@@ -140,6 +196,9 @@ export default function KnockoutPage() {
   const [betsFor, setBetsFor] = useState<Match | null>(null);
   // Vista del cuadro: columnas (todo hacia abajo) o cuadro a dos lados.
   const [view, setView] = useState<"columns" | "bracket">("columns");
+  // Desplegables de la vista por columnas: "Fases previas" y "Fase final".
+  const [openPrev, setOpenPrev] = useState(true);
+  const [openFinal, setOpenFinal] = useState(true);
 
   useEffect(() => {
     const unsub = subscribeToMatches(
@@ -180,8 +239,6 @@ export default function KnockoutPage() {
   }
   byStage.third.sort((a, b) => a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis());
 
-  const presentStages = BRACKET_STAGES.filter((s) => byStage[s].length > 0);
-
   // Resolución PROVISIONAL del cuadro con la clasificación actual (se recalcula
   // en cada render, así cada resultado nuevo actualiza los cruces). No persiste.
   const overrides = resolveBracketProvisional(matches);
@@ -198,6 +255,69 @@ export default function KnockoutPage() {
       homeSub: sub(ov?.home),
       awaySub: sub(ov?.away),
     };
+  };
+
+  // Rejilla de columnas (una por fase) para un conjunto de fases dado. Se usa
+  // dentro de cada desplegable ("Fases previas" / "Fase final").
+  const renderColumns = (stages: MatchStage[]) => {
+    const present = stages.filter((s) => byStage[s].length > 0);
+    if (present.length === 0) {
+      return (
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+          Aún no disponible.
+        </p>
+      );
+    }
+    return (
+      <div className="overflow-x-auto rounded-lg border bg-card/40 p-4">
+        <div
+          className="grid gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${present.length}, minmax(220px, 1fr))`,
+            minWidth: present.length > 1 ? `${present.length * 240}px` : undefined,
+            minHeight: "560px",
+          }}
+        >
+          {present.map((stage) => {
+            const style = STAGE_STYLES[stage];
+            const items = byStage[stage];
+            return (
+              <div key={stage} className="flex flex-col">
+                <div
+                  className={cn(
+                    "mb-3 flex items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wider",
+                    style.chip
+                  )}
+                >
+                  <span>
+                    {style.emoji} {style.label}
+                  </span>
+                  <span className="opacity-70">({items.length})</span>
+                </div>
+                <div className="relative flex flex-1 flex-col justify-around gap-2">
+                  {items.map((m) => (
+                    <div
+                      key={m.id}
+                      className={cn(
+                        "relative rounded-lg bg-gradient-to-br p-[1px]",
+                        style.gradient
+                      )}
+                    >
+                      <MatchCard
+                        {...displayProps(m)}
+                        compact
+                        className="bg-card"
+                        onClick={setBetsFor}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   // Columnas para la vista "cuadro a dos lados": mitad izquierda → final → mitad
@@ -264,55 +384,31 @@ export default function KnockoutPage() {
         </CardHeader>
       </Card>
 
-      {/* ──────────── Vista columnas (todo hacia abajo) ──────────── */}
+      {/* ──── Vista columnas, agrupada en Fases previas / Fase final ──── */}
       {view === "columns" && (
-      <div className="overflow-x-auto rounded-xl border bg-card/40 p-4">
-        <div
-          className="grid min-w-[1100px] gap-4"
-          style={{
-            gridTemplateColumns: `repeat(${presentStages.length}, minmax(220px, 1fr))`,
-            minHeight: "640px",
-          }}
-        >
-          {presentStages.map((stage) => {
-            const style = STAGE_STYLES[stage];
-            const items = byStage[stage];
-            return (
-              <div key={stage} className="flex flex-col">
-                <div
-                  className={cn(
-                    "mb-3 flex items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wider",
-                    style.chip
-                  )}
-                >
-                  <span>
-                    {style.emoji} {style.label}
-                  </span>
-                  <span className="opacity-70">({items.length})</span>
-                </div>
-                <div className="relative flex flex-1 flex-col justify-around gap-2">
-                  {items.map((m) => (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "relative rounded-lg bg-gradient-to-br p-[1px]",
-                        style.gradient
-                      )}
-                    >
-                      <MatchCard
-                        {...displayProps(m)}
-                        compact
-                        className="bg-card"
-                        onClick={setBetsFor}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="space-y-4">
+          <CollapsibleSection
+            open={openPrev}
+            onToggle={() => setOpenPrev((o) => !o)}
+            title="Fases previas"
+            subtitle="Dieciseisavos · Octavos"
+            emoji="🎯"
+            count={PREVIA_STAGES.reduce((a, s) => a + byStage[s].length, 0)}
+          >
+            {renderColumns(PREVIA_STAGES)}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            open={openFinal}
+            onToggle={() => setOpenFinal((o) => !o)}
+            title="Fase final"
+            subtitle="Cuartos · Semis · Final"
+            emoji="🏆"
+            count={FINAL_STAGES.reduce((a, s) => a + byStage[s].length, 0)}
+          >
+            {renderColumns(FINAL_STAGES)}
+          </CollapsibleSection>
         </div>
-      </div>
       )}
 
       {/* ──── Vista cuadro a dos lados: final en el centro, cabe sin scroll ──── */}
