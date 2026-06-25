@@ -203,6 +203,100 @@ export function eliminatedFromTop2(
 }
 
 /**
+ * Equipos del grupo que YA TIENEN ASEGURADO el top-2 (clasificación DIRECTA)
+ * pase lo que pase en los partidos pendientes del grupo. Es el "dual" de
+ * `eliminatedFromTop2`, pero PESIMISTA con los desempates: como la diferencia
+ * de goles de los partidos que faltan no se puede prever, un equipo solo se
+ * considera clasificado MATEMÁTICAMENTE si termina 1.º o 2.º en TODOS los
+ * escenarios posibles, incluso perdiendo cualquier desempate (peor caso).
+ *
+ *  - Si el grupo ya ha terminado: el 1.º y el 2.º reales están asegurados.
+ *  - Si quedan partidos: simula todos los resultados posibles de los pendientes
+ *    y exige que en NINGÚN escenario haya 2 o más equipos con puntos >= a los
+ *    suyos (si los hubiera, podría caer al 3.º por desempate).
+ *
+ * Sirve para distinguir "va 1.º/2.º en la foto actual" de "ya no se le puede
+ * escapar la clasificación directa".
+ */
+export function guaranteedTop2(
+  groupId: GroupId,
+  matches: Match[]
+): Set<string> {
+  const groupMatches = matches.filter(
+    (m) => m.stage === "group" && m.groupId === groupId
+  );
+  const labels = [
+    ...new Set(groupMatches.flatMap((m) => [m.homeLabel, m.awayLabel])),
+  ];
+  if (labels.length < 4) return new Set();
+
+  const finished = groupMatches.filter(
+    (m) => m.status === "finished" && m.result
+  );
+  if (finished.length === 0) return new Set();
+  const remaining = groupMatches.filter(
+    (m) => !(m.status === "finished" && m.result)
+  );
+
+  // Grupo terminado: el 1.º y el 2.º reales ya están clasificados directos.
+  if (remaining.length === 0) {
+    const st = computeGroupStandings(groupId, matches);
+    const out = new Set<string>();
+    if (st[0] && st[0].played > 0) out.add(st[0].teamLabel);
+    if (st[1] && st[1].played > 0) out.add(st[1].teamLabel);
+    return out;
+  }
+
+  const base: Record<string, number> = {};
+  for (const l of labels) base[l] = 0;
+  for (const m of finished) {
+    const r = m.result!;
+    if (r.homeGoals > r.awayGoals) base[m.homeLabel] += 3;
+    else if (r.homeGoals === r.awayGoals) {
+      base[m.homeLabel] += 1;
+      base[m.awayLabel] += 1;
+    } else base[m.awayLabel] += 3;
+  }
+
+  // Asumimos que todos están asegurados y descartamos a quien, en algún
+  // escenario, podría quedar fuera del top-2 (peor caso de desempates).
+  const safe: Record<string, boolean> = {};
+  for (const l of labels) safe[l] = true;
+
+  const total = 3 ** remaining.length;
+  for (let mask = 0; mask < total; mask++) {
+    const pts = { ...base };
+    let x = mask;
+    for (const m of remaining) {
+      const outcome = x % 3;
+      x = Math.floor(x / 3);
+      if (outcome === 0) pts[m.homeLabel] += 3;
+      else if (outcome === 1) {
+        pts[m.homeLabel] += 1;
+        pts[m.awayLabel] += 1;
+      } else pts[m.awayLabel] += 3;
+    }
+    for (const l of labels) {
+      // Peor caso: cualquiera con puntos >= a los míos podría quedar por encima
+      // (perdería el desempate). Si hay 2 o más, podría caer al 3.º.
+      const geqOrAbove = labels.filter(
+        (o) => o !== l && pts[o] >= pts[l]
+      ).length;
+      if (geqOrAbove > 1) safe[l] = false;
+    }
+  }
+
+  const out = new Set<string>();
+  for (const l of labels) {
+    const played = finished.some(
+      (m) => m.homeLabel === l || m.awayLabel === l
+    );
+    if (safe[l] && played) out.add(l);
+  }
+  return out;
+}
+
+/**
  * Equipos del grupo REALMENTE eliminados del Mundial (no solo de la directa).
  * Como en el formato 2026 los 8 MEJORES TERCEROS también pasan, un equipo solo
  * está eliminado si:

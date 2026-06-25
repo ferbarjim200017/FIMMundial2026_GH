@@ -9,6 +9,7 @@ import {
   computeGroupStandings,
   computeBestThirds,
   eliminatedFromKnockout,
+  guaranteedTop2,
   type TeamStanding,
 } from "@/features/standings/standings.utils";
 
@@ -21,6 +22,9 @@ interface Props {
 export function GroupTable({ groupId, matches, compact }: Props) {
   const standings = computeGroupStandings(groupId, matches);
   const eliminated = eliminatedFromKnockout(groupId, matches);
+  // Clasificados DIRECTOS matemáticos: aseguran el top-2 pase lo que pase en
+  // los partidos pendientes (no basta con ir 1.º/2.º en la foto actual).
+  const qualifiedDirect = guaranteedTop2(groupId, matches);
   // Mejores terceros (top-8) AHORA MISMO: se recalcula con cada resultado.
   const qualifiedThirds = new Set(
     computeBestThirds(GROUP_IDS, matches)
@@ -79,6 +83,7 @@ export function GroupTable({ groupId, matches, compact }: Props) {
                 compact={compact}
                 eliminated={eliminated.has(s.teamLabel)}
                 qualifiedThird={qualifiedThirds.has(s.teamLabel)}
+                qualifiedDirect={qualifiedDirect.has(s.teamLabel)}
               />
             ))}
           </tbody>
@@ -93,31 +98,34 @@ function Row({
   compact,
   eliminated,
   qualifiedThird,
+  qualifiedDirect,
 }: {
   s: TeamStanding;
   compact?: boolean;
   eliminated?: boolean;
   qualifiedThird?: boolean;
+  qualifiedDirect?: boolean;
 }) {
-  // Marcas visuales para los puestos (foto actual, se actualiza con cada
-  // resultado):
-  //  - 1.º y 2.º clasifican directo (verde) → "Clasificado"
+  // Marcas visuales para los puestos:
+  //  - "Clasificado" (verde) SOLO si tiene el top-2 asegurado matemáticamente
+  //    (no basta con ir 1.º/2.º en la foto actual).
   //  - 3.º clasifica solo si está entre los 8 mejores terceros → "Mejor 3.º"
+  //  - va en puesto de clasificar pero aún no asegurado → ámbar (sin badge)
   //  - resto / eliminado matemáticamente → rojo
   const rank = s.rank ?? 0;
   const jugado = s.played > 0;
-  const clasifDirecto = !eliminated && jugado && (rank === 1 || rank === 2);
+  const clasifDirecto = !eliminated && jugado && !!qualifiedDirect;
   const clasifTercero = !eliminated && jugado && rank === 3 && !!qualifiedThird;
   const clasificado = clasifDirecto || clasifTercero;
+  const enPuesto =
+    !eliminated && jugado && (rank === 1 || rank === 2 || rank === 3);
 
   const indicatorClass = eliminated
     ? "bg-loss"
-    : rank === 1 || rank === 2
+    : clasificado
       ? "bg-profit/70"
-      : rank === 3
-        ? clasifTercero
-          ? "bg-profit/70"
-          : "bg-amber-500/80"
+      : enPuesto
+        ? "bg-amber-500/80"
         : "bg-loss/40";
 
   return (
