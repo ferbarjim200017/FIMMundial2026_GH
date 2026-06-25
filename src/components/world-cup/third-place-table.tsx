@@ -87,7 +87,14 @@ function Row({ e, idx }: { e: ThirdPlaceEntry; idx: number }) {
         </div>
       </td>
       <td className="px-2 py-1.5 font-bold text-primary">{e.groupId}</td>
-      <td className="px-2 py-1.5 font-medium">{e.teamLabel}</td>
+      <td className="px-2 py-1.5 font-medium">
+        {e.teamLabel}
+        {e.qualified && (
+          <span className="ml-1.5 rounded bg-profit/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-profit">
+            Clasificado
+          </span>
+        )}
+      </td>
       <td className="px-2 py-1.5 text-center font-mono">{e.played}</td>
       <td className="px-2 py-1.5 text-center font-mono">{e.won}</td>
       <td className="px-2 py-1.5 text-center font-mono">{e.drawn}</td>

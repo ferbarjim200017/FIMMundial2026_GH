@@ -2,10 +2,12 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GROUP_COLORS } from "@/features/matches/stage-styles";
+import { GROUP_IDS } from "@/features/matches/matches.service";
 import { cn } from "@/lib/utils";
 import type { GroupId, Match } from "@/types/domain";
 import {
   computeGroupStandings,
+  computeBestThirds,
   eliminatedFromKnockout,
   type TeamStanding,
 } from "@/features/standings/standings.utils";
@@ -19,6 +21,12 @@ interface Props {
 export function GroupTable({ groupId, matches, compact }: Props) {
   const standings = computeGroupStandings(groupId, matches);
   const eliminated = eliminatedFromKnockout(groupId, matches);
+  // Mejores terceros (top-8) AHORA MISMO: se recalcula con cada resultado.
+  const qualifiedThirds = new Set(
+    computeBestThirds(GROUP_IDS, matches)
+      .filter((t) => t.qualified)
+      .map((t) => t.teamLabel)
+  );
   const hasAny = standings.some((s) => s.played > 0);
   const groupStyle = GROUP_COLORS[groupId];
 
@@ -70,6 +78,7 @@ export function GroupTable({ groupId, matches, compact }: Props) {
                 s={s}
                 compact={compact}
                 eliminated={eliminated.has(s.teamLabel)}
+                qualifiedThird={qualifiedThirds.has(s.teamLabel)}
               />
             ))}
           </tbody>
@@ -83,29 +92,40 @@ function Row({
   s,
   compact,
   eliminated,
+  qualifiedThird,
 }: {
   s: TeamStanding;
   compact?: boolean;
   eliminated?: boolean;
+  qualifiedThird?: boolean;
 }) {
-  // Marcas visuales para los puestos:
-  //  - 1.º y 2.º clasifican directo (verde)
-  //  - 3.º depende de la tabla de terceros (ámbar)
-  //  - 4.º eliminado (rojo tenue)
+  // Marcas visuales para los puestos (foto actual, se actualiza con cada
+  // resultado):
+  //  - 1.º y 2.º clasifican directo (verde) → "Clasificado"
+  //  - 3.º clasifica solo si está entre los 8 mejores terceros → "Mejor 3.º"
+  //  - resto / eliminado matemáticamente → rojo
   const rank = s.rank ?? 0;
+  const jugado = s.played > 0;
+  const clasifDirecto = !eliminated && jugado && (rank === 1 || rank === 2);
+  const clasifTercero = !eliminated && jugado && rank === 3 && !!qualifiedThird;
+  const clasificado = clasifDirecto || clasifTercero;
+
   const indicatorClass = eliminated
     ? "bg-loss"
     : rank === 1 || rank === 2
       ? "bg-profit/70"
       : rank === 3
-        ? "bg-amber-500/80"
+        ? clasifTercero
+          ? "bg-profit/70"
+          : "bg-amber-500/80"
         : "bg-loss/40";
 
   return (
     <tr
       className={cn(
         "border-b last:border-0 hover:bg-accent/30",
-        eliminated && "bg-loss/10"
+        eliminated && "bg-loss/10",
+        clasificado && "bg-profit/10"
       )}
     >
       <td className="px-2 py-1.5 text-center">
@@ -121,6 +141,16 @@ function Row({
         {eliminated && (
           <span className="ml-1.5 rounded bg-loss/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-loss">
             Eliminado
+          </span>
+        )}
+        {clasifDirecto && (
+          <span className="ml-1.5 rounded bg-profit/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-profit">
+            Clasificado
+          </span>
+        )}
+        {clasifTercero && (
+          <span className="ml-1.5 rounded bg-profit/20 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-profit">
+            Mejor 3.º
           </span>
         )}
       </td>
