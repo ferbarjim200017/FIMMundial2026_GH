@@ -3,18 +3,6 @@
 import { useEffect } from "react";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
-import {
-  flushPendingSettles,
-  getPendingSettles,
-} from "@/features/bets/pending-settles";
-import {
-  flushPendingEdits,
-  getPendingEdits,
-} from "@/features/bets/pending-edits";
-import {
-  flushPendingCreates,
-  getPendingCreates,
-} from "@/features/bets/pending-creates";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 
 /**
@@ -27,6 +15,12 @@ import { isFirebaseConfigured } from "@/lib/firebase/client";
  *
  * No pinta nada: es solo un soporte de datos. Se monta dentro del AuthGuard,
  * así que solo se suscribe cuando hay un usuario autenticado.
+ *
+ * NOTA: aquí NO se sube nada de forma automática. Las colas locales
+ * (borradores, liquidaciones y ediciones "sin subir") solo se suben cuando el
+ * usuario pulsa "Subir todo" en la lista de apuestas. Antes había un auto-flush
+ * cada 5 min, pero subía las apuestas mientras el usuario aún las estaba
+ * preparando ("se subían solas"), así que se quitó: el usuario controla cuándo.
  */
 export function DataKeepAlive() {
   useEffect(() => {
@@ -37,22 +31,6 @@ export function DataKeepAlive() {
       unsubBets();
       unsubMatches();
     };
-  }, []);
-
-  // Sube las liquidaciones guardadas en local (sin subir por falta de cuota) en
-  // cuanto se pueda: al abrir la app y cada 5 minutos. Así capta el reset diario
-  // de la cuota gratuita de Firebase (≈ 9:00 en España) sin que el usuario haga
-  // nada.
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    const tryFlush = () => {
-      if (getPendingCreates().length > 0) void flushPendingCreates();
-      if (getPendingSettles().length > 0) void flushPendingSettles();
-      if (getPendingEdits().length > 0) void flushPendingEdits();
-    };
-    tryFlush();
-    const id = setInterval(tryFlush, 5 * 60 * 1000);
-    return () => clearInterval(id);
   }, []);
 
   return null;
