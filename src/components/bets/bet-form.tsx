@@ -23,6 +23,7 @@ import {
   type BetFormValues,
 } from "@/features/bets/bets.schema";
 import { createBet, updateBet } from "@/features/bets/bets.service";
+import { queueEdit } from "@/features/bets/pending-edits";
 import {
   updateDefaultBookmaker,
   updateDefaultStake,
@@ -445,7 +446,19 @@ export function BetForm({ userId, initial, prefill, onDone }: Props) {
       await withTimeout(op, 9000);
       finish();
     } catch (err) {
-      if (err instanceof TimeoutError) {
+      if (initial) {
+        // EDICIÓN: tanto si tarda (TimeoutError) como si Firebase la rechaza
+        // ("quota exceeded"), guardamos el cambio en LOCAL para NO perderlo: se
+        // muestra al instante con el distintivo "sin subir" y se reintenta solo.
+        // Reaplicarlo es idempotente (updateBet recalcula el profit).
+        queueEdit({
+          betId: initial.id,
+          input: { ...parsed.data, betId: initial.id },
+          label: `${parsed.data.matchLabel} · ${parsed.data.selection}`,
+          queuedAt: Date.now(),
+        });
+        finish();
+      } else if (err instanceof TimeoutError) {
         // Red lenta: se guarda y sincroniza en segundo plano. Continuamos
         // para no dejar el botón en "Guardando…" eternamente.
         finish();

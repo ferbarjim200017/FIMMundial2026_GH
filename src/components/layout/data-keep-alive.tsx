@@ -7,6 +7,10 @@ import {
   flushPendingSettles,
   getPendingSettles,
 } from "@/features/bets/pending-settles";
+import {
+  flushPendingEdits,
+  getPendingEdits,
+} from "@/features/bets/pending-edits";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 
 /**
@@ -39,6 +43,7 @@ export function DataKeepAlive() {
     if (!isFirebaseConfigured) return;
     const tryFlush = () => {
       if (getPendingSettles().length > 0) void flushPendingSettles();
+      if (getPendingEdits().length > 0) void flushPendingEdits();
     };
     tryFlush();
     const id = setInterval(tryFlush, 5 * 60 * 1000);

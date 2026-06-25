@@ -65,6 +65,30 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
     !!bet.isFreebet
   );
 
+  /** Guarda la liquidación en LOCAL (cola "sin subir") y cierra. Se usa tanto
+   *  cuando la subida falla/tarda como cuando el usuario lo pide a mano. */
+  function queueOffline() {
+    queueSettle({
+      betId: bet.id,
+      status: choice,
+      cashoutProfit: choice === "cashout" ? cashoutProfit : undefined,
+      label: `${bet.matchLabel} · ${bet.selection}`,
+      queuedAt: Date.now(),
+    });
+    onOpenChange(false);
+    onSettled?.();
+  }
+
+  /** Botón "Sin subir": el usuario sabe que la cuota está saturada y no quiere
+   *  esperar; lo guardamos en local directamente, sin intentar subirlo. */
+  function handleQueueOffline() {
+    if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
+      setError("Introduce un importe de cashout válido");
+      return;
+    }
+    queueOffline();
+  }
+
   async function handleConfirm() {
     if (choice === "cashout" && !Number.isFinite(cashoutAmountNum)) {
       setError("Introduce un importe de cashout válido");
@@ -83,27 +107,12 @@ export function SettleBetDialog({ bet, open, onOpenChange, onSettled }: Props) {
       );
       onOpenChange(false);
       onSettled?.();
-    } catch (err) {
-      if (err instanceof TimeoutError) {
-        // Tarda por red lenta: el cambio se guarda y se sincroniza en segundo
-        // plano. Cerramos igualmente para no dejar la UI colgada.
-        onOpenChange(false);
-        onSettled?.();
-      } else {
-        // No se pudo subir (p. ej. "quota exceeded" del plan gratuito de
-        // Firebase): guardamos la liquidación en LOCAL. La apuesta se marca al
-        // instante como ganada/perdida con un distintivo "sin subir" y se
-        // reintenta subir sola en cuanto vuelva la cuota (≈ 9:00).
-        queueSettle({
-          betId: bet.id,
-          status: choice,
-          cashoutProfit: choice === "cashout" ? cashoutProfit : undefined,
-          label: `${bet.matchLabel} · ${bet.selection}`,
-          queuedAt: Date.now(),
-        });
-        onOpenChange(false);
-        onSettled?.();
-      }
+    } catch {
+      // Tanto si tarda demasiado (TimeoutError) como si Firebase la rechaza
+      // (quota), la guardamos en LOCAL para NO perderla: se marca "sin subir" y
+      // se reintenta subir sola. Si la escritura sí llegó a aplicarse, el
+      // reintento es idempotente (no duplica el beneficio).
+      queueOffline();
     } finally {
       setSubmitting(false);
     }

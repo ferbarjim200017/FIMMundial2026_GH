@@ -24,6 +24,10 @@ import {
   applyPendingToBets,
   flushPendingSettles,
 } from "@/features/bets/pending-settles";
+import {
+  usePendingEdits,
+  applyPendingEditsToBets,
+} from "@/features/bets/pending-edits";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   BOOKMAKER_OPTIONS,
@@ -75,8 +79,9 @@ export default function BetsPage() {
     return unsub;
   }, [appUser, scope, status, bookmaker]);
 
-  // Liquidaciones guardadas en local (sin subir por falta de cuota de Firebase).
+  // Liquidaciones y ediciones guardadas en local (sin subir por falta de cuota).
   const pending = usePendingSettles();
+  const pendingEdits = usePendingEdits();
 
   // Filtrado adicional por grupo activo + búsqueda de texto en tiempo real.
   const normalizedQuery = query.trim().toLowerCase();
@@ -115,12 +120,16 @@ export default function BetsPage() {
     normalizedQuery,
   ]);
 
-  // Superponemos las liquidaciones locales sin subir: las apuestas se ven ya
-  // ganadas/perdidas (con su beneficio) y marcadas "sin subir".
-  const { bets: displayBets, pendingIds } = useMemo(
-    () => applyPendingToBets(bets, pending),
-    [bets, pending]
-  );
+  // Superponemos lo local sin subir: liquidaciones (ganada/perdida con su
+  // beneficio) y ediciones (datos ya cambiados). Ambas marcadas "sin subir".
+  const { bets: displayBets, pendingIds } = useMemo(() => {
+    const conSettles = applyPendingToBets(bets, pending);
+    return applyPendingEditsToBets(
+      conSettles.bets,
+      pendingEdits,
+      conSettles.pendingIds
+    );
+  }, [bets, pending, pendingEdits]);
 
   // La query ya viene por createdAt desc; reordenamos en cliente si el usuario
   // elige "por registro" (addedAt, con createdAt como desempate para que las
