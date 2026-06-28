@@ -17,10 +17,14 @@ import {
   STAGE_LABELS,
   subscribeToMatches,
 } from "@/features/matches/matches.service";
+import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
 import type { Match } from "@/types/domain";
 
 type StageFilter = "all" | Match["stage"];
 type StatusFilter = "all" | "upcoming" | "finished";
+
+/** Partido ya con los placeholders del cuadro resueltos a equipos reales. */
+type ShownMatch = Match & { homeSub?: string; awaySub?: string };
 
 export default function CalendarPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -43,9 +47,30 @@ export default function CalendarPage() {
     return unsub;
   }, []);
 
+  // Resuelve los placeholders del cuadro ("2.º Grupo A", "Mejor 3.º…", "Ganador
+  // M73") a equipos reales con la clasificación actual, para que el calendario
+  // muestre los cruces de verdad (con bandera) sin esperar a pulsar nada. Si el
+  // grupo aún no terminó, marca el hueco como provisional.
+  const resolved = useMemo<ShownMatch[]>(() => {
+    const ov = resolveBracketProvisional(matches);
+    const subOf = (s: { slot: string; provisional: boolean } | null) =>
+      s && s.provisional ? `${s.slot} · prov.` : undefined;
+    return matches.map((m) => {
+      const o = ov.get(m.id);
+      if (!o) return m;
+      return {
+        ...m,
+        homeLabel: o.home?.team ?? m.homeLabel,
+        awayLabel: o.away?.team ?? m.awayLabel,
+        homeSub: subOf(o.home),
+        awaySub: subOf(o.away),
+      };
+    });
+  }, [matches]);
+
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
-    const list = matches.filter((m) => {
+    const list = resolved.filter((m) => {
       if (stage !== "all" && m.stage !== stage) return false;
       if (status === "upcoming" && m.status === "finished") return false;
       if (status === "finished" && m.status !== "finished") return false;
@@ -66,10 +91,10 @@ export default function CalendarPage() {
       return status === "finished" ? -diff : diff;
     });
     return list;
-  }, [matches, search, stage, status]);
+  }, [resolved, search, stage, status]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Match[]>();
+    const map = new Map<string, ShownMatch[]>();
     for (const m of filtered) {
       const day = new Date(m.kickoffUtc.toMillis()).toLocaleDateString("es-ES", {
         weekday: "long",
@@ -151,7 +176,13 @@ export default function CalendarPage() {
             </h2>
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {items.map((m) => (
-                <MatchCard key={m.id} match={m} onClick={setBetsFor} />
+                <MatchCard
+                  key={m.id}
+                  match={m}
+                  homeSub={m.homeSub}
+                  awaySub={m.awaySub}
+                  onClick={setBetsFor}
+                />
               ))}
             </div>
           </div>
