@@ -24,6 +24,11 @@ export const TVE_MATCH_IDS = new Set<string>([
   "wc26-m56", // 25 jun · Ecuador – Alemania
   "wc26-m66", // 27 jun · Uruguay – España
   "wc26-m71", // 28 jun · Colombia – Portugal
+  // Dieciseisavos (Round of 32)
+  "wc26-m73", // 28 jun · Sudáfrica – Canadá
+  "wc26-m76", // 29 jun · Brasil – Japón
+  "wc26-m77", // 30 jun · Francia – Suecia
+  "wc26-m84", // 2 jul · España – Austria
 ]);
 
 export function isTveMatch(match: Match): boolean {
