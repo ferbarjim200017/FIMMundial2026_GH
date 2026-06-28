@@ -182,13 +182,22 @@ export function MatchCard({
                 {r.awayGoals}
               </span>
             </div>
-            {r.homeGoals === r.awayGoals && r.penaltyWinner && (
-              <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
-                {r.homePenalties != null && r.awayPenalties != null
-                  ? `Pen. ${r.homePenalties}-${r.awayPenalties}`
-                  : `Pen. ${r.penaltyWinner === "home" ? "←" : "→"}`}
-              </span>
-            )}
+            {(() => {
+              const notes: string[] = [];
+              if (r.afterExtraTime) notes.push("Prór.");
+              if (r.homeGoals === r.awayGoals && r.penaltyWinner) {
+                notes.push(
+                  r.homePenalties != null && r.awayPenalties != null
+                    ? `Pen. ${r.homePenalties}-${r.awayPenalties}`
+                    : `Pen. ${r.penaltyWinner === "home" ? "←" : "→"}`
+                );
+              }
+              return notes.length ? (
+                <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+                  {notes.join(" · ")}
+                </span>
+              ) : null;
+            })()}
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">vs</span>

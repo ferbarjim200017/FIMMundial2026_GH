@@ -74,22 +74,24 @@ function MiniBracketCard({
       </div>
     );
   };
+  // Ganador (para resaltar): mayor marcador final, o el de los penaltis si
+  // quedó empate. homeGoals/awayGoals ya es el marcador final (tras prórroga).
+  const homeWin =
+    !!finished &&
+    (r!.homeGoals > r!.awayGoals ||
+      (r!.homeGoals === r!.awayGoals && r!.penaltyWinner === "home"));
+  const awayWin =
+    !!finished &&
+    (r!.awayGoals > r!.homeGoals ||
+      (r!.homeGoals === r!.awayGoals && r!.penaltyWinner === "away"));
   return (
     <button
       type="button"
       onClick={() => onClick(match)}
       className="w-full rounded border bg-card px-1 py-0.5 text-left text-[9px] leading-tight transition-colors hover:bg-accent/40"
     >
-      {row(
-        match.homeLabel,
-        finished ? r!.homeGoals : null,
-        !!finished && r!.homeGoals > r!.awayGoals
-      )}
-      {row(
-        match.awayLabel,
-        finished ? r!.awayGoals : null,
-        !!finished && r!.awayGoals > r!.homeGoals
-      )}
+      {row(match.homeLabel, finished ? r!.homeGoals : null, homeWin)}
+      {row(match.awayLabel, finished ? r!.awayGoals : null, awayWin)}
     </button>
   );
 }

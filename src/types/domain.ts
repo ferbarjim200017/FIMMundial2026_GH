@@ -284,22 +284,27 @@ export type GroupId =
   | "G" | "H" | "I" | "J" | "K" | "L";
 
 export interface MatchResult {
+  /** Marcador que DECIDE el partido: en eliminatorias, el resultado FINAL
+   *  (incluyendo la prórroga si la hubo). En grupos, el marcador de los 90'.
+   *  El ganador del cuadro y todas las pantallas se basan en estos campos. */
   homeGoals: number;
   awayGoals: number;
   homeYellow: number;
   awayYellow: number;
   homeRed: number;
   awayRed: number;
-  /** Eliminatorias: el partido se decidió en la prórroga (90'+30'). Solo
-   *  informativo; el marcador (homeGoals/awayGoals) ya incluye los goles de
-   *  la prórroga. */
+  /** Eliminatorias: el partido se jugó prórroga (90'+30'). */
   afterExtraTime?: boolean;
-  /** Eliminatorias con empate: marcador de la tanda de penaltis. */
+  /** Eliminatorias con prórroga: marcador a los 90' (tiempo reglamentario),
+   *  antes de la prórroga. El final, tras la prórroga, va en homeGoals/awayGoals.
+   *  Solo informativo (para mostrar "2-2 (90'), 3-2 prór."). */
+  home90?: number | null;
+  away90?: number | null;
+  /** Eliminatorias con empate (tras prórroga): marcador de la tanda de penaltis. */
   homePenalties?: number | null;
   awayPenalties?: number | null;
-  /** En eliminatorias, si terminó empatado tras 90' + prórroga, quién ganó
-   *  los penaltis. Se deriva del marcador de penaltis. Solo se rellena cuando
-   *  hay empate en knockouts. */
+  /** En eliminatorias, si terminó empatado, quién ganó los penaltis. Se deriva
+   *  del marcador de penaltis. Solo se rellena cuando hay empate en knockouts. */
   penaltyWinner?: "home" | "away" | null;
 }
 

@@ -25,34 +25,47 @@ interface Props {
 }
 
 interface FormState {
-  homeGoals: string;
-  awayGoals: string;
+  // Marcador a los 90' (tiempo reglamentario).
+  homeReg: string;
+  awayReg: string;
+  // Eliminatorias:
+  afterExtraTime: boolean;
+  homeExtra: string; // marcador final tras la prórroga
+  awayExtra: string;
+  penalties: boolean;
+  homePenalties: string;
+  awayPenalties: string;
+  // Solo grupos:
   homeYellow: string;
   awayYellow: string;
   homeRed: string;
   awayRed: string;
-  // Eliminatorias:
-  afterExtraTime: boolean;
-  penalties: boolean;
-  homePenalties: string;
-  awayPenalties: string;
 }
 
 function initialFor(m: Match): FormState {
   const r = m.result;
+  const et = !!r?.afterExtraTime;
+  // En partidos con prórroga, el 90' está en home90/away90 y el final en
+  // homeGoals/awayGoals. Sin prórroga, el "Goles" es el propio homeGoals.
+  const reg90 =
+    et && r?.home90 != null
+      ? { h: r.home90 ?? 0, a: r.away90 ?? 0 }
+      : { h: r?.homeGoals ?? 0, a: r?.awayGoals ?? 0 };
   const hasPenalties =
     r?.homePenalties != null || r?.awayPenalties != null || !!r?.penaltyWinner;
   return {
-    homeGoals: String(r?.homeGoals ?? 0),
-    awayGoals: String(r?.awayGoals ?? 0),
+    homeReg: String(reg90.h),
+    awayReg: String(reg90.a),
+    afterExtraTime: et,
+    homeExtra: String(r?.homeGoals ?? 0),
+    awayExtra: String(r?.awayGoals ?? 0),
+    penalties: hasPenalties,
+    homePenalties: String(r?.homePenalties ?? 0),
+    awayPenalties: String(r?.awayPenalties ?? 0),
     homeYellow: String(r?.homeYellow ?? 0),
     awayYellow: String(r?.awayYellow ?? 0),
     homeRed: String(r?.homeRed ?? 0),
     awayRed: String(r?.awayRed ?? 0),
-    afterExtraTime: !!r?.afterExtraTime,
-    penalties: hasPenalties,
-    homePenalties: String(r?.homePenalties ?? 0),
-    awayPenalties: String(r?.awayPenalties ?? 0),
   };
 }
 
@@ -73,11 +86,29 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
     setValues((s) => ({ ...s, [key]: v }));
   }
 
+  /** Marca/desmarca la prórroga; al activarla, el resultado tras la prórroga
+   *  arranca en el marcador de los 90' (cómodo para ir cambiándolo). */
+  function toggleExtraTime() {
+    setValues((s) =>
+      s.afterExtraTime
+        ? { ...s, afterExtraTime: false }
+        : {
+            ...s,
+            afterExtraTime: true,
+            homeExtra: s.homeReg,
+            awayExtra: s.awayReg,
+          }
+    );
+  }
+
   const isKnockout = match.stage !== "group";
-  const isTie = Number(values.homeGoals) === Number(values.awayGoals);
-  // La tanda de penaltis se muestra si el usuario la activa o si en
-  // eliminatoria el resultado quedó empatado (es obligatoria).
-  const showPenalties = isKnockout && (values.penalties || isTie);
+  // Marcador que DECIDE: el de la prórroga si la hubo, si no el de los 90'.
+  const decHome = Number(values.afterExtraTime ? values.homeExtra : values.homeReg);
+  const decAway = Number(values.afterExtraTime ? values.awayExtra : values.awayReg);
+  const decTie = decHome === decAway;
+  // La tanda de penaltis se muestra si el usuario la activa o si el marcador
+  // que decide quedó empatado (entonces es obligatoria).
+  const showPenalties = isKnockout && (values.penalties || decTie);
   const penH = Number(values.homePenalties);
   const penA = Number(values.awayPenalties);
   const penWinner: "home" | "away" | null =
@@ -88,15 +119,21 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
     setSaving(true);
     setError(null);
     try {
-      const homeGoals = clampInt(values.homeGoals, 0, 30);
-      const awayGoals = clampInt(values.awayGoals, 0, 30);
-      const tie = homeGoals === awayGoals;
+      const regHome = clampInt(values.homeReg, 0, 30);
+      const regAway = clampInt(values.awayReg, 0, 30);
 
       let result: MatchResult;
 
       if (isKnockout) {
-        // En eliminatorias no contamos tarjetas (solo importa el resultado y
-        // el ganador). Si quedó empate, hace falta la tanda de penaltis.
+        // Marcador final: tras la prórroga si la hubo, si no el de los 90'.
+        const finalHome = values.afterExtraTime
+          ? clampInt(values.homeExtra, 0, 30)
+          : regHome;
+        const finalAway = values.afterExtraTime
+          ? clampInt(values.awayExtra, 0, 30)
+          : regAway;
+        const tie = finalHome === finalAway;
+
         const usePenalties = values.penalties || tie;
         let homePens: number | null = null;
         let awayPens: number | null = null;
@@ -110,35 +147,38 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
 
         if (tie && winner === null) {
           setError(
-            "En eliminatorias no puede quedar empate: marca los penaltis (y no pueden acabar empatados)."
+            "Sigue empatado: marca los penaltis (y no pueden acabar empatados)."
           );
           setSaving(false);
           return;
         }
 
         result = {
-          homeGoals,
-          awayGoals,
+          homeGoals: finalHome,
+          awayGoals: finalAway,
           homeYellow: 0,
           awayYellow: 0,
           homeRed: 0,
           awayRed: 0,
-          afterExtraTime: !!values.afterExtraTime,
-          // El marcador de penaltis y el ganador solo se guardan cuando hubo
-          // empate (es cuando deciden el partido).
+          afterExtraTime: values.afterExtraTime,
+          // El 90' solo se guarda aparte si hubo prórroga (si no, coincide con el final).
+          home90: values.afterExtraTime ? regHome : null,
+          away90: values.afterExtraTime ? regAway : null,
           homePenalties: tie ? homePens : null,
           awayPenalties: tie ? awayPens : null,
           penaltyWinner: tie ? winner : null,
         };
       } else {
         result = {
-          homeGoals,
-          awayGoals,
+          homeGoals: regHome,
+          awayGoals: regAway,
           homeYellow: clampInt(values.homeYellow, 0, 30),
           awayYellow: clampInt(values.awayYellow, 0, 30),
           homeRed: clampInt(values.homeRed, 0, 11),
           awayRed: clampInt(values.awayRed, 0, 11),
           afterExtraTime: false,
+          home90: null,
+          away90: null,
           homePenalties: null,
           awayPenalties: null,
           penaltyWinner: null,
@@ -188,11 +228,11 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
 
         <div className="space-y-4">
           <ResultRow
-            label="Goles"
-            home={values.homeGoals}
-            away={values.awayGoals}
-            onHome={(v) => update("homeGoals", v)}
-            onAway={(v) => update("awayGoals", v)}
+            label={isKnockout ? "Goles (90')" : "Goles"}
+            home={values.homeReg}
+            away={values.awayReg}
+            onHome={(v) => update("homeReg", v)}
+            onAway={(v) => update("awayReg", v)}
             homeTeam={match.homeLabel}
             awayTeam={match.awayLabel}
             big
@@ -205,24 +245,46 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
                 <Button
                   type="button"
                   variant={values.afterExtraTime ? "default" : "outline"}
-                  onClick={() => update("afterExtraTime", !values.afterExtraTime)}
+                  onClick={toggleExtraTime}
                 >
                   ⏱️ Prórroga
                 </Button>
                 <Button
                   type="button"
-                  variant={values.penalties || isTie ? "default" : "outline"}
+                  variant={showPenalties ? "default" : "outline"}
                   onClick={() => update("penalties", !values.penalties)}
-                  disabled={isTie}
+                  disabled={decTie}
                   title={
-                    isTie
-                      ? "Obligatorio: el partido quedó empatado"
+                    decTie
+                      ? "Obligatorio: el partido sigue empatado"
                       : "Marca si se decidió en los penaltis"
                   }
                 >
                   🥅 Penaltis
                 </Button>
               </div>
+
+              {values.afterExtraTime && (
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                    Resultado tras la prórroga
+                  </p>
+                  <ResultRow
+                    label="Final"
+                    home={values.homeExtra}
+                    away={values.awayExtra}
+                    onHome={(v) => update("homeExtra", v)}
+                    onAway={(v) => update("awayExtra", v)}
+                  />
+                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                    {decTie
+                      ? "Sigue empatado tras la prórroga → hace falta tanda de penaltis."
+                      : `Gana ${
+                          decHome > decAway ? match.homeLabel : match.awayLabel
+                        } en la prórroga.`}
+                  </p>
+                </div>
+              )}
 
               {showPenalties && (
                 <div className="rounded-md border bg-muted/20 p-3">
