@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -41,15 +42,17 @@ export function MatchFilter({
   const [showAll, setShowAll] = useState(false);
 
   const options = useMemo(() => {
+    // Huecos de eliminatoria resueltos al equipo provisional (como el cuadro).
+    const resolved = resolveMatchLabels(matches);
     const byKickAsc = (a: Match, b: Match) =>
       a.kickoffUtc.toMillis() - b.kickoffUtc.toMillis();
-    const upcoming = matches
+    const upcoming = resolved
       .filter((m) => m.status !== "finished")
       .sort(byKickAsc);
 
     let list: Match[];
     if (showAll) {
-      const finished = matches
+      const finished = resolved
         .filter((m) => m.status === "finished")
         .sort((a, b) => b.kickoffUtc.toMillis() - a.kickoffUtc.toMillis());
       list = [...upcoming, ...finished];
@@ -60,7 +63,7 @@ export function MatchFilter({
     // El partido seleccionado debe seguir disponible aunque no esté en la lista
     // visible (p. ej. elegiste uno finalizado y luego colapsas a "próximos").
     if (value !== "all" && !list.some((m) => m.id === value)) {
-      const sel = matches.find((m) => m.id === value);
+      const sel = resolved.find((m) => m.id === value);
       if (sel) list = [sel, ...list];
     }
     return list;

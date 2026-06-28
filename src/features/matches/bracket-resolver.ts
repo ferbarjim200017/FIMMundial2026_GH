@@ -300,6 +300,28 @@ export function resolveBracketProvisional(
 }
 
 /**
+ * Devuelve los partidos con sus etiquetas YA RESUELTAS de forma provisional:
+ * los huecos de eliminatoria ("2.º Grupo A", "Ganador M73", "Mejor 3.º X/Y"…)
+ * se sustituyen por el equipo que va ahora mismo en esa posición. Los partidos
+ * de grupos quedan igual (ya tienen equipo real). Pensado para mostrar equipos
+ * de verdad en CUALQUIER sitio que pinte partidos (selector de apuestas, filtro,
+ * próximos…), no solo en el cuadro. No persiste: se recalcula con los datos
+ * actuales.
+ */
+export function resolveMatchLabels(matches: Match[]): Match[] {
+  const overrides = resolveBracketProvisional(matches);
+  return matches.map((m) => {
+    const ov = overrides.get(m.id);
+    if (!ov || (!ov.home?.team && !ov.away?.team)) return m;
+    return {
+      ...m,
+      homeLabel: ov.home?.team ?? m.homeLabel,
+      awayLabel: ov.away?.team ?? m.awayLabel,
+    };
+  });
+}
+
+/**
  * Resuelve placeholders de los partidos eliminatorios a equipos reales,
  * iterando hasta que no haya más cambios. Cada pasada propaga ganadores
  * de una ronda a la siguiente (r32 → r16 → qf → sf → final/3.º).

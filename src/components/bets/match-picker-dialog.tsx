@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { subscribeToMatches, STAGE_LABELS } from "@/features/matches/matches.service";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import { currentDayWindow } from "@/features/bets/bets.utils";
 import { isSpainMatch, isTveMatch } from "@/features/matches/tve-matches";
 import { TeamFlag } from "@/components/matches/team-flag";
@@ -157,13 +158,18 @@ export function MatchPickerDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Partidos con los huecos de eliminatoria ya resueltos al equipo provisional
+  // (como el cuadro): así se ven equipos de verdad y se pueden buscar por
+  // nombre, en vez de "2.º Grupo A vs 2.º Grupo B".
+  const displayMatches = useMemo(() => resolveMatchLabels(matches), [matches]);
+
   const filtered = useMemo(() => {
     // Por defecto ocultamos los partidos ya finalizados; con el botón
     // "Finalizados" se incluyen (p. ej. para registrar una apuesta de un
     // partido que ya se jugó).
     const base = showFinished
-      ? matches
-      : matches.filter((m) => m.status !== "finished");
+      ? displayMatches
+      : displayMatches.filter((m) => m.status !== "finished");
     const s = deferredSearch.trim().toLowerCase();
     if (s) {
       // Al buscar, miramos en TODOS los partidos (ignoramos el filtro de
@@ -187,7 +193,7 @@ export function MatchPickerDialog({
       });
     }
     return base;
-  }, [matches, deferredSearch, showFinished, showAll]);
+  }, [displayMatches, deferredSearch, showFinished, showAll]);
 
   // Agrupar por día (ordenado por kickoff asc en el servicio)
   const grouped = useMemo(() => {
@@ -224,7 +230,9 @@ export function MatchPickerDialog({
   );
 
   function handleConfirm() {
-    const chosen = matches.filter((m) => selected.has(m.id));
+    // Devolvemos los partidos con la etiqueta ya resuelta, así la apuesta se
+    // guarda con el equipo (p. ej. "España vs Australia") y no con el hueco.
+    const chosen = displayMatches.filter((m) => selected.has(m.id));
     onConfirm(chosen);
     onOpenChange(false);
   }
