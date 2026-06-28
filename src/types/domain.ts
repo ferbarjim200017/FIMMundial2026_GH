@@ -312,6 +312,9 @@ export interface Match {
   status: MatchStatus;
   result?: MatchResult | null;
   enteredBy?: string | null;    // uid del admin que metió el resultado
+  /** Marcado a mano por un admin: lo emite TVE La 1. Si no está definido, se
+   *  usa como respaldo la lista estática TVE_MATCH_IDS (por seedId). */
+  tve?: boolean;
 }
 
 // ============================================================

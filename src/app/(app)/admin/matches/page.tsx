@@ -28,9 +28,11 @@ import {
   deleteMatch,
   GROUP_IDS,
   seedWorldCupMatches,
+  setMatchTve,
   STAGE_LABELS,
   subscribeToMatches,
 } from "@/features/matches/matches.service";
+import { isTveMatch } from "@/features/matches/tve-matches";
 import {
   resolveBracket,
   type BracketPending,
@@ -138,6 +140,14 @@ export default function AdminMatchesPage() {
       await deleteMatch(m.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error al eliminar");
+    }
+  }
+
+  async function handleToggleTve(m: Match) {
+    try {
+      await setMatchTve(m.id, !isTveMatch(m));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al marcar La 1");
     }
   }
 
@@ -424,6 +434,7 @@ export default function AdminMatchesPage() {
                   <th className="px-4 py-2">Fase</th>
                   <th className="px-4 py-2">Partido</th>
                   <th className="px-4 py-2 text-center">Resultado</th>
+                  <th className="px-4 py-2 text-center">La 1</th>
                   <th className="px-4 py-2">Ciudad</th>
                   <th className="px-4 py-2"></th>
                 </tr>
@@ -480,6 +491,20 @@ export default function AdminMatchesPage() {
                         </Button>
                       )}
                     </td>
+                    <td className="px-4 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTve(m)}
+                        className={
+                          isTveMatch(m)
+                            ? "rounded-[3px] bg-blue-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+                            : "rounded-[3px] border border-muted-foreground/30 px-1.5 py-0.5 text-xs text-muted-foreground hover:border-blue-500/60 hover:text-blue-500"
+                        }
+                        title={isTveMatch(m) ? "Emite La 1 (click para quitar)" : "Marcar como emitido por La 1"}
+                      >
+                        TVE
+                      </button>
+                    </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
                       {m.city ?? "—"}
                     </td>
@@ -497,7 +522,7 @@ export default function AdminMatchesPage() {
                 ))}
                 {!fetching && matches.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                       Aún no hay partidos. Añade el primero arriba.
                     </td>
                   </tr>

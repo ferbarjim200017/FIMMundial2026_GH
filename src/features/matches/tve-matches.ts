@@ -32,6 +32,8 @@ export const TVE_MATCH_IDS = new Set<string>([
 ]);
 
 export function isTveMatch(match: Match): boolean {
+  // Si un admin lo marcó/desmarcó a mano, eso manda; si no, la lista estática.
+  if (typeof match.tve === "boolean") return match.tve;
   return TVE_MATCH_IDS.has(match.id);
 }
 

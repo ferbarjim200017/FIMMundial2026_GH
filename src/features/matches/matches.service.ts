@@ -156,6 +156,11 @@ export async function setMatchResult(
   });
 }
 
+/** Marca o desmarca un partido como emitido por TVE La 1. */
+export async function setMatchTve(id: string, tve: boolean): Promise<void> {
+  await updateDoc(doc(db, MATCHES, id), { tve });
+}
+
 export async function deleteMatch(id: string): Promise<void> {
   await deleteDoc(doc(db, MATCHES, id));
 }
