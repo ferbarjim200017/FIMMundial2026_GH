@@ -3,6 +3,7 @@ import {
   computeBestThirds,
   computeGroupStandings,
 } from "@/features/standings/standings.utils";
+import { teamFlagCode } from "@/features/matches/teams-2026";
 
 // Patrones de los placeholders que viene desde el seed
 const FIRST_RE = /^1\.º Grupo ([A-L])$/;
@@ -211,6 +212,42 @@ export function resolveBracketProvisional(
     thirdAssign = matchThirds(thirdSlots, thirds);
   }
 
+  const out = new Map<
+    string,
+    { home: ProvisionalSlot | null; away: ProvisionalSlot | null }
+  >();
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
+  // Equipo real ya resuelto de un lado del partido fuente: usa la resolución
+  // previa (si el lado era un placeholder de grupo/ganador) o el propio label
+  // si ya es un equipo real (p. ej. dieciseisavos ya con nombres reales).
+  const resolvedTeam = (
+    src: Match,
+    side: "home" | "away"
+  ): string | null => {
+    const prev = out.get(src.id)?.[side];
+    if (prev?.team) return prev.team;
+    const label = side === "home" ? src.homeLabel : src.awayLabel;
+    return teamFlagCode(label) ? label : null;
+  };
+
+  // Ganador/perdedor de un partido fuente, ya RESUELTO al equipo real. Avanza
+  // el equipo de verdad aunque el dieciseisavos siga con placeholder en BD.
+  const advance = (srcId: string, want: "winner" | "loser"): string | null => {
+    const src = matchById.get(srcId);
+    if (!src || src.status !== "finished" || !src.result) return null;
+    const r = src.result;
+    let winSide: "home" | "away" | null = null;
+    if (r.homeGoals > r.awayGoals) winSide = "home";
+    else if (r.awayGoals > r.homeGoals) winSide = "away";
+    else if (r.penaltyWinner === "home") winSide = "home";
+    else if (r.penaltyWinner === "away") winSide = "away";
+    if (!winSide) return null;
+    const pick =
+      want === "winner" ? winSide : winSide === "home" ? "away" : "home";
+    return resolvedTeam(src, pick);
+  };
+
   const resolveField = (
     label: string,
     matchId: string,
@@ -234,24 +271,26 @@ export function resolveBracketProvisional(
       return t ? { team: t, slot: "Mejor 3.º", provisional: !allGroupsFinal } : null;
     }
     if ((mt = label.match(WINNER_RE))) {
-      const src = matches.find((x) => x.id === `wc26-m${mt![1]}`);
-      const w = src ? getWinnerLabel(src) : null;
+      const w = advance(`wc26-m${mt[1]}`, "winner");
       return w ? { team: w, slot: `Gan. M${mt[1]}`, provisional: false } : null;
     }
     if ((mt = label.match(LOSER_RE))) {
-      const src = matches.find((x) => x.id === `wc26-m${mt![1]}`);
-      const l = src ? getLoserLabel(src) : null;
+      const l = advance(`wc26-m${mt[1]}`, "loser");
       return l ? { team: l, slot: `Perd. M${mt[1]}`, provisional: false } : null;
     }
     return null;
   };
 
-  const out = new Map<
-    string,
-    { home: ProvisionalSlot | null; away: ProvisionalSlot | null }
-  >();
-  for (const m of matches) {
-    if (m.stage === "group") continue;
+  // Resolvemos en orden de número de partido ascendente: los seedId siguen el
+  // orden del cuadro (r32 < r16 < qf < sf < final), así cuando resolvemos un
+  // "Ganador MN" el partido fuente MN ya está resuelto y propagamos su equipo.
+  const ordered = matches
+    .filter((m) => m.stage !== "group")
+    .sort(
+      (a, b) =>
+        Number(a.id.replace("wc26-m", "")) - Number(b.id.replace("wc26-m", ""))
+    );
+  for (const m of ordered) {
     out.set(m.id, {
       home: resolveField(m.homeLabel, m.id, "homeLabel"),
       away: resolveField(m.awayLabel, m.id, "awayLabel"),
