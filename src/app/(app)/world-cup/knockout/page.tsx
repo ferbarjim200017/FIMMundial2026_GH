@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { MatchCard } from "@/components/world-cup/match-card";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
@@ -91,6 +91,62 @@ function MiniBracketCard({
         !!finished && r!.awayGoals > r!.homeGoals
       )}
     </button>
+  );
+}
+
+/**
+ * Columna de CONECTORES entre dos rondas del cuadro (las líneas que unen cada
+ * pareja de partidos con el de la ronda siguiente, como en el cuadro oficial).
+ * Geometría en porcentajes: con `n` partidos de origen (centrados por `flex-1`),
+ * el partido i está al `(i+0.5)/n` de la altura; cada pareja (2k, 2k+1) se une
+ * con una línea vertical y sale una horizontal hacia el partido siguiente.
+ *  - dir="right": orígenes a la izquierda, salida a la derecha.
+ *  - dir="left":  orígenes a la derecha, salida a la izquierda (lado derecho).
+ */
+function BracketConnector({ n, dir }: { n: number; dir: "right" | "left" }) {
+  const feedersLeft = dir === "right";
+  const hLine = (top: number, fromLeft: number): CSSProperties => ({
+    position: "absolute",
+    top: `${top}%`,
+    left: `${fromLeft}%`,
+    width: "50%",
+    height: "1px",
+  });
+  const segments: CSSProperties[] = [];
+  for (let k = 0; k < Math.ceil(n / 2); k++) {
+    const a = 2 * k;
+    const b = Math.min(2 * k + 1, n - 1);
+    const ya = ((a + 0.5) / n) * 100;
+    const yb = ((b + 0.5) / n) * 100;
+    const ymid = (ya + yb) / 2;
+    // Horizontales de cada origen hacia el bus vertical (centro de la columna).
+    segments.push(hLine(ya, feedersLeft ? 0 : 50));
+    segments.push(hLine(yb, feedersLeft ? 0 : 50));
+    // Bus vertical que une la pareja.
+    if (yb > ya) {
+      segments.push({
+        position: "absolute",
+        left: "50%",
+        top: `${ya}%`,
+        height: `${yb - ya}%`,
+        width: "1px",
+      });
+    }
+    // Horizontal de salida hacia el partido de la ronda siguiente.
+    segments.push(hLine(ymid, feedersLeft ? 50 : 0));
+  }
+  return (
+    <div className="flex w-2.5 shrink-0 flex-col sm:w-5">
+      {/* Espaciador invisible para alinear con las cabeceras de las rondas. */}
+      <div className="invisible mb-1.5 px-0.5 py-0.5 text-[8px] sm:text-[10px]">
+        ·
+      </div>
+      <div className="relative flex-1">
+        {segments.map((s, i) => (
+          <span key={i} className="absolute bg-border" style={s} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -190,12 +246,45 @@ const BRACKET_SIDES: { left: Set<number>; right: Set<number> } = (() => {
   return { left, right };
 })();
 
+// Orden VERTICAL del cuadro (como el cuadro oficial): recorrido in-order del
+// árbol (hijo-home arriba · nodo · hijo-away abajo) desde la final. Así los dos
+// partidos que se cruzan en la ronda siguiente quedan adyacentes, en vez de
+// ordenarse por hora. Map<nº de partido, índice vertical>.
+const BRACKET_ORDER: Map<number, number> = (() => {
+  const sources = new Map<number, [number?, number?]>();
+  for (const m of WORLDCUP_2026_MATCHES) {
+    if (m.stage === "group") continue;
+    const srcs: number[] = [];
+    for (const label of [m.homeLabel, m.awayLabel]) {
+      const mt = label.match(/^(?:Ganador|Perdedor) M(\d+)$/);
+      if (mt) srcs.push(Number(mt[1]));
+    }
+    sources.set(matchNum(m.seedId), [srcs[0], srcs[1]]);
+  }
+  const order = new Map<number, number>();
+  let idx = 0;
+  const visit = (n: number | undefined) => {
+    if (n == null) return;
+    const [h, a] = sources.get(n) ?? [];
+    if (h == null && a == null) {
+      order.set(n, idx++); // hoja (dieciseisavos)
+      return;
+    }
+    visit(h);
+    order.set(n, idx++);
+    visit(a);
+  };
+  const fin = WORLDCUP_2026_MATCHES.find((m) => m.stage === "final");
+  if (fin) visit(matchNum(fin.seedId));
+  return order;
+})();
+
 export default function KnockoutPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [betsFor, setBetsFor] = useState<Match | null>(null);
-  // Vista del cuadro: columnas (todo hacia abajo) o cuadro a dos lados.
-  const [view, setView] = useState<"columns" | "bracket">("columns");
+  // Vista del cuadro: cuadro a dos lados (por defecto) o columnas hacia abajo.
+  const [view, setView] = useState<"columns" | "bracket">("bracket");
   // Desplegables de la vista por columnas: "Fases previas" y "Fase final".
   const [openPrev, setOpenPrev] = useState(true);
   const [openFinal, setOpenFinal] = useState(true);
@@ -320,27 +409,56 @@ export default function KnockoutPage() {
     );
   };
 
-  // Columnas para la vista "cuadro a dos lados": mitad izquierda → final → mitad
-  // derecha (las columnas de la derecha van en orden inverso para que apunten
-  // hacia el centro).
+  // Cuadro a dos lados (estructura del árbol): mitad izquierda → final → mitad
+  // derecha. Dentro de cada ronda los partidos van en ORDEN DEL CUADRO
+  // (recorrido in-order, BRACKET_ORDER), NO por hora, para que cada partido
+  // quede pegado a su pareja igual que en el cuadro oficial. Entre cada par de
+  // rondas se intercala una columna de conectores.
   const sideOf = (m: Match): "left" | "right" | "center" =>
     BRACKET_SIDES.left.has(matchNum(m.id))
       ? "left"
       : BRACKET_SIDES.right.has(matchNum(m.id))
         ? "right"
         : "center";
-  type BracketCol = { stage: MatchStage; side: "left" | "right" | "center"; items: Match[] };
-  const bracketCols: BracketCol[] = [];
-  for (const s of ["r32", "r16", "qf", "sf"] as MatchStage[]) {
-    const items = byStage[s].filter((m) => sideOf(m) === "left");
-    if (items.length) bracketCols.push({ stage: s, side: "left", items });
+  const orderIdx = (m: Match) => BRACKET_ORDER.get(matchNum(m.id)) ?? 0;
+  const colItems = (stage: MatchStage, side: "left" | "right") =>
+    byStage[stage]
+      .filter((m) => sideOf(m) === side)
+      .sort((a, b) => orderIdx(a) - orderIdx(b));
+
+  type BCol =
+    | {
+        kind: "round";
+        stage: MatchStage;
+        side: "left" | "right" | "center";
+        items: Match[];
+      }
+    | { kind: "conn"; n: number; dir: "right" | "left"; key: string };
+
+  const leftRounds = (["r32", "r16", "qf", "sf"] as MatchStage[])
+    .map((stage) => ({ stage, items: colItems(stage, "left") }))
+    .filter((c) => c.items.length > 0);
+  const rightRounds = (["sf", "qf", "r16", "r32"] as MatchStage[])
+    .map((stage) => ({ stage, items: colItems(stage, "right") }))
+    .filter((c) => c.items.length > 0);
+  const hasFinal = byStage.final.length > 0;
+
+  const bracketCols: BCol[] = [];
+  leftRounds.forEach((c, idx) => {
+    bracketCols.push({ kind: "round", stage: c.stage, side: "left", items: c.items });
+    if (idx < leftRounds.length - 1 || hasFinal) {
+      bracketCols.push({ kind: "conn", n: c.items.length, dir: "right", key: `cl-${c.stage}` });
+    }
+  });
+  if (hasFinal) {
+    bracketCols.push({ kind: "round", stage: "final", side: "center", items: byStage.final });
   }
-  if (byStage.final.length)
-    bracketCols.push({ stage: "final", side: "center", items: byStage.final });
-  for (const s of ["sf", "qf", "r16", "r32"] as MatchStage[]) {
-    const items = byStage[s].filter((m) => sideOf(m) === "right");
-    if (items.length) bracketCols.push({ stage: s, side: "right", items });
-  }
+  rightRounds.forEach((c, idx) => {
+    if (idx > 0 || hasFinal) {
+      bracketCols.push({ kind: "conn", n: c.items.length, dir: "left", key: `cr-${c.stage}` });
+    }
+    bracketCols.push({ kind: "round", stage: c.stage, side: "right", items: c.items });
+  });
 
   return (
     <div className="space-y-6">
@@ -411,11 +529,15 @@ export default function KnockoutPage() {
         </div>
       )}
 
-      {/* ──── Vista cuadro a dos lados: final en el centro, cabe sin scroll ──── */}
+      {/* ──── Vista cuadro a dos lados: final en el centro, partidos centrados
+              entre su pareja y unidos con conectores (como el cuadro oficial) ──── */}
       {view === "bracket" && (
-        <div className="rounded-xl border bg-card/40 p-1.5 sm:p-3">
-          <div className="flex w-full gap-0.5 sm:gap-1.5" style={{ minHeight: "440px" }}>
+        <div className="overflow-x-auto rounded-xl border bg-card/40 p-1.5 sm:p-3">
+          <div className="flex w-full items-stretch" style={{ minHeight: "460px" }}>
             {bracketCols.map((col, i) => {
+              if (col.kind === "conn") {
+                return <BracketConnector key={col.key} n={col.n} dir={col.dir} />;
+              }
               const style = STAGE_STYLES[col.stage];
               const arrow =
                 col.side === "left" ? "→" : col.side === "right" ? "←" : "";
@@ -437,13 +559,20 @@ export default function KnockoutPage() {
                     </span>
                     {arrow && <span className="ml-0.5">{arrow}</span>}
                   </div>
-                  <div className="relative flex flex-1 flex-col justify-around gap-1">
+                  {/* Cada partido en una celda flex-1: al haber la mitad de
+                      partidos en la ronda siguiente, su celda ocupa el doble y
+                      el partido queda centrado entre su pareja. */}
+                  <div className="relative flex flex-1 flex-col">
                     {col.items.map((m) => (
-                      <MiniBracketCard
+                      <div
                         key={m.id}
-                        match={displayProps(m).match}
-                        onClick={setBetsFor}
-                      />
+                        className="flex flex-1 items-center px-0.5"
+                      >
+                        <MiniBracketCard
+                          match={displayProps(m).match}
+                          onClick={setBetsFor}
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>

@@ -290,8 +290,16 @@ export interface MatchResult {
   awayYellow: number;
   homeRed: number;
   awayRed: number;
+  /** Eliminatorias: el partido se decidió en la prórroga (90'+30'). Solo
+   *  informativo; el marcador (homeGoals/awayGoals) ya incluye los goles de
+   *  la prórroga. */
+  afterExtraTime?: boolean;
+  /** Eliminatorias con empate: marcador de la tanda de penaltis. */
+  homePenalties?: number | null;
+  awayPenalties?: number | null;
   /** En eliminatorias, si terminó empatado tras 90' + prórroga, quién ganó
-   *  los penaltis. Solo se rellena cuando hay empate en knockouts. */
+   *  los penaltis. Se deriva del marcador de penaltis. Solo se rellena cuando
+   *  hay empate en knockouts. */
   penaltyWinner?: "home" | "away" | null;
 }
 

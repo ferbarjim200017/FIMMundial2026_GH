@@ -184,7 +184,9 @@ export function MatchCard({
             </div>
             {r.homeGoals === r.awayGoals && r.penaltyWinner && (
               <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
-                Pen. {r.penaltyWinner === "home" ? "←" : "→"}
+                {r.homePenalties != null && r.awayPenalties != null
+                  ? `Pen. ${r.homePenalties}-${r.awayPenalties}`
+                  : `Pen. ${r.penaltyWinner === "home" ? "←" : "→"}`}
               </span>
             )}
           </div>

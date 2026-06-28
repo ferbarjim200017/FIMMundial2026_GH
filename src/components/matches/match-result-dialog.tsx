@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { setMatchResult } from "@/features/matches/matches.service";
 import { useAuth } from "@/features/auth/auth.context";
 import { TeamFlag } from "@/components/matches/team-flag";
+import { cn } from "@/lib/utils";
 import type { Match, MatchResult } from "@/types/domain";
 
 interface Props {
@@ -31,11 +31,17 @@ interface FormState {
   awayYellow: string;
   homeRed: string;
   awayRed: string;
-  penaltyWinner: "home" | "away" | "";
+  // Eliminatorias:
+  afterExtraTime: boolean;
+  penalties: boolean;
+  homePenalties: string;
+  awayPenalties: string;
 }
 
 function initialFor(m: Match): FormState {
   const r = m.result;
+  const hasPenalties =
+    r?.homePenalties != null || r?.awayPenalties != null || !!r?.penaltyWinner;
   return {
     homeGoals: String(r?.homeGoals ?? 0),
     awayGoals: String(r?.awayGoals ?? 0),
@@ -43,7 +49,10 @@ function initialFor(m: Match): FormState {
     awayYellow: String(r?.awayYellow ?? 0),
     homeRed: String(r?.homeRed ?? 0),
     awayRed: String(r?.awayRed ?? 0),
-    penaltyWinner: r?.penaltyWinner ?? "",
+    afterExtraTime: !!r?.afterExtraTime,
+    penalties: hasPenalties,
+    homePenalties: String(r?.homePenalties ?? 0),
+    awayPenalties: String(r?.awayPenalties ?? 0),
   };
 }
 
@@ -60,9 +69,19 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
     }
   }, [open, match]);
 
-  function update<K extends keyof FormState>(key: K, v: string) {
+  function update<K extends keyof FormState>(key: K, v: FormState[K]) {
     setValues((s) => ({ ...s, [key]: v }));
   }
+
+  const isKnockout = match.stage !== "group";
+  const isTie = Number(values.homeGoals) === Number(values.awayGoals);
+  // La tanda de penaltis se muestra si el usuario la activa o si en
+  // eliminatoria el resultado quedó empatado (es obligatoria).
+  const showPenalties = isKnockout && (values.penalties || isTie);
+  const penH = Number(values.homePenalties);
+  const penA = Number(values.awayPenalties);
+  const penWinner: "home" | "away" | null =
+    showPenalties && penH !== penA ? (penH > penA ? "home" : "away") : null;
 
   async function handleSave() {
     if (!firebaseUser) return;
@@ -71,29 +90,61 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
     try {
       const homeGoals = clampInt(values.homeGoals, 0, 30);
       const awayGoals = clampInt(values.awayGoals, 0, 30);
-      const isKnockout = match.stage !== "group";
-      const isTie = homeGoals === awayGoals;
+      const tie = homeGoals === awayGoals;
 
-      if (isKnockout && isTie && !values.penaltyWinner) {
-        setError(
-          "En eliminatorias, si el resultado fue empate hay que indicar quién ganó en penaltis."
-        );
-        setSaving(false);
-        return;
+      let result: MatchResult;
+
+      if (isKnockout) {
+        // En eliminatorias no contamos tarjetas (solo importa el resultado y
+        // el ganador). Si quedó empate, hace falta la tanda de penaltis.
+        const usePenalties = values.penalties || tie;
+        let homePens: number | null = null;
+        let awayPens: number | null = null;
+        let winner: "home" | "away" | null = null;
+        if (usePenalties) {
+          homePens = clampInt(values.homePenalties, 0, 40);
+          awayPens = clampInt(values.awayPenalties, 0, 40);
+          winner =
+            homePens > awayPens ? "home" : awayPens > homePens ? "away" : null;
+        }
+
+        if (tie && winner === null) {
+          setError(
+            "En eliminatorias no puede quedar empate: marca los penaltis (y no pueden acabar empatados)."
+          );
+          setSaving(false);
+          return;
+        }
+
+        result = {
+          homeGoals,
+          awayGoals,
+          homeYellow: 0,
+          awayYellow: 0,
+          homeRed: 0,
+          awayRed: 0,
+          afterExtraTime: !!values.afterExtraTime,
+          // El marcador de penaltis y el ganador solo se guardan cuando hubo
+          // empate (es cuando deciden el partido).
+          homePenalties: tie ? homePens : null,
+          awayPenalties: tie ? awayPens : null,
+          penaltyWinner: tie ? winner : null,
+        };
+      } else {
+        result = {
+          homeGoals,
+          awayGoals,
+          homeYellow: clampInt(values.homeYellow, 0, 30),
+          awayYellow: clampInt(values.awayYellow, 0, 30),
+          homeRed: clampInt(values.homeRed, 0, 11),
+          awayRed: clampInt(values.awayRed, 0, 11),
+          afterExtraTime: false,
+          homePenalties: null,
+          awayPenalties: null,
+          penaltyWinner: null,
+        };
       }
 
-      const result: MatchResult = {
-        homeGoals,
-        awayGoals,
-        homeYellow: clampInt(values.homeYellow, 0, 30),
-        awayYellow: clampInt(values.awayYellow, 0, 30),
-        homeRed: clampInt(values.homeRed, 0, 11),
-        awayRed: clampInt(values.awayRed, 0, 11),
-        penaltyWinner:
-          isKnockout && isTie && values.penaltyWinner
-            ? values.penaltyWinner
-            : null,
-      };
       await setMatchResult(match.id, result, firebaseUser.uid);
       onOpenChange(false);
       onSaved?.();
@@ -147,58 +198,86 @@ export function MatchResultDialog({ match, open, onOpenChange, onSaved }: Props)
             big
           />
 
-          {match.stage !== "group" &&
-            Number(values.homeGoals) === Number(values.awayGoals) && (
-              <div className="border-t pt-3">
-                <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  Empate en eliminatoria — ganador por penaltis
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={
-                      values.penaltyWinner === "home" ? "default" : "outline"
-                    }
-                    onClick={() => update("penaltyWinner", "home")}
-                  >
-                    <TeamFlag name={match.homeLabel} className="mr-1" />
-                    {match.homeLabel}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      values.penaltyWinner === "away" ? "default" : "outline"
-                    }
-                    onClick={() => update("penaltyWinner", "away")}
-                  >
-                    <TeamFlag name={match.awayLabel} className="mr-1" />
-                    {match.awayLabel}
-                  </Button>
-                </div>
+          {/* ── Eliminatorias: prórroga y penaltis (sin tarjetas) ── */}
+          {isKnockout && (
+            <div className="space-y-3 border-t pt-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={values.afterExtraTime ? "default" : "outline"}
+                  onClick={() => update("afterExtraTime", !values.afterExtraTime)}
+                >
+                  ⏱️ Prórroga
+                </Button>
+                <Button
+                  type="button"
+                  variant={values.penalties || isTie ? "default" : "outline"}
+                  onClick={() => update("penalties", !values.penalties)}
+                  disabled={isTie}
+                  title={
+                    isTie
+                      ? "Obligatorio: el partido quedó empatado"
+                      : "Marca si se decidió en los penaltis"
+                  }
+                >
+                  🥅 Penaltis
+                </Button>
               </div>
-            )}
 
-          <div className="border-t pt-3">
-            <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-              Disciplina (para tabla de fair play)
-            </p>
-            <div className="space-y-2">
-              <ResultRow
-                label="🟨 Amarillas"
-                home={values.homeYellow}
-                away={values.awayYellow}
-                onHome={(v) => update("homeYellow", v)}
-                onAway={(v) => update("awayYellow", v)}
-              />
-              <ResultRow
-                label="🟥 Rojas"
-                home={values.homeRed}
-                away={values.awayRed}
-                onHome={(v) => update("homeRed", v)}
-                onAway={(v) => update("awayRed", v)}
-              />
+              {showPenalties && (
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                    Tanda de penaltis
+                  </p>
+                  <ResultRow
+                    label="Penaltis"
+                    home={values.homePenalties}
+                    away={values.awayPenalties}
+                    onHome={(v) => update("homePenalties", v)}
+                    onAway={(v) => update("awayPenalties", v)}
+                  />
+                  <p className="mt-2 text-center text-xs">
+                    {penWinner ? (
+                      <span className="font-semibold text-profit">
+                        Gana{" "}
+                        {penWinner === "home" ? match.homeLabel : match.awayLabel}{" "}
+                        en los penaltis
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        Indica el marcador de penaltis (no puede quedar empate).
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* ── Fase de grupos: tarjetas para el fair play ── */}
+          {!isKnockout && (
+            <div className="border-t pt-3">
+              <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                Disciplina (para tabla de fair play)
+              </p>
+              <div className="space-y-2">
+                <ResultRow
+                  label="🟨 Amarillas"
+                  home={values.homeYellow}
+                  away={values.awayYellow}
+                  onHome={(v) => update("homeYellow", v)}
+                  onAway={(v) => update("awayYellow", v)}
+                />
+                <ResultRow
+                  label="🟥 Rojas"
+                  home={values.homeRed}
+                  away={values.awayRed}
+                  onHome={(v) => update("homeRed", v)}
+                  onAway={(v) => update("awayRed", v)}
+                />
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
@@ -265,17 +344,18 @@ function ResultRow({
           inputMode="numeric"
           value={home}
           onChange={(e) => onHome(e.target.value)}
-          className={
+          className={cn(
             big
               ? "h-16 text-center text-3xl font-bold font-mono"
               : "h-9 text-center text-sm font-mono"
-          }
+          )}
         />
       </div>
       <div
-        className={`text-center text-xs uppercase tracking-wider text-muted-foreground ${
-          big ? "px-4 pt-5" : ""
-        }`}
+        className={cn(
+          "text-center text-xs uppercase tracking-wider text-muted-foreground",
+          big && "px-4 pt-5"
+        )}
       >
         {label}
       </div>
@@ -292,11 +372,11 @@ function ResultRow({
           inputMode="numeric"
           value={away}
           onChange={(e) => onAway(e.target.value)}
-          className={
+          className={cn(
             big
               ? "h-16 text-center text-3xl font-bold font-mono"
               : "h-9 text-center text-sm font-mono"
-          }
+          )}
         />
       </div>
     </div>
