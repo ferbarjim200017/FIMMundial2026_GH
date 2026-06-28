@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BetsBarChart } from "@/components/ranking/bets-bar-chart";
+import { CashNetCard } from "@/components/bets/cash-net-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import {
@@ -264,6 +265,20 @@ export default function RankingPage() {
     () => computeSuperaumentoSummary(phaseBets),
     [phaseBets]
   );
+
+  // Caja del grupo: dinero TOTAL ingresado y retirado por todos los miembros.
+  // No depende de la fase ni de las apuestas (es dinero real metido/sacado de
+  // las casas).
+  const groupCash = useMemo(() => {
+    let deposits = 0;
+    let withdrawals = 0;
+    for (const u of users ?? []) {
+      const c = computeCashSummary(u, activeGroup?.id);
+      deposits += c.deposits;
+      withdrawals += c.withdrawals;
+    }
+    return { deposits, withdrawals };
+  }, [users, activeGroup]);
 
   // Stats por usuario de la FASE seleccionada (las que se ven en pantalla:
   // tabla, gráficas, saldo). En "general" coinciden con todo el torneo.
@@ -587,6 +602,14 @@ export default function RankingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── Ingresos − Retiradas (global del grupo) ─── */}
+      <CashNetCard
+        deposits={groupCash.deposits}
+        withdrawals={groupCash.withdrawals}
+        subject="El grupo ha"
+        title="Ingresos − Retiradas del grupo"
+      />
 
       {/* ─── Bloque de gráficas ─── */}
       {/* grid-cols-1 en móvil: limita la columna al ancho disponible para que

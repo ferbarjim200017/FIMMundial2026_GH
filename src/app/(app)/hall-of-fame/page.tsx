@@ -20,12 +20,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CashNetCard } from "@/components/bets/cash-net-card";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betInGroup,
   betOutcome,
   bookmakerLabel,
+  computeCashSummary,
   computeUserStats,
   round2,
 } from "@/features/bets/bets.utils";
@@ -222,6 +224,19 @@ export default function HallOfFamePage() {
     return map;
   }, [groupMembers]);
 
+  // Caja del grupo: dinero TOTAL ingresado y retirado por todos los miembros
+  // (independiente de las apuestas; es dinero real metido/sacado de las casas).
+  const groupCash = useMemo(() => {
+    let deposits = 0;
+    let withdrawals = 0;
+    for (const u of groupMembers) {
+      const c = computeCashSummary(u, activeGroup?.id);
+      deposits += c.deposits;
+      withdrawals += c.withdrawals;
+    }
+    return { deposits, withdrawals };
+  }, [groupMembers, activeGroup]);
+
   const nameOf = (uid: string) => usersById[uid]?.username ?? "—";
   const betDetail = (b: Bet) =>
     `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
@@ -404,6 +419,14 @@ export default function HallOfFamePage() {
           actualiza solo con cada apuesta.
         </p>
       </header>
+
+      {/* Ingresos − Retiradas (global del grupo) */}
+      <CashNetCard
+        deposits={groupCash.deposits}
+        withdrawals={groupCash.withdrawals}
+        subject="El grupo ha"
+        title="Ingresos − Retiradas del grupo"
+      />
 
       {!hasData ? (
         <div className="py-16 text-center text-sm text-muted-foreground">

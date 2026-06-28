@@ -3,6 +3,7 @@ import type {
   Bet,
   BetStatus,
   BookmakerBalances,
+  Match,
   UserStats,
 } from "@/types/domain";
 import { EMPTY_BOOKMAKER_BALANCES, EMPTY_USER_STATS } from "@/types/domain";
@@ -44,6 +45,26 @@ export function betMatchIds(bet: Bet): string[] {
   for (const x of bet.matchIds ?? []) if (x) ids.add(x);
   for (const leg of bet.legs ?? []) if (leg.matchId) ids.add(leg.matchId);
   return [...ids];
+}
+
+/**
+ * Etiqueta del/los partido(s) de una apuesta para MOSTRAR, recalculada desde
+ * los partidos vinculados (así sale el equipo actual aunque la apuesta se
+ * guardara con un hueco de eliminatoria como "2.º Grupo A vs 2.º Grupo B").
+ * Para apuestas sin partido (outright/manual) usa la etiqueta guardada.
+ * `matchById` debe traer ya las etiquetas resueltas (resolveMatchLabels).
+ */
+export function betDisplayLabel(
+  bet: Bet,
+  matchById: Map<string, Match>
+): string {
+  const ids = betMatchIds(bet);
+  if (ids.length === 0) return bet.matchLabel;
+  const labels = ids
+    .map((id) => matchById.get(id))
+    .filter((m): m is Match => !!m)
+    .map((m) => `${m.homeLabel} vs ${m.awayLabel}`);
+  return labels.length > 0 ? labels.join(" + ") : bet.matchLabel;
 }
 
 /**

@@ -16,9 +16,10 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
 import { queueSettle } from "@/features/bets/pending-settles";
+import { betDisplayLabel } from "@/features/bets/bets.utils";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
-import type { Bet } from "@/types/domain";
+import type { Bet, Match } from "@/types/domain";
 
 interface Props {
   bets: Bet[];
@@ -29,6 +30,10 @@ interface Props {
   /** Quita un borrador local (apuesta aún sin subir) de la cola. Recibe el
    *  localId (el id de la fila es "local:<localId>"). */
   onRemoveDraft?: (localId: string) => void;
+  /** Partidos (con etiquetas ya resueltas) por id, para mostrar el equipo de
+   *  verdad en la columna "Partido" aunque la apuesta se guardara con un hueco
+   *  de eliminatoria. */
+  matchById?: Map<string, Match>;
 }
 
 function marketLabel(value: string): string {
@@ -44,6 +49,7 @@ export function BetsTable({
   isAdmin,
   pendingIds,
   onRemoveDraft,
+  matchById,
 }: Props) {
   const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
@@ -249,7 +255,9 @@ export function BetsTable({
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   {formatDateTime(b.createdAt.toDate())}
                 </td>
-                <td className="px-3 py-2 font-medium">{b.matchLabel}</td>
+                <td className="px-3 py-2 font-medium">
+                  {matchById ? betDisplayLabel(b, matchById) : b.matchLabel}
+                </td>
                 <td className="px-3 py-2">
                   <div className="text-xs text-muted-foreground">
                     {marketLabel(b.market)}

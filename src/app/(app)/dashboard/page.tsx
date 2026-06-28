@@ -31,16 +31,20 @@ import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
+  betDisplayLabel,
   betInGroup,
   betOutcome,
   betPlaysInWindow,
   bookmakerLabel,
   computeBookmakerSummary,
+  computeCashSummary,
   computeSuperaumentoSummary,
   computeUserStats,
   currentDayWindow,
   getInitialBalances,
 } from "@/features/bets/bets.utils";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
+import { CashNetCard } from "@/components/bets/cash-net-card";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
@@ -110,6 +114,24 @@ export default function DashboardPage() {
     for (const x of matches) m.set(x.id, x.kickoffUtc.toMillis());
     return m;
   }, [matches]);
+
+  // Partidos con los huecos de eliminatoria resueltos al equipo provisional,
+  // para mostrar el equipo real en "Últimas apuestas" aunque la apuesta se
+  // guardara con un hueco ("2.º Grupo A vs 2.º Grupo B").
+  const resolvedMatchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
+  // Caja personal en el grupo activo: ingresos y retiradas reales.
+  const cash = useMemo(
+    () =>
+      appUser
+        ? computeCashSummary(appUser, activeGroup?.id)
+        : { deposits: 0, withdrawals: 0, net: 0 },
+    [appUser, activeGroup]
+  );
 
   // Filtramos a las apuestas del grupo activo. Cada grupo es contabilidad
   // independiente: saldos, stats y "últimas apuestas" solo reflejan el
@@ -317,6 +339,9 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* ─────── Ingresos − Retiradas (personal) ─────── */}
+      <CashNetCard deposits={cash.deposits} withdrawals={cash.withdrawals} />
+
       {/* ─────── Saldos por casa ─────── */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -523,7 +548,9 @@ export default function DashboardPage() {
                     className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-accent/30 focus:outline-none focus-visible:bg-accent/30"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{b.matchLabel}</p>
+                      <p className="truncate font-medium">
+                        {betDisplayLabel(b, resolvedMatchById)}
+                      </p>
                       <p className="flex flex-wrap items-center gap-1.5 truncate text-xs text-muted-foreground">
                         <span className="truncate">
                           {b.selection} @ {b.odds.toFixed(2)}

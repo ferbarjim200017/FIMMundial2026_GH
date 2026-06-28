@@ -6,7 +6,13 @@ import { Plus, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { betInGroup, betHasMatch, bookmakerLabel } from "@/features/bets/bets.utils";
+import {
+  betInGroup,
+  betHasMatch,
+  betDisplayLabel,
+  bookmakerLabel,
+} from "@/features/bets/bets.utils";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import {
   Select,
   SelectContent,
@@ -105,6 +111,15 @@ export default function BetsPage() {
     }
   }
 
+  // Partidos con los huecos de eliminatoria ya resueltos al equipo provisional,
+  // indexados por id. Sirve para mostrar el equipo real en la columna "Partido"
+  // (aunque la apuesta se guardara con un hueco) y para buscar por ese nombre.
+  const resolvedMatchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
   // Filtrado adicional por grupo activo + búsqueda de texto en tiempo real.
   const normalizedQuery = query.trim().toLowerCase();
   const bets = useMemo(() => {
@@ -119,6 +134,7 @@ export default function BetsPage() {
       if (matchFilter !== "all" && !betHasMatch(b, matchFilter)) return false;
       if (normalizedQuery) {
         const haystack = [
+          betDisplayLabel(b, resolvedMatchById),
           b.matchLabel,
           b.selection,
           b.marketDetail ?? "",
@@ -140,6 +156,7 @@ export default function BetsPage() {
     status,
     matchFilter,
     normalizedQuery,
+    resolvedMatchById,
   ]);
 
   // Borradores locales que encajan en la vista actual (grupo + filtros), para
@@ -404,6 +421,7 @@ export default function BetsPage() {
           isAdmin={isAdmin}
           pendingIds={pendingIds}
           onRemoveDraft={removePendingCreate}
+          matchById={resolvedMatchById}
         />
       )}
     </div>
