@@ -32,6 +32,7 @@ import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
+import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
 import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
 import { isTveMatch } from "@/features/matches/tve-matches";
 import { TeamFlag } from "@/components/matches/team-flag";
@@ -198,6 +199,26 @@ export default function UpcomingPage() {
     return map;
   }, [matches]);
 
+  // Resolución PROVISIONAL del cuadro: rellena los huecos de eliminatorias
+  // ("2.º Grupo A", "Ganador M73"…) con los equipos que van ahora mismo, igual
+  // que el cuadro. Para fase de grupos no hay override (ya tienen equipo real).
+  const overrides = useMemo(
+    () => resolveBracketProvisional(matches ?? []),
+    [matches]
+  );
+  const displayMatch = (m: Match): { match: Match; provisional: boolean } => {
+    const ov = overrides.get(m.id);
+    if (!ov) return { match: m, provisional: false };
+    return {
+      match: {
+        ...m,
+        homeLabel: ov.home?.team ?? m.homeLabel,
+        awayLabel: ov.away?.team ?? m.awayLabel,
+      },
+      provisional: !!(ov.home?.provisional || ov.away?.provisional),
+    };
+  };
+
   // ── Mis apuestas pendientes dentro de la ventana ──
   // Filtramos también por grupo activo: el subscribe ya filtra a userId
   // (tu propio user), pero un mismo user tiene apuestas en cada uno de
@@ -340,16 +361,20 @@ export default function UpcomingPage() {
           description={`${liveMatches.length} partido${liveMatches.length === 1 ? "" : "s"} jugándose ahora mismo.`}
         >
           <div className="space-y-2">
-            {liveMatches.map((m) => (
-              <MatchRow
-                key={m.id}
-                match={m}
-                now={now}
-                live
-                onSelect={setBetsFor}
-                isSelectedDay={isOnDay(m, selectedDayMs)}
-              />
-            ))}
+            {liveMatches.map((m) => {
+              const d = displayMatch(m);
+              return (
+                <MatchRow
+                  key={m.id}
+                  match={d.match}
+                  provisional={d.provisional}
+                  now={now}
+                  live
+                  onSelect={setBetsFor}
+                  isSelectedDay={isOnDay(m, selectedDayMs)}
+                />
+              );
+            })}
           </div>
         </SectionCard>
       )}
@@ -385,15 +410,19 @@ export default function UpcomingPage() {
           }
         >
           <div className="space-y-2">
-            {upcomingMatches.map((m) => (
-              <MatchRow
-                key={m.id}
-                match={m}
-                now={now}
-                onSelect={setBetsFor}
-                isSelectedDay={isOnDay(m, selectedDayMs)}
-              />
-            ))}
+            {upcomingMatches.map((m) => {
+              const d = displayMatch(m);
+              return (
+                <MatchRow
+                  key={m.id}
+                  match={d.match}
+                  provisional={d.provisional}
+                  now={now}
+                  onSelect={setBetsFor}
+                  isSelectedDay={isOnDay(m, selectedDayMs)}
+                />
+              );
+            })}
           </div>
         </SectionCard>
       )}
@@ -511,6 +540,7 @@ function MatchRow({
   live = false,
   onSelect,
   isSelectedDay = false,
+  provisional = false,
 }: {
   match: Match;
   now: number;
@@ -521,6 +551,9 @@ function MatchRow({
   /** True cuando el kickoff cae en el día seleccionado por el usuario:
    *  resaltamos con borde verde para diferenciarlo del resto del rango. */
   isSelectedDay?: boolean;
+  /** True si el cruce de eliminatoria es provisional (los grupos aún no han
+   *  terminado, así que el equipo mostrado puede cambiar). */
+  provisional?: boolean;
 }) {
   const tve = isTveMatch(match);
   const kickoffMs = matchKickoffMs(match);
@@ -572,6 +605,12 @@ function MatchRow({
                 <span className="font-semibold text-amber-600 dark:text-amber-400">
                   La 1 · TVE
                 </span>
+              </>
+            )}
+            {provisional && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="italic">cruce provisional</span>
               </>
             )}
           </div>
