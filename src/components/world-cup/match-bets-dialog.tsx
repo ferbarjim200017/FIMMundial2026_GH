@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ClipboardCheck, Eye, Search, X } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Eye, Search, Tv, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,8 @@ import {
   BOOKMAKER_OPTIONS,
 } from "@/features/bets/bets.schema";
 import { TeamFlag } from "@/components/matches/team-flag";
+import { isTveMatch } from "@/features/matches/tve-matches";
+import { setMatchTve } from "@/features/matches/matches.service";
 import { MatchResultDialog } from "@/components/matches/match-result-dialog";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import {
@@ -292,6 +294,9 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
   const { memberUids, activeGroup, groupMembers } = useGroup();
   const { openBet } = useBetDetail();
   const [resultOpen, setResultOpen] = useState(false);
+  // Estado optimista del toggle "La 1": refleja el cambio al instante sin
+  // esperar a que el listener recargue el partido.
+  const [tveOn, setTveOn] = useState(false);
   // Apuesta que se está liquidando desde el propio popup (solo las mías).
   const [betToSettle, setBetToSettle] = useState<Bet | null>(null);
   const [bets, setBets] = useState<Bet[] | null>(null);
@@ -320,6 +325,22 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
     setPlayerFilter("all");
     setQuery("");
   }, [match?.id]);
+
+  // Sincroniza el toggle de La 1 con el partido actual.
+  useEffect(() => {
+    setTveOn(match ? isTveMatch(match) : false);
+  }, [match?.id, match?.tve]);
+
+  async function toggleTve() {
+    if (!match) return;
+    const next = !tveOn;
+    setTveOn(next); // optimista
+    try {
+      await setMatchTve(match.id, next);
+    } catch {
+      setTveOn(!next); // revertir si falla
+    }
+  }
 
   useEffect(() => {
     if (!open || !match || !isFirebaseConfigured) {
@@ -522,18 +543,32 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Solo admins: poner/editar el resultado del partido desde aquí. */}
+        {/* Solo admins: poner/editar el resultado y marcar si lo da La 1. */}
         {isAdmin && (
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setResultOpen(true)}
-              className="w-full gap-1.5 sm:w-auto"
+              className="flex-1 gap-1.5 sm:flex-none"
             >
               <ClipboardCheck className="h-4 w-4" />
               {match.result ? "Editar resultado" : "Poner resultado"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleTve}
+              className={cn(
+                "flex-1 gap-1.5 sm:flex-none",
+                tveOn && "border-blue-500 bg-blue-600/10 text-blue-500 hover:text-blue-500"
+              )}
+              title={tveOn ? "Lo emite La 1 (click para quitar)" : "Marcar: lo emite La 1"}
+            >
+              <Tv className="h-4 w-4" />
+              {tveOn ? "Quitar de La 1" : "Marcar La 1"}
             </Button>
           </div>
         )}
