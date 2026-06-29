@@ -517,6 +517,19 @@ export default function RankingPage() {
     });
   }, [users, groupStatsByUid, balanceByUid, cashByUid, sort]);
 
+  // Placeholder de carga para las gráficas (se reutiliza en las tres).
+  const chartSkeleton = () => (
+    <div className="space-y-3">
+      <Skeleton className="h-8 w-44" />
+      <Skeleton className="h-[320px] w-full rounded-lg" />
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-6 w-20 rounded-full" />
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* ─── Selector de fase (define el alcance de toda la página) ─── */}
@@ -631,68 +644,76 @@ export default function RankingPage() {
         title="Balance de caja del grupo"
       />
 
-      {/* ─── Bloque de gráficas ─── */}
+      {/* ─── Evolución del beneficio: General + fase seleccionada ─── */}
       {/* grid-cols-1 en móvil: limita la columna al ancho disponible para que
           el SVG de las gráficas no la "estire" y se desborde a la derecha. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* General: TODO el torneo (no depende del selector de fase). */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <LineChart className="h-4 w-4 text-primary" />
-              Evolución del beneficio
+              Evolución del beneficio · General
             </CardTitle>
             <CardDescription>
-              Beneficio/pérdida acumulado a lo largo del periodo elegido (por
-              defecto, todo el historial). Cada línea arranca en 0 € al inicio
-              del periodo — solo refleja ganancias y pérdidas, no el saldo de la
-              banca. Click en un nombre para ocultar/mostrar su línea.
+              Todo el torneo (todas las apuestas). Cada línea arranca en 0 € y
+              solo refleja ganancias/pérdidas, no el saldo de la banca.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {users === null ? (
-              <div className="space-y-3">
-                <Skeleton className="h-8 w-44" />
-                <Skeleton className="h-[320px] w-full rounded-lg" />
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
-                  ))}
-                </div>
-              </div>
+              chartSkeleton()
+            ) : (
+              <RankingChart users={users} bets={bets} matches={matches} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Fase actual: la fase seleccionada arriba (por defecto, la del torneo). */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              <LineChart className="h-4 w-4 text-primary" />
+              Evolución del beneficio
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                {RANKING_PHASE_LABELS[phase]}
+              </span>
+            </CardTitle>
+            <CardDescription>
+              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}).
+              Cámbiala con el desplegable de fase.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users === null ? (
+              chartSkeleton()
             ) : (
               <RankingChart users={users} bets={phaseBets} matches={matches} />
             )}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              Apuestas por jugador
-            </CardTitle>
-            <CardDescription>
-              Una barra por jugador. Elige un día concreto o &quot;Total&quot;
-              para ver cuántas apuestas ha registrado cada uno.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {users === null ? (
-              <div className="space-y-3">
-                <Skeleton className="h-8 w-44" />
-                <Skeleton className="h-[320px] w-full rounded-lg" />
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <BetsBarChart users={users} bets={phaseBets} />
-            )}
-          </CardContent>
-        </Card>
       </div>
+
+      {/* ─── Apuestas por jugador ─── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            Apuestas por jugador
+          </CardTitle>
+          <CardDescription>
+            Una barra por jugador. Elige un día concreto o &quot;Total&quot; para
+            ver cuántas apuestas ha registrado cada uno.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {users === null ? (
+            chartSkeleton()
+          ) : (
+            <BetsBarChart users={users} bets={phaseBets} />
+          )}
+        </CardContent>
+      </Card>
 
       {/* ─── Tabla de clasificación ─── */}
       <Card>
