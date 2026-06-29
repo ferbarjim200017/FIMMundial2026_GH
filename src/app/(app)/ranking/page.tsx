@@ -647,7 +647,7 @@ export default function RankingPage() {
       {/* ─── Evolución del beneficio: General + fase seleccionada ─── */}
       {/* grid-cols-1 en móvil: limita la columna al ancho disponible para que
           el SVG de las gráficas no la "estire" y se desborde a la derecha. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         {/* General: TODO el torneo (no depende del selector de fase). */}
         <Card>
           <CardHeader>
@@ -695,7 +695,7 @@ export default function RankingPage() {
       </div>
 
       {/* ─── Apuestas por jugador: General + fase seleccionada ─── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         {/* General: TODO el torneo. */}
         <Card>
           <CardHeader>

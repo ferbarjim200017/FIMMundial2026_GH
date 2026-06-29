@@ -22,10 +22,14 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import { useGroup } from "@/features/groups/groups.context";
 import {
   betInGroup,
+  betMatchIds,
   betOutcome,
+  betShareCount,
   bookmakerLabel,
   computeCashSummary,
   computeUserStats,
@@ -33,7 +37,7 @@ import {
 } from "@/features/bets/bets.utils";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { cn, formatCurrency, formatPercent, initials, profitClass } from "@/lib/utils";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, Match } from "@/types/domain";
 
 // ── Helpers de presentación ──────────────────────────────────────────────
 
@@ -197,7 +201,13 @@ const MIN_DECIDED_FOR_HITRATE = 5;
 
 export default function HallOfFamePage() {
   const [allBets, setAllBets] = useState<Bet[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const { activeGroup, groupMembers, memberUids } = useGroup();
+
+  useEffect(
+    () => subscribeToMatches(setMatches, () => setMatches([])),
+    []
+  );
 
   // Reutiliza el listener COMPARTIDO de apuestas (ya vivo por el keep-alive del
   // layout): este salón de la fama no abre nada nuevo en Firestore, solo hace
@@ -259,6 +269,71 @@ export default function HallOfFamePage() {
         .slice(0, 3),
     [groupMembers, cashByUid]
   );
+
+  // Partidos con los huecos de eliminatoria ya resueltos al equipo real.
+  const matchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
+  // ── Records por PARTIDO ──
+  // Agregamos por partido: dinero apostado (solo dinero real), beneficio,
+  // nº de apuestas y jugadores distintos. Los combos reparten su stake/beneficio
+  // entre sus partidos; las apuestas a futuro sin partido se ignoran.
+  const matchRecords = useMemo(() => {
+    const byMatch = new Map<
+      string,
+      { stake: number; profit: number; count: number; users: Set<string> }
+    >();
+    for (const b of bets) {
+      const ids = betMatchIds(b);
+      if (ids.length === 0) continue;
+      const share = betShareCount(b);
+      const stakeShare = b.isFreebet ? 0 : b.stake / share;
+      const profitShare = b.status !== "pending" ? (b.profit ?? 0) / share : 0;
+      for (const id of ids) {
+        const cur =
+          byMatch.get(id) ??
+          { stake: 0, profit: 0, count: 0, users: new Set<string>() };
+        cur.stake += stakeShare;
+        cur.profit += profitShare;
+        cur.count += 1;
+        cur.users.add(b.userId);
+        byMatch.set(id, cur);
+      }
+    }
+    const labelOf = (id: string): string => {
+      const m = matchById.get(id);
+      if (m) return `${m.homeLabel} vs ${m.awayLabel}`;
+      const b = bets.find((x) => betMatchIds(x).includes(id));
+      return b?.matchLabel ?? "Partido";
+    };
+    const list = [...byMatch.entries()].map(([id, v]) => ({
+      id,
+      label: labelOf(id),
+      stake: round2(v.stake),
+      profit: round2(v.profit),
+      count: v.count,
+      players: v.users.size,
+    }));
+    return {
+      mostStaked: [...list].sort((a, b) => b.stake - a.stake).slice(0, 3),
+      mostBets: [...list].sort((a, b) => b.count - a.count).slice(0, 3),
+      mostWon: [...list]
+        .filter((m) => m.profit > 0)
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3),
+      mostLost: [...list]
+        .filter((m) => m.profit < 0)
+        .sort((a, b) => a.profit - b.profit)
+        .slice(0, 3),
+      mostPlayers: [...list]
+        .filter((m) => m.players > 1)
+        .sort((a, b) => b.players - a.players)
+        .slice(0, 3),
+    };
+  }, [bets, matchById]);
 
   const nameOf = (uid: string) => usersById[uid]?.username ?? "—";
   const betDetail = (b: Bet) =>
@@ -555,6 +630,74 @@ export default function HallOfFamePage() {
                   valueClass: "text-red-500",
                 }))}
                 emptyText="Nadie ha fallado un cuotón aún."
+              />
+            </div>
+          </section>
+
+          {/* Records de partidos */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Records de partidos
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <PodiumCard
+                title="Más dinero jugado"
+                icon={Coins}
+                accent="text-amber-500"
+                entries={matchRecords.mostStaked.map((m) => ({
+                  name: m.label,
+                  detail: `${m.count} apuesta${m.count === 1 ? "" : "s"} · ${
+                    m.players
+                  } jugador${m.players === 1 ? "" : "es"}`,
+                  value: formatCurrency(m.stake),
+                }))}
+                emptyText="Aún no hay apuestas a partidos."
+              />
+              <PodiumCard
+                title="Donde más se ha ganado"
+                icon={TrendingUp}
+                accent="text-emerald-500"
+                entries={matchRecords.mostWon.map((m) => ({
+                  name: m.label,
+                  detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
+                  value: `+${formatCurrency(m.profit)}`,
+                  valueClass: "text-profit",
+                }))}
+                emptyText="Aún nadie ha ganado en un partido."
+              />
+              <PodiumCard
+                title="Donde más se ha perdido"
+                icon={TrendingDown}
+                accent="text-red-500"
+                entries={matchRecords.mostLost.map((m) => ({
+                  name: m.label,
+                  detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
+                  value: formatCurrency(m.profit),
+                  valueClass: "text-loss",
+                }))}
+                emptyText="Aún nadie ha perdido en un partido."
+              />
+              <PodiumCard
+                title="Partido con más apuestas"
+                icon={Receipt}
+                accent="text-primary"
+                entries={matchRecords.mostBets.map((m) => ({
+                  name: m.label,
+                  detail: `${formatCurrency(m.stake)} jugado`,
+                  value: `${m.count}`,
+                }))}
+                emptyText="Aún no hay apuestas a partidos."
+              />
+              <PodiumCard
+                title="El partido más popular"
+                icon={Flame}
+                accent="text-orange-500"
+                entries={matchRecords.mostPlayers.map((m) => ({
+                  name: m.label,
+                  detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
+                  value: `${m.players} jugadores`,
+                }))}
+                emptyText="Aún no hay partidos con varios jugadores."
               />
             </div>
           </section>

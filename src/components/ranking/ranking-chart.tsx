@@ -56,16 +56,23 @@ interface Series {
 }
 
 function niceTicks(min: number, max: number, count: number): number[] {
-  if (max === min) return [min];
+  // Datos no finitos o degenerados: una sola marca, nunca un bucle gigante que
+  // sature el eje de etiquetas.
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max === min) {
+    return [Number.isFinite(min) ? min : 0];
+  }
   const span = max - min;
   const roughStep = span / Math.max(1, count - 1);
   const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
   const candidates = [1, 2, 2.5, 5, 10].map((c) => c * magnitude);
-  const step = candidates.find((c) => c >= roughStep) ?? roughStep;
+  let step = candidates.find((c) => c >= roughStep) ?? roughStep;
+  // Tope de seguridad: si por lo que sea el paso saliera ínfimo, lo ajustamos
+  // para no generar decenas de marcas amontonadas.
+  if (!(step > 0) || span / step > 12) step = span / Math.max(1, count - 1);
   const start = Math.floor(min / step) * step;
   const end = Math.ceil(max / step) * step;
   const ticks: number[] = [];
-  for (let v = start; v <= end + step / 2; v += step) {
+  for (let v = start; v <= end + step / 2 && ticks.length < 16; v += step) {
     ticks.push(Number(v.toFixed(6)));
   }
   return ticks;
