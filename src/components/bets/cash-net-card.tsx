@@ -13,28 +13,30 @@ import { round2 } from "@/features/bets/bets.utils";
 import { cn, formatCurrency } from "@/lib/utils";
 
 /**
- * Tarjeta "Ingresos − Retiradas": muestra el dinero ingresado, el retirado y
- * el NETO (ingresos − retiradas). Un neto positivo = se ha ingresado más;
- * negativo = se ha retirado más. `subject` adapta el texto ("Has…" para el
- * dashboard personal, "El grupo ha…" para ranking/salón de la fama).
+ * Tarjeta "Balance de caja": muestra el dinero ingresado, el retirado y el NETO
+ * = RETIRADO − INGRESADO. Un neto POSITIVO = te has llevado más dinero del que
+ * metiste (bueno); negativo = has metido más del que has sacado. `subject`
+ * adapta el texto ("Has…" para el dashboard personal, "El grupo ha…" para el
+ * ranking).
  */
 export function CashNetCard({
   deposits,
   withdrawals,
   subject = "Has",
-  title = "Ingresos − Retiradas",
+  title = "Balance de caja",
 }: {
   deposits: number;
   withdrawals: number;
   subject?: string;
   title?: string;
 }) {
-  const net = round2(deposits - withdrawals);
+  // Neto = retirado − ingresado. Positivo = te has llevado más de lo que metiste.
+  const net = round2(withdrawals - deposits);
   const verdict =
     net > 0
-      ? `${subject} ingresado más`
+      ? `${subject} retirado más`
       : net < 0
-        ? `${subject} retirado más`
+        ? `${subject} ingresado más`
         : "Igualado";
 
   return (
@@ -45,7 +47,8 @@ export function CashNetCard({
           {title}
         </CardTitle>
         <CardDescription>
-          Diferencia entre el dinero ingresado y el retirado de las casas.
+          Lo retirado menos lo ingresado. En positivo = te has llevado más dinero
+          del que metiste.
         </CardDescription>
       </CardHeader>
       <CardContent>

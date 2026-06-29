@@ -603,12 +603,12 @@ export default function RankingPage() {
         </CardContent>
       </Card>
 
-      {/* ─── Ingresos − Retiradas (global del grupo) ─── */}
+      {/* ─── Balance de caja (global del grupo) ─── */}
       <CashNetCard
         deposits={groupCash.deposits}
         withdrawals={groupCash.withdrawals}
         subject="El grupo ha"
-        title="Ingresos − Retiradas del grupo"
+        title="Balance de caja del grupo"
       />
 
       {/* ─── Bloque de gráficas ─── */}

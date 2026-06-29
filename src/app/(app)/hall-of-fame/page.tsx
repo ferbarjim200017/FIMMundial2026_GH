@@ -17,10 +17,10 @@ import {
   Snowflake,
   Dices,
   Skull,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CashNetCard } from "@/components/bets/cash-net-card";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
@@ -224,18 +224,41 @@ export default function HallOfFamePage() {
     return map;
   }, [groupMembers]);
 
-  // Caja del grupo: dinero TOTAL ingresado y retirado por todos los miembros
-  // (independiente de las apuestas; es dinero real metido/sacado de las casas).
-  const groupCash = useMemo(() => {
-    let deposits = 0;
-    let withdrawals = 0;
+  // Caja por jugador: ingresos, retiradas y NETO RETIRADO (retirado − ingresado).
+  // Positivo = se ha llevado más dinero del que metió (bueno, es su dinero).
+  const cashByUid = useMemo(() => {
+    const map = new Map<
+      string,
+      { deposits: number; withdrawals: number; netWithdrawn: number }
+    >();
     for (const u of groupMembers) {
       const c = computeCashSummary(u, activeGroup?.id);
-      deposits += c.deposits;
-      withdrawals += c.withdrawals;
+      map.set(u.uid, {
+        deposits: c.deposits,
+        withdrawals: c.withdrawals,
+        netWithdrawn: round2(c.withdrawals - c.deposits),
+      });
     }
-    return { deposits, withdrawals };
+    return map;
   }, [groupMembers, activeGroup]);
+
+  // Podio "Más dinero retirado": jugadores ordenados por neto retirado (desc).
+  const topWithdrawn = useMemo(
+    () =>
+      groupMembers
+        .map((u) => ({
+          user: u,
+          ...(cashByUid.get(u.uid) ?? {
+            deposits: 0,
+            withdrawals: 0,
+            netWithdrawn: 0,
+          }),
+        }))
+        .filter((p) => p.deposits > 0 || p.withdrawals > 0)
+        .sort((a, b) => b.netWithdrawn - a.netWithdrawn)
+        .slice(0, 3),
+    [groupMembers, cashByUid]
+  );
 
   const nameOf = (uid: string) => usersById[uid]?.username ?? "—";
   const betDetail = (b: Bet) =>
@@ -419,14 +442,6 @@ export default function HallOfFamePage() {
           actualiza solo con cada apuesta.
         </p>
       </header>
-
-      {/* Ingresos − Retiradas (global del grupo) */}
-      <CashNetCard
-        deposits={groupCash.deposits}
-        withdrawals={groupCash.withdrawals}
-        subject="El grupo ha"
-        title="Ingresos − Retiradas del grupo"
-      />
 
       {!hasData ? (
         <div className="py-16 text-center text-sm text-muted-foreground">
@@ -631,6 +646,27 @@ export default function HallOfFamePage() {
                 }))}
                 emptyText="Nadie ha perdido todavía."
               />
+              <PodiumCard
+                title="Más dinero retirado"
+                icon={Wallet}
+                accent="text-emerald-500"
+                entries={topWithdrawn.map((p) => ({
+                  name: p.user.username,
+                  detail: `Ingresado ${formatCurrency(
+                    p.deposits
+                  )} · Retirado ${formatCurrency(p.withdrawals)}`,
+                  value: `${p.netWithdrawn > 0 ? "+" : ""}${formatCurrency(
+                    p.netWithdrawn
+                  )}`,
+                  valueClass:
+                    p.netWithdrawn > 0
+                      ? "text-profit"
+                      : p.netWithdrawn < 0
+                        ? "text-loss"
+                        : undefined,
+                }))}
+                emptyText="Nadie ha ingresado ni retirado aún."
+              />
             </div>
           </section>
 
@@ -643,7 +679,10 @@ export default function HallOfFamePage() {
               {perPlayer
                 .slice()
                 .sort((a, b) => b.stats.totalProfit - a.stats.totalProfit)
-                .map((p) => (
+                .map((p) => {
+                  const netWithdrawn =
+                    cashByUid.get(p.user.uid)?.netWithdrawn ?? 0;
+                  return (
                   <Card key={p.user.uid}>
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center gap-2 text-base">
@@ -676,6 +715,13 @@ export default function HallOfFamePage() {
                           label="Mejor racha"
                           value={`${p.stats.bestStreak} ✅`}
                         />
+                        <Metric
+                          label="Neto retirado"
+                          value={`${netWithdrawn > 0 ? "+" : ""}${formatCurrency(
+                            netWithdrawn
+                          )}`}
+                          valueClass={profitClass(netWithdrawn)}
+                        />
                       </div>
                       {p.best && (p.best.profit ?? 0) > 0 && (
                         <BetHighlight label="Mayor acierto" bet={p.best} />
@@ -685,7 +731,8 @@ export default function HallOfFamePage() {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
             </div>
           </section>
         </>
