@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { useAuth } from "@/features/auth/auth.context";
+import { usePendingUploadsCount } from "@/features/bets/use-pending-uploads";
 
 const NAV = [
   { href: ROUTES.dashboard, label: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +30,7 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const { isAdmin } = useAuth();
+  const pendingUploads = usePendingUploadsCount();
 
   const items = [
     ...NAV,
@@ -64,6 +66,14 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               <span>{label}</span>
+              {href === ROUTES.bets && pendingUploads > 0 && (
+                <span
+                  className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                  title={`${pendingUploads} sin subir`}
+                >
+                  {pendingUploads > 99 ? "99+" : pendingUploads}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -7,9 +7,11 @@ import { es } from "date-fns/locale";
 import {
   ArrowUpRight,
   ArrowDownRight,
+  ChevronDown,
   Clock,
   Coins,
   Copy,
+  Layers,
   Percent,
   Receipt,
   Search,
@@ -79,11 +81,45 @@ const FILTERS: { value: FeedFilter; label: string }[] = [
 ];
 
 const MAX_ITEMS = 80;
+// Ventana para agrupar apuestas registradas "del tirón" (escaleras/sesión).
+const GROUP_WINDOW_MS = 15 * 60 * 1000;
 
 function eventDate(bet: Bet): Date {
   const ts = bet.settledAt ?? bet.createdAt;
   return ts.toDate();
 }
+
+function sameYMD(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(d: Date): string {
+  const now = new Date();
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (sameYMD(d, now)) return "Hoy";
+  if (sameYMD(d, yest)) return "Ayer";
+  return d.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+}
+
+/** Entrada del feed ya procesada: divisor de día, apuesta suelta o grupo
+ *  (escalera / varias apuestas del mismo registro). */
+type FeedEntry =
+  | { kind: "day"; key: string; label: string }
+  | { kind: "single"; key: string; bet: Bet }
+  | { kind: "group"; key: string; bets: Bet[] };
 
 function matchesFilter(bet: Bet, filter: FeedFilter): boolean {
   if (filter === "all") return true;
@@ -240,6 +276,50 @@ export default function FeedPage() {
     usersById,
     resolvedMatchById,
   ]);
+
+  // Procesa la lista en entradas con divisores por día y AGRUPANDO las apuestas
+  // registradas del tirón (mismo usuario, mismo partido, mismo estado y dentro
+  // de una ventana corta) para que una escalera de 5 no inunde el feed.
+  const feedEntries = useMemo<FeedEntry[]>(() => {
+    if (!filteredBets) return [];
+    const out: FeedEntry[] = [];
+    let lastDay = "";
+    let i = 0;
+    while (i < filteredBets.length) {
+      const b = filteredBets[i];
+      const d = eventDate(b);
+      const dk = dayKey(d);
+      if (dk !== lastDay) {
+        out.push({ kind: "day", key: `day-${dk}`, label: dayLabel(d) });
+        lastDay = dk;
+      }
+      const group = [b];
+      let j = i + 1;
+      while (j < filteredBets.length) {
+        const n = filteredBets[j];
+        if (
+          n.userId === b.userId &&
+          n.matchLabel === b.matchLabel &&
+          n.status === b.status &&
+          sameYMD(eventDate(n), d) &&
+          Math.abs(n.createdAt.toMillis() - b.createdAt.toMillis()) <
+            GROUP_WINDOW_MS
+        ) {
+          group.push(n);
+          j++;
+        } else {
+          break;
+        }
+      }
+      if (group.length >= 2) {
+        out.push({ kind: "group", key: `g-${b.id}`, bets: group });
+      } else {
+        out.push({ kind: "single", key: b.id, bet: b });
+      }
+      i = j;
+    }
+    return out;
+  }, [filteredBets]);
 
   const resetFilters = () => {
     setQuery("");
@@ -627,14 +707,25 @@ export default function FeedPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredBets.map((bet) => (
-            <FeedItem
-              key={bet.id}
-              bet={bet}
-              user={usersById[bet.userId] ?? null}
-              matchById={resolvedMatchById}
-            />
-          ))}
+          {feedEntries.map((e) =>
+            e.kind === "day" ? (
+              <DayDivider key={e.key} label={e.label} />
+            ) : e.kind === "group" ? (
+              <GroupedFeedItem
+                key={e.key}
+                bets={e.bets}
+                user={usersById[e.bets[0].userId] ?? null}
+                matchById={resolvedMatchById}
+              />
+            ) : (
+              <FeedItem
+                key={e.key}
+                bet={e.bet}
+                user={usersById[e.bet.userId] ?? null}
+                matchById={resolvedMatchById}
+              />
+            )
+          )}
         </div>
       )}
     </div>
@@ -706,6 +797,124 @@ function ExtremeCard({
           )}
         </div>
       </CardContent>
+    </Card>
+  );
+}
+
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/** Varias apuestas registradas del tirón (una escalera), agrupadas en una sola
+ *  tarjeta plegable para no inundar el feed. */
+function GroupedFeedItem({
+  bets,
+  user,
+  matchById,
+}: {
+  bets: Bet[];
+  user: AppUser | null;
+  matchById: Map<string, Match>;
+}) {
+  const { openBet } = useBetDetail();
+  const [open, setOpen] = useState(false);
+  const displayName = user?.username ?? "Usuario";
+  const first = bets[0];
+  const totalStake = bets.reduce((a, b) => a + b.stake, 0);
+  const allSettled = bets.every((b) => b.status !== "pending");
+  const totalProfit = bets.reduce((a, b) => a + (b.profit ?? 0), 0);
+  const timestamp = formatDistanceToNow(eventDate(first), {
+    addSuffix: true,
+    locale: es,
+  });
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-accent/30"
+      >
+        <Avatar className="h-10 w-10 shrink-0">
+          {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
+          <AvatarFallback>{initials(displayName)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+            <span className="font-semibold">{displayName}</span>
+            <span className="text-muted-foreground">
+              {actionVerb(first.status)} {bets.length} apuestas en
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+              <Layers className="h-3 w-3" />
+              Escalera
+            </span>
+          </p>
+          <p className="truncate text-sm font-medium">
+            {betDisplayLabel(first, matchById)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Stake total {formatCurrency(totalStake)} · {timestamp}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {allSettled && (
+            <span
+              className={cn("font-mono text-sm font-bold", profitClass(totalProfit))}
+            >
+              {totalProfit > 0 ? "+" : ""}
+              {formatCurrency(totalProfit)}
+            </span>
+          )}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              open && "rotate-180"
+            )}
+            aria-hidden
+          />
+        </div>
+      </button>
+      {open && (
+        <ul className="divide-y border-t">
+          {bets.map((b) => (
+            <li key={b.id}>
+              <button
+                type="button"
+                onClick={() => openBet(b, user)}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors hover:bg-accent/30"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {b.selection}{" "}
+                  <span className="text-muted-foreground">
+                    @ {b.odds.toFixed(2)} · {formatCurrency(b.stake)}
+                  </span>
+                </span>
+                <BetStatusBadge status={b.status} />
+                {b.status !== "pending" && (
+                  <span
+                    className={cn(
+                      "shrink-0 font-mono text-xs font-semibold",
+                      profitClass(b.profit)
+                    )}
+                  >
+                    {b.profit > 0 ? "+" : ""}
+                    {formatCurrency(b.profit)}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

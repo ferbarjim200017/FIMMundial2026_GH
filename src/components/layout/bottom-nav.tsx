@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
+import { usePendingUploadsCount } from "@/features/bets/use-pending-uploads";
 
 const NAV = [
   { href: ROUTES.dashboard, label: "Inicio", icon: LayoutDashboard },
@@ -32,6 +33,7 @@ const NAV = [
  */
 export function BottomNav() {
   const pathname = usePathname();
+  const pendingUploads = usePendingUploadsCount();
 
   return (
     <nav
@@ -58,6 +60,15 @@ export function BottomNav() {
                     className={cn("h-5 w-5", active && "scale-110")}
                     aria-hidden="true"
                   />
+                  {href === ROUTES.bets && pendingUploads > 0 && (
+                    <span
+                      className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white"
+                      title={`${pendingUploads} sin subir`}
+                      aria-label={`${pendingUploads} apuestas sin subir`}
+                    >
+                      {pendingUploads > 99 ? "99+" : pendingUploads}
+                    </span>
+                  )}
                 </span>
                 <span className="leading-none">{label}</span>
               </Link>

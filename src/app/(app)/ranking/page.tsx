@@ -145,7 +145,14 @@ function RankMovementIndicator({
   );
 }
 
-type SortKey = "roi" | "profit" | "balance" | "hitRate" | "betsCount" | "username";
+type SortKey =
+  | "roi"
+  | "profit"
+  | "balance"
+  | "cash"
+  | "hitRate"
+  | "betsCount"
+  | "username";
 
 export default function RankingPage() {
   const [allBets, setAllBets] = useState<Bet[]>([]);
@@ -278,6 +285,17 @@ export default function RankingPage() {
       withdrawals += c.withdrawals;
     }
     return { deposits, withdrawals };
+  }, [users, activeGroup]);
+
+  // Neto RETIRADO por jugador (retirado − ingresado). Positivo = se ha llevado
+  // más dinero del que metió. No depende de la fase.
+  const cashByUid = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const u of users ?? []) {
+      const c = computeCashSummary(u, activeGroup?.id);
+      map.set(u.uid, c.withdrawals - c.deposits);
+    }
+    return map;
   }, [users, activeGroup]);
 
   // Stats por usuario de la FASE seleccionada (las que se ven en pantalla:
@@ -472,6 +490,8 @@ export default function RankingPage() {
           return s?.totalProfit ?? 0;
         case "balance":
           return balanceByUid.get(u.uid) ?? 0;
+        case "cash":
+          return cashByUid.get(u.uid) ?? 0;
         case "hitRate":
           return s?.hitRate ?? 0;
         case "betsCount":
@@ -495,7 +515,7 @@ export default function RankingPage() {
         (groupStatsByUid.get(a.uid)?.totalProfit ?? 0)
       );
     });
-  }, [users, groupStatsByUid, balanceByUid, sort]);
+  }, [users, groupStatsByUid, balanceByUid, cashByUid, sort]);
 
   return (
     <div className="space-y-6">
@@ -686,7 +706,8 @@ export default function RankingPage() {
           <CardDescription>
             Pulsa una columna para ordenar por ese campo (vuelve a pulsar para
             invertir). Por defecto, por <strong>ROI</strong>. Se actualiza en
-            tiempo real.
+            tiempo real. Las flechas ↑↓ de posición solo aplican a la fase{" "}
+            <strong>General</strong>. <strong>Caja</strong> = retirado − ingresado.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -719,6 +740,7 @@ export default function RankingPage() {
                     {sortTh("roi", "ROI", "px-2 py-3 text-right")}
                     {sortTh("profit", "Beneficio", "px-2 py-3 text-right")}
                     {sortTh("balance", "Saldo", "px-2 py-3 text-right")}
+                    {sortTh("cash", "Caja", "px-2 py-3 text-right")}
                     {sortTh("hitRate", "% Acierto", "px-2 py-3 text-right")}
                     {sortTh("betsCount", "Apuestas", "px-4 py-3 text-right")}
                   </tr>
@@ -731,6 +753,7 @@ export default function RankingPage() {
                     const profit = s?.totalProfit ?? 0;
                     const hitRate = s?.hitRate ?? 0;
                     const balance = balanceByUid.get(u.uid) ?? 0;
+                    const cash = cashByUid.get(u.uid) ?? 0;
                     const isMe = appUser?.uid === u.uid;
                     // Farolillo rojo: el auténtico último por ROI, da igual
                     // cómo esté ordenada la tabla.
@@ -744,7 +767,11 @@ export default function RankingPage() {
                           <div className="flex items-center gap-1.5 text-base font-semibold">
                             <span>{medal(rank)}</span>
                             <RankMovementIndicator
-                              entry={movements[u.uid]}
+                              entry={
+                                phase === "general"
+                                  ? movements[u.uid]
+                                  : undefined
+                              }
                               nowMs={nowMs}
                             />
                           </div>
@@ -824,6 +851,15 @@ export default function RankingPage() {
                         </td>
                         <td className="px-2 py-3 text-right font-mono">
                           {formatCurrency(balance)}
+                        </td>
+                        <td
+                          className={`px-2 py-3 text-right font-mono ${profitClass(
+                            cash
+                          )}`}
+                          title="Retirado − ingresado (positivo = te has llevado más)"
+                        >
+                          {cash > 0 ? "+" : ""}
+                          {formatCurrency(cash)}
                         </td>
                         <td className="px-2 py-3 text-right font-mono text-muted-foreground">
                           {formatPercent(hitRate)}
