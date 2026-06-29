@@ -45,6 +45,7 @@ import {
 } from "@/features/bets/bets.utils";
 import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import { CashNetCard } from "@/components/bets/cash-net-card";
+import { PendingUploadsBanner } from "@/components/bets/pending-uploads-banner";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
@@ -239,6 +240,8 @@ export default function DashboardPage() {
         />
       )}
       <LiveTvBanner />
+
+      <PendingUploadsBanner />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">

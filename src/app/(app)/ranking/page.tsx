@@ -694,26 +694,52 @@ export default function RankingPage() {
         </Card>
       </div>
 
-      {/* ─── Apuestas por jugador ─── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            Apuestas por jugador
-          </CardTitle>
-          <CardDescription>
-            Una barra por jugador. Elige un día concreto o &quot;Total&quot; para
-            ver cuántas apuestas ha registrado cada uno.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {users === null ? (
-            chartSkeleton()
-          ) : (
-            <BetsBarChart users={users} bets={phaseBets} />
-          )}
-        </CardContent>
-      </Card>
+      {/* ─── Apuestas por jugador: General + fase seleccionada ─── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* General: TODO el torneo. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Apuestas por jugador · General
+            </CardTitle>
+            <CardDescription>
+              Todas las apuestas del torneo. Elige un día concreto o
+              &quot;Total&quot; para ver cuántas ha registrado cada uno.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users === null ? (
+              chartSkeleton()
+            ) : (
+              <BetsBarChart users={users} bets={bets} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Fase actual: la fase seleccionada arriba (por defecto, la del torneo). */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Apuestas por jugador
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                {RANKING_PHASE_LABELS[phase]}
+              </span>
+            </CardTitle>
+            <CardDescription>
+              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {users === null ? (
+              chartSkeleton()
+            ) : (
+              <BetsBarChart users={users} bets={phaseBets} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ─── Tabla de clasificación ─── */}
       <Card>

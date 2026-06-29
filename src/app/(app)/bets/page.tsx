@@ -28,19 +28,17 @@ import { subscribeToBets, type BetsFilter } from "@/features/bets/bets.service";
 import {
   usePendingSettles,
   applyPendingToBets,
-  flushPendingSettles,
 } from "@/features/bets/pending-settles";
 import {
   usePendingEdits,
   applyPendingEditsToBets,
-  flushPendingEdits,
 } from "@/features/bets/pending-edits";
 import {
   usePendingCreates,
   applyPendingCreatesToBets,
-  flushPendingCreates,
   removePendingCreate,
 } from "@/features/bets/pending-creates";
+import { PendingUploadsBanner } from "@/components/bets/pending-uploads-banner";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import {
   BOOKMAKER_OPTIONS,
@@ -96,20 +94,6 @@ export default function BetsPage() {
   const pending = usePendingSettles();
   const pendingEdits = usePendingEdits();
   const pendingCreates = usePendingCreates();
-  const [uploading, setUploading] = useState(false);
-
-  // Sube TODO lo acumulado en local en lotes (una llamada por tipo) + un
-  // recálculo por usuario. Cada flush es idempotente y tolera fallos parciales.
-  async function handleUploadAll() {
-    setUploading(true);
-    try {
-      await flushPendingCreates();
-      await flushPendingSettles();
-      await flushPendingEdits();
-    } finally {
-      setUploading(false);
-    }
-  }
 
   // Partidos con los huecos de eliminatoria ya resueltos al equipo provisional,
   // indexados por id. Sirve para mostrar el equipo real en la columna "Partido"
@@ -222,23 +206,6 @@ export default function BetsPage() {
   }, [displayBets, sortBy]);
 
   const stats = useMemo(() => summarize(displayBets), [displayBets]);
-
-  // Resumen de lo que hay sin subir (todos los grupos) para el aviso superior.
-  const pendingTotal =
-    pendingCreates.length + pending.length + pendingEdits.length;
-  const pendingDetail = [
-    pendingCreates.length > 0
-      ? `${pendingCreates.length} nueva${pendingCreates.length > 1 ? "s" : ""}`
-      : null,
-    pending.length > 0
-      ? `${pending.length} liquidación${pending.length > 1 ? "es" : ""}`
-      : null,
-    pendingEdits.length > 0
-      ? `${pendingEdits.length} edición${pendingEdits.length > 1 ? "es" : ""}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   if (!appUser) return null;
 
@@ -394,23 +361,7 @@ export default function BetsPage() {
         </CardContent>
       </Card>
 
-      {pendingTotal > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-          <span className="text-amber-700 dark:text-amber-400">
-            ⏳ <strong>{pendingTotal}</strong> sin subir en este dispositivo
-            {pendingDetail && ` · ${pendingDetail}`}. Súbelas todas de golpe en
-            una sola llamada (o se subirán solas cuando vuelva la cuota).
-          </span>
-          <Button
-            size="sm"
-            className="ml-auto h-8"
-            onClick={handleUploadAll}
-            disabled={uploading}
-          >
-            {uploading ? "Subiendo…" : `Subir todo (${pendingTotal})`}
-          </Button>
-        </div>
-      )}
+      <PendingUploadsBanner />
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando apuestas…</p>
