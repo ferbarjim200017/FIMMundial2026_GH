@@ -68,16 +68,22 @@ export function betDisplayLabel(
 }
 
 /**
- * Ventana de la "jornada" actual, de MEDIODÍA a MEDIODÍA (12:00 → 12:00 del día
- * siguiente). Si aún no es mediodía, devuelve la jornada que arrancó ayer a las
- * 12:00. Así una sesión de noche (19-21h → 8h) cuenta entera en el mismo día.
+ * Hora a la que empieza/termina cada "jornada" (de las 9:00 a las 9:00 del día
+ * siguiente). Si lo quieres cambiar, toca solo este número.
+ */
+export const DAY_START_HOUR = 9;
+
+/**
+ * Ventana de la "jornada" actual, de las 9:00 a las 9:00 del día siguiente. Si
+ * aún no son las 9:00, devuelve la jornada que arrancó ayer a las 9:00. Así una
+ * sesión de noche (19-21h → madrugada) cuenta entera en el mismo día.
  */
 export function currentDayWindow(nowMs: number = Date.now()): {
   startMs: number;
   endMs: number;
 } {
   const start = new Date(nowMs);
-  start.setHours(12, 0, 0, 0);
+  start.setHours(DAY_START_HOUR, 0, 0, 0);
   if (nowMs < start.getTime()) start.setDate(start.getDate() - 1);
   const startMs = start.getTime();
   return { startMs, endMs: startMs + 24 * 60 * 60 * 1000 };

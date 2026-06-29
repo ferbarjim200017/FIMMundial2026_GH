@@ -338,7 +338,7 @@ export default function FeedPage() {
     return m;
   }, [matches]);
 
-  // "Resultado de hoy": jornada de mediodía a mediodía, por hora del partido.
+  // "Resultado de hoy": jornada de las 9:00 a las 9:00, por hora del partido.
   // Una pérdida de un partido de ayer NO cuenta hoy aunque la marques hoy.
   const todaySummary = useMemo(() => {
     if (!sortedBets) return null;

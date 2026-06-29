@@ -182,9 +182,9 @@ export default function DashboardPage() {
     [bets]
   );
 
-  // "Hoy" = jornada de MEDIODÍA a MEDIODÍA. Así una sesión de noche (de 19-21h
-  // hasta las 8h de la mañana siguiente) cuenta entera en el mismo día. Si aún
-  // no es mediodía, seguimos en la jornada que arrancó ayer a las 12:00.
+  // "Hoy" = jornada de las 9:00 a las 9:00 del día siguiente. Así una sesión de
+  // noche (de 19-21h hasta la madrugada) cuenta entera en el mismo día. Si aún
+  // no son las 9:00, seguimos en la jornada que arrancó ayer a las 9:00.
   // Una apuesta cuenta como "de hoy" según la HORA DEL PARTIDO (kickoff), no
   // según cuándo se creó ni cuándo se liquidó. Para combos basta con que algún
   // partido de la apuesta se juegue hoy.
@@ -249,7 +249,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* ─────── Hoy (jornada de mediodía a mediodía) ─────── */}
+      {/* ─────── Hoy (jornada de 9:00 a 9:00) ─────── */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <Sunrise className="h-5 w-5 text-primary" />

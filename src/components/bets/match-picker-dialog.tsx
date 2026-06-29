@@ -123,7 +123,7 @@ export function MatchPickerDialog({
   const deferredSearch = useDeferredValue(search);
   const [showFinished, setShowFinished] = useState(false);
   // Por defecto el selector muestra solo los partidos de la jornada de hoy
-  // (ventana 12:00 → 12:00, la misma del dashboard). Con "Ver todos" se
+  // (ventana 9:00 → 9:00, la misma del dashboard). Con "Ver todos" se
   // muestran el resto. Además de ser más cómodo, renderizar menos filas hace
   // que el diálogo abra más fluido.
   const [showAll, setShowAll] = useState(false);
@@ -183,7 +183,7 @@ export function MatchPickerDialog({
           (m.city ?? "").toLowerCase().includes(s)
       );
     }
-    // Sin búsqueda: por defecto solo la jornada actual (12:00 → 12:00). El
+    // Sin búsqueda: por defecto solo la jornada actual (9:00 → 9:00). El
     // botón "Ver todos los partidos" desactiva este filtro.
     if (!showAll) {
       const { startMs, endMs } = currentDayWindow();
@@ -277,7 +277,7 @@ export function MatchPickerDialog({
             <span>
               {showAll
                 ? "Mostrando todos los partidos"
-                : "Mostrando la jornada de hoy (desde las 12:00)"}
+                : "Mostrando la jornada de hoy (desde las 9:00)"}
             </span>
             <button
               type="button"
