@@ -46,6 +46,7 @@ import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { useGroup } from "@/features/groups/groups.context";
 import {
+  betDisplayLabel,
   betHasMatch,
   betInGroup,
   betOutcome,
@@ -55,6 +56,7 @@ import {
   currentDayWindow,
 } from "@/features/bets/bets.utils";
 import { bookmakerLabel } from "@/features/bets/bets.utils";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -187,6 +189,14 @@ export default function FeedPage() {
     maxStake !== "" ||
     normalizedQuery !== "";
 
+  // Partidos con los huecos de eliminatoria resueltos al equipo provisional,
+  // para mostrar el equipo real aunque la apuesta se guardara con un hueco.
+  const resolvedMatchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
   const filteredBets = useMemo(() => {
     if (!sortedBets) return null;
     return sortedBets
@@ -204,6 +214,7 @@ export default function FeedPage() {
           const username = usersById[b.userId]?.username?.toLowerCase() ?? "";
           const haystack = [
             username,
+            betDisplayLabel(b, resolvedMatchById),
             b.matchLabel,
             b.selection,
             b.marketDetail,
@@ -227,6 +238,7 @@ export default function FeedPage() {
     maxStakeNum,
     normalizedQuery,
     usersById,
+    resolvedMatchById,
   ]);
 
   const resetFilters = () => {
@@ -620,6 +632,7 @@ export default function FeedPage() {
               key={bet.id}
               bet={bet}
               user={usersById[bet.userId] ?? null}
+              matchById={resolvedMatchById}
             />
           ))}
         </div>
@@ -697,7 +710,15 @@ function ExtremeCard({
   );
 }
 
-function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
+function FeedItem({
+  bet,
+  user,
+  matchById,
+}: {
+  bet: Bet;
+  user: AppUser | null;
+  matchById: Map<string, Match>;
+}) {
   const { openBet } = useBetDetail();
   const accent =
     bet.status === "won"
@@ -769,7 +790,7 @@ function FeedItem({ bet, user }: { bet: Bet; user: AppUser | null }) {
           </div>
 
           <p className="block truncate text-sm font-medium">
-            {bet.matchLabel}
+            {betDisplayLabel(bet, matchById)}
           </p>
 
           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
