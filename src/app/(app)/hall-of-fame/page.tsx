@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Crown,
   TrendingUp,
@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
@@ -54,16 +55,31 @@ function Initial({ name }: { name: string }) {
   );
 }
 
+/** Banderas (local arriba, visitante abajo) para las entradas de partido. */
+function matchFlags(home?: string, away?: string): ReactNode {
+  if (!home || !away) return undefined;
+  return (
+    <span className="flex h-8 w-8 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md bg-muted/50">
+      <TeamFlag name={home} className="h-3 w-[18px]" />
+      <TeamFlag name={away} className="h-3 w-[18px]" />
+    </span>
+  );
+}
+
 interface PodiumEntry {
   name: string;
   detail?: string;
   value: string;
   valueClass?: string;
+  /** Elemento a la izquierda del nombre (banderas, etc.). Si no se pasa, se usa
+   *  el círculo con las iniciales del nombre. */
+  leading?: ReactNode;
 }
 
 /**
  * Tarjeta de podio reutilizable (sirve tanto para records de apuestas como
- * para rankings de jugadores). Muestra hasta 3 entradas con su medalla.
+ * para rankings de jugadores y partidos). Muestra hasta 3 entradas con su
+ * medalla y resalta el 1.º.
  */
 function PodiumCard({
   title,
@@ -79,23 +95,40 @@ function PodiumCard({
   emptyText?: string;
 }) {
   return (
-    <Card>
+    <Card className="transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <Icon className={cn("h-4 w-4", accent)} />
+          <span
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted/60",
+              accent
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2.5">
+      <CardContent className="space-y-1">
         {entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="px-1 py-2 text-xs text-muted-foreground">
             {emptyText ?? "Sin datos todavía."}
           </p>
         ) : (
           entries.map((e, i) => (
-            <div key={i} className="flex items-center gap-2.5">
-              <span className="w-5 shrink-0 text-center text-sm">{medal(i)}</span>
-              <Initial name={e.name} />
+            <div
+              key={i}
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors",
+                i === 0
+                  ? "bg-amber-400/10 ring-1 ring-amber-400/20"
+                  : "hover:bg-accent/30"
+              )}
+            >
+              <span className="w-6 shrink-0 text-center text-base leading-none">
+                {medal(i)}
+              </span>
+              {e.leading ?? <Initial name={e.name} />}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{e.name}</p>
                 {e.detail && (
@@ -115,6 +148,28 @@ function PodiumCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Chip de estadística para la cabecera (apuestas, dinero jugado, beneficio). */
+function HeroStat({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card/60 px-3 py-1.5 text-center">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className={cn("font-mono text-base font-bold tabular-nums", valueClass)}>
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -309,14 +364,19 @@ export default function HallOfFamePage() {
       const b = bets.find((x) => betMatchIds(x).includes(id));
       return b?.matchLabel ?? "Partido";
     };
-    const list = [...byMatch.entries()].map(([id, v]) => ({
-      id,
-      label: labelOf(id),
-      stake: round2(v.stake),
-      profit: round2(v.profit),
-      count: v.count,
-      players: v.users.size,
-    }));
+    const list = [...byMatch.entries()].map(([id, v]) => {
+      const m = matchById.get(id);
+      return {
+        id,
+        label: labelOf(id),
+        home: m?.homeLabel,
+        away: m?.awayLabel,
+        stake: round2(v.stake),
+        profit: round2(v.profit),
+        count: v.count,
+        players: v.users.size,
+      };
+    });
     return {
       mostStaked: [...list].sort((a, b) => b.stake - a.stake).slice(0, 3),
       mostBets: [...list].sort((a, b) => b.count - a.count).slice(0, 3),
@@ -334,6 +394,17 @@ export default function HallOfFamePage() {
         .slice(0, 3),
     };
   }, [bets, matchById]);
+
+  // Resumen rápido del grupo para la cabecera.
+  const groupSummary = useMemo(() => {
+    let stake = 0;
+    let profit = 0;
+    for (const b of bets) {
+      if (!b.isFreebet) stake += b.stake;
+      if (b.status !== "pending") profit += b.profit ?? 0;
+    }
+    return { count: bets.length, stake: round2(stake), profit: round2(profit) };
+  }, [bets]);
 
   const nameOf = (uid: string) => usersById[uid]?.username ?? "—";
   const betDetail = (b: Bet) =>
@@ -507,16 +578,44 @@ export default function HallOfFamePage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Crown className="h-6 w-6 text-yellow-500" />
-          Salón de la fama
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Records de <span className="font-medium">{activeGroup.name}</span>. Se
-          actualiza solo con cada apuesta.
-        </p>
-      </header>
+      {/* ─── Cabecera ─── */}
+      <Card className="overflow-hidden border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-transparent">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-yellow-500/15 text-yellow-500">
+              <Crown className="h-6 w-6" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold leading-tight">
+                Salón de la fama
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Records de{" "}
+                <span className="font-medium text-foreground">
+                  {activeGroup.name}
+                </span>{" "}
+                · se actualiza solo
+              </p>
+            </div>
+          </div>
+          {hasData && (
+            <div className="flex flex-wrap gap-2">
+              <HeroStat label="Apuestas" value={String(groupSummary.count)} />
+              <HeroStat
+                label="Dinero jugado"
+                value={formatCurrency(groupSummary.stake)}
+              />
+              <HeroStat
+                label="Beneficio"
+                value={`${groupSummary.profit > 0 ? "+" : ""}${formatCurrency(
+                  groupSummary.profit
+                )}`}
+                valueClass={profitClass(groupSummary.profit)}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {!hasData ? (
         <div className="py-16 text-center text-sm text-muted-foreground">
@@ -646,6 +745,7 @@ export default function HallOfFamePage() {
                 accent="text-amber-500"
                 entries={matchRecords.mostStaked.map((m) => ({
                   name: m.label,
+                  leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"} · ${
                     m.players
                   } jugador${m.players === 1 ? "" : "es"}`,
@@ -659,6 +759,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={matchRecords.mostWon.map((m) => ({
                   name: m.label,
+                  leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: `+${formatCurrency(m.profit)}`,
                   valueClass: "text-profit",
@@ -671,6 +772,7 @@ export default function HallOfFamePage() {
                 accent="text-red-500"
                 entries={matchRecords.mostLost.map((m) => ({
                   name: m.label,
+                  leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: formatCurrency(m.profit),
                   valueClass: "text-loss",
@@ -683,6 +785,7 @@ export default function HallOfFamePage() {
                 accent="text-primary"
                 entries={matchRecords.mostBets.map((m) => ({
                   name: m.label,
+                  leading: matchFlags(m.home, m.away),
                   detail: `${formatCurrency(m.stake)} jugado`,
                   value: `${m.count}`,
                 }))}
@@ -694,6 +797,7 @@ export default function HallOfFamePage() {
                 accent="text-orange-500"
                 entries={matchRecords.mostPlayers.map((m) => ({
                   name: m.label,
+                  leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: `${m.players} jugadores`,
                 }))}
