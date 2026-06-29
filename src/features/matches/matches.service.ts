@@ -20,8 +20,44 @@ import {
 import { db } from "@/lib/firebase/client";
 import type { Match, MatchResult } from "@/types/domain";
 import { WORLDCUP_2026_MATCHES } from "./worldcup-fixtures";
+import { teamFlagCode } from "./teams-2026";
 
 const MATCHES = "matches";
+
+// ── Etiquetas REALES del sorteo oficial (calendario del código) ──────────────
+// Los cruces de eliminatoria del sorteo oficial (Alemania-Paraguay,
+// Francia-Suecia…) están en el seed, pero el documento en Firestore puede tener
+// todavía el HUECO ("1.º Grupo A", "2.º Grupo B"…). Si el doc tiene un hueco,
+// rellenamos con el equipo real del seed; si ya tiene un equipo de verdad, no se
+// toca. Así la app muestra los cruces correctos sin re-sembrar la base de datos.
+// Solo guardamos las etiquetas que son equipos REALES (los "Ganador MN" de
+// octavos en adelante no: esos se resuelven con los resultados).
+const SEED_KNOCKOUT_LABELS = new Map<
+  string,
+  { home?: string; away?: string }
+>();
+for (const sm of WORLDCUP_2026_MATCHES) {
+  if (sm.stage === "group") continue;
+  SEED_KNOCKOUT_LABELS.set(sm.seedId, {
+    home: teamFlagCode(sm.homeLabel) ? sm.homeLabel : undefined,
+    away: teamFlagCode(sm.awayLabel) ? sm.awayLabel : undefined,
+  });
+}
+
+/** Rellena los huecos de eliminatoria de cada partido con el equipo real del
+ *  seed (solo si el doc no trae ya un equipo de verdad). */
+function applySeedLabels(matches: Match[]): Match[] {
+  return matches.map((m) => {
+    const seed = SEED_KNOCKOUT_LABELS.get(m.id);
+    if (!seed) return m;
+    const home =
+      seed.home && !teamFlagCode(m.homeLabel) ? seed.home : m.homeLabel;
+    const away =
+      seed.away && !teamFlagCode(m.awayLabel) ? seed.away : m.awayLabel;
+    if (home === m.homeLabel && away === m.awayLabel) return m;
+    return { ...m, homeLabel: home, awayLabel: away };
+  });
+}
 
 const matchConverter: FirestoreDataConverter<Match> = {
   toFirestore(m: Match): DocumentData {
@@ -43,7 +79,7 @@ export function matchDoc(id: string) {
 
 export async function listMatches(): Promise<Match[]> {
   const snap = await getDocs(query(matchesCol(), orderBy("kickoffUtc", "asc")));
-  return snap.docs.map((d) => d.data());
+  return applySeedLabels(snap.docs.map((d) => d.data()));
 }
 
 // Suscripción COMPARTIDA a los partidos: muchas pantallas la usan a la vez
@@ -69,7 +105,7 @@ export function subscribeToMatches(
     matchesUnsub = onSnapshot(
       query(matchesCol(), orderBy("kickoffUtc", "asc")),
       (snap) => {
-        matchesLatest = snap.docs.map((d) => d.data());
+        matchesLatest = applySeedLabels(snap.docs.map((d) => d.data()));
         for (const s of matchesSubscribers) s.cb(matchesLatest);
       },
       (err) => {
