@@ -53,13 +53,22 @@ function roundedTopBar(
   },${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`;
 }
 
-/** Tick values enteros para el eje Y. */
+/** Tick values enteros para el eje Y, con un paso "bonito" (1/2/5 × 10ⁿ) que
+ *  escala con la magnitud: así salen ~5-8 marcas tanto si el máximo es 8 como
+ *  658 (antes con 658 ponía una marca cada 10 → decenas de números amontonados).
+ *  El último tick es el máximo redondeado hacia arriba, que se usa para escalar. */
 function integerYTicks(max: number): number[] {
   const top = Math.max(1, max);
-  const step = top <= 4 ? 1 : top <= 10 ? 2 : top <= 25 ? 5 : 10;
+  const rough = top / 5; // objetivo: ~5 marcas
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  let step = norm >= 5 ? 5 * mag : norm >= 2 ? 2 * mag : mag;
+  step = Math.max(1, Math.round(step)); // los conteos son enteros → paso mínimo 1
+  const yTop = Math.ceil(top / step) * step;
   const out: number[] = [];
-  for (let v = 0; v <= top; v += step) out.push(v);
-  if (out[out.length - 1] !== top) out.push(top);
+  for (let v = 0; v <= yTop + step / 2 && out.length < 14; v += step) {
+    out.push(Math.round(v));
+  }
   return out;
 }
 
@@ -87,12 +96,6 @@ export function BetsBarChart({ users, bets }: Props) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  const colorByUid = useMemo(() => {
-    const map: Record<string, string> = {};
-    users.forEach((u, i) => (map[u.uid] = pickChartColor(i)));
-    return map;
-  }, [users]);
 
   // Días con actividad + hoy. Más reciente primero.
   const dayOptions = useMemo(() => {
