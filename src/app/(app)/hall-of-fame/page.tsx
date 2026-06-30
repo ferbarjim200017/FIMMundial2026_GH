@@ -58,13 +58,6 @@ function formatDayShort(ms: number): string {
   });
 }
 
-/** Minutos desde medianoche → "HH:MM". */
-function formatMinOfDay(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
 /** Círculo con las iniciales del jugador (sin fotos, como pediste). */
 function Initial({ name }: { name: string }) {
   return (
@@ -93,6 +86,9 @@ interface PodiumEntry {
   /** Elemento a la izquierda del nombre (banderas, etc.). Si no se pasa, se usa
    *  el círculo con las iniciales del nombre. */
   leading?: ReactNode;
+  /** Contenido extra que se muestra DEBAJO de la fila (p. ej. el desglose de
+   *  jugadores de un partido). */
+  extra?: ReactNode;
 }
 
 /**
@@ -138,35 +134,80 @@ function PodiumCard({
             <div
               key={i}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors",
+                "rounded-lg transition-colors",
                 i === 0
                   ? "bg-amber-400/10 ring-1 ring-amber-400/20"
                   : "hover:bg-accent/30"
               )}
             >
-              <span className="w-6 shrink-0 text-center text-base leading-none">
-                {medal(i)}
-              </span>
-              {e.leading ?? <Initial name={e.name} />}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{e.name}</p>
-                {e.detail && (
-                  <p className="truncate text-xs text-muted-foreground">{e.detail}</p>
-                )}
+              <div className="flex items-center gap-2.5 px-2 py-1.5">
+                <span className="w-6 shrink-0 text-center text-base leading-none">
+                  {medal(i)}
+                </span>
+                {e.leading ?? <Initial name={e.name} />}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{e.name}</p>
+                  {e.detail && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {e.detail}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 font-mono text-sm font-semibold",
+                    e.valueClass
+                  )}
+                >
+                  {e.value}
+                </span>
               </div>
-              <span
-                className={cn(
-                  "shrink-0 font-mono text-sm font-semibold",
-                  e.valueClass
-                )}
-              >
-                {e.value}
-              </span>
+              {e.extra && <div className="px-2 pb-2 pl-10">{e.extra}</div>}
             </div>
           ))
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Desglose del top-3 de jugadores de un partido (con su beneficio/pérdida en
+ *  ese partido). Se muestra bajo cada partido en "Donde más se ha ganado/perdido". */
+function MatchPlayerBreakdown({
+  players,
+  positive,
+  nameOf,
+}: {
+  players: { uid: string; profit: number }[];
+  positive: boolean;
+  nameOf: (uid: string) => string;
+}) {
+  if (players.length === 0) return null;
+  return (
+    <ul
+      className={cn(
+        "space-y-0.5 border-l-2 pl-2",
+        positive ? "border-emerald-500/30" : "border-red-500/30"
+      )}
+    >
+      {players.map((p) => (
+        <li
+          key={p.uid}
+          className="flex items-center justify-between gap-2 text-[11px]"
+        >
+          <span className="truncate text-muted-foreground">{nameOf(p.uid)}</span>
+          <span
+            className={cn(
+              "shrink-0 font-mono font-medium",
+              positive ? "text-profit" : "text-loss"
+            )}
+          >
+            {p.profit > 0 ? "+" : ""}
+            {formatCurrency(p.profit)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -358,7 +399,13 @@ export default function HallOfFamePage() {
   const matchRecords = useMemo(() => {
     const byMatch = new Map<
       string,
-      { stake: number; profit: number; count: number; users: Set<string> }
+      {
+        stake: number;
+        profit: number;
+        count: number;
+        users: Set<string>;
+        profitByUser: Map<string, number>;
+      }
     >();
     for (const b of bets) {
       const ids = betMatchIds(b);
@@ -369,11 +416,21 @@ export default function HallOfFamePage() {
       for (const id of ids) {
         const cur =
           byMatch.get(id) ??
-          { stake: 0, profit: 0, count: 0, users: new Set<string>() };
+          {
+            stake: 0,
+            profit: 0,
+            count: 0,
+            users: new Set<string>(),
+            profitByUser: new Map<string, number>(),
+          };
         cur.stake += stakeShare;
         cur.profit += profitShare;
         cur.count += 1;
         cur.users.add(b.userId);
+        cur.profitByUser.set(
+          b.userId,
+          (cur.profitByUser.get(b.userId) ?? 0) + profitShare
+        );
         byMatch.set(id, cur);
       }
     }
@@ -385,6 +442,20 @@ export default function HallOfFamePage() {
     };
     const list = [...byMatch.entries()].map(([id, v]) => {
       const m = matchById.get(id);
+      // Desglose por jugador en este partido: top-3 ganadores y top-3
+      // perdedores (con su beneficio/pérdida ya repartido en combos).
+      const players = [...v.profitByUser.entries()].map(([uid, p]) => ({
+        uid,
+        profit: round2(p),
+      }));
+      const topWinners = players
+        .filter((p) => p.profit > 0)
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3);
+      const topLosers = players
+        .filter((p) => p.profit < 0)
+        .sort((a, b) => a.profit - b.profit)
+        .slice(0, 3);
       return {
         id,
         label: labelOf(id),
@@ -394,6 +465,8 @@ export default function HallOfFamePage() {
         profit: round2(v.profit),
         count: v.count,
         players: v.users.size,
+        topWinners,
+        topLosers,
       };
     });
     return {
@@ -406,10 +479,6 @@ export default function HallOfFamePage() {
       mostLost: [...list]
         .filter((m) => m.profit < 0)
         .sort((a, b) => a.profit - b.profit)
-        .slice(0, 3),
-      mostPlayers: [...list]
-        .filter((m) => m.players > 1)
-        .sort((a, b) => b.players - a.players)
         .slice(0, 3),
     };
   }, [bets, matchById]);
@@ -451,31 +520,35 @@ export default function HallOfFamePage() {
       .slice(0, 3);
   }, [bets]);
 
-  // Horario medio de registro por jugador (madrugadores vs búhos). Hace falta
-  // un mínimo de apuestas para que la media sea significativa.
+  // Madrugadores (apuestas de 06:00 a 09:59) y búhos nocturnos (de 22:00 a
+  // 05:59): se rankea a cada jugador por el NÚMERO de apuestas registradas en
+  // esa franja horaria. (La media de hora anterior mezclaba madrugada y noche
+  // y daba resultados sin sentido.)
   const timeRecords = useMemo(() => {
-    const byUser = new Map<string, { sumMin: number; count: number }>();
+    const isNight = (h: number) => h >= 22 || h < 6; // 22:00–05:59
+    const isMorning = (h: number) => h >= 6 && h < 10; // 06:00–09:59
+    const byUser = new Map<string, { night: number; morning: number }>();
     for (const b of bets) {
-      const d = (b.addedAt ?? b.createdAt).toDate();
-      const min = d.getHours() * 60 + d.getMinutes();
-      const cur = byUser.get(b.userId) ?? { sumMin: 0, count: 0 };
-      cur.sumMin += min;
-      cur.count += 1;
+      const h = (b.addedAt ?? b.createdAt).toDate().getHours();
+      const cur = byUser.get(b.userId) ?? { night: 0, morning: 0 };
+      if (isNight(h)) cur.night += 1;
+      if (isMorning(h)) cur.morning += 1;
       byUser.set(b.userId, cur);
     }
-    const list = [...byUser.entries()]
-      .filter(([, v]) => v.count >= 3)
-      .map(([uid, v]) => ({
-        user: usersById[uid] ?? null,
-        avgMin: v.sumMin / v.count,
-        count: v.count,
-      }))
-      .filter((x): x is { user: AppUser; avgMin: number; count: number } =>
+    const rows = [...byUser.entries()]
+      .map(([uid, v]) => ({ user: usersById[uid] ?? null, ...v }))
+      .filter((x): x is { user: AppUser; night: number; morning: number } =>
         Boolean(x.user)
       );
     return {
-      earliest: [...list].sort((a, b) => a.avgMin - b.avgMin).slice(0, 3),
-      latest: [...list].sort((a, b) => b.avgMin - a.avgMin).slice(0, 3),
+      earliest: rows
+        .filter((r) => r.morning > 0)
+        .sort((a, b) => b.morning - a.morning)
+        .slice(0, 3),
+      latest: rows
+        .filter((r) => r.night > 0)
+        .sort((a, b) => b.night - a.night)
+        .slice(0, 3),
     };
   }, [bets, usersById]);
 
@@ -838,6 +911,13 @@ export default function HallOfFamePage() {
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: `+${formatCurrency(m.profit)}`,
                   valueClass: "text-profit",
+                  extra: (
+                    <MatchPlayerBreakdown
+                      players={m.topWinners}
+                      positive
+                      nameOf={nameOf}
+                    />
+                  ),
                 }))}
                 emptyText="Aún nadie ha ganado en un partido."
               />
@@ -851,6 +931,13 @@ export default function HallOfFamePage() {
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: formatCurrency(m.profit),
                   valueClass: "text-loss",
+                  extra: (
+                    <MatchPlayerBreakdown
+                      players={m.topLosers}
+                      positive={false}
+                      nameOf={nameOf}
+                    />
+                  ),
                 }))}
                 emptyText="Aún nadie ha perdido en un partido."
               />
@@ -865,18 +952,6 @@ export default function HallOfFamePage() {
                   value: `${m.count}`,
                 }))}
                 emptyText="Aún no hay apuestas a partidos."
-              />
-              <PodiumCard
-                title="El partido más popular"
-                icon={Flame}
-                accent="text-orange-500"
-                entries={matchRecords.mostPlayers.map((m) => ({
-                  name: m.label,
-                  leading: matchFlags(m.home, m.away),
-                  detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
-                  value: `${m.players} jugadores`,
-                }))}
-                emptyText="Aún no hay partidos con varios jugadores."
               />
             </div>
           </section>
@@ -918,10 +993,10 @@ export default function HallOfFamePage() {
                 accent="text-amber-500"
                 entries={timeRecords.earliest.map((p) => ({
                   name: p.user.username,
-                  detail: `${p.count} apuestas`,
-                  value: formatMinOfDay(p.avgMin),
+                  detail: "apuestas de 06:00 a 10:00",
+                  value: `${p.morning}`,
                 }))}
-                emptyText="Hacen falta al menos 3 apuestas."
+                emptyText="Nadie apuesta a primera hora… aún."
               />
               <PodiumCard
                 title="Búhos nocturnos"
@@ -929,10 +1004,10 @@ export default function HallOfFamePage() {
                 accent="text-indigo-500"
                 entries={timeRecords.latest.map((p) => ({
                   name: p.user.username,
-                  detail: `${p.count} apuestas`,
-                  value: formatMinOfDay(p.avgMin),
+                  detail: "apuestas de 22:00 a 06:00",
+                  value: `${p.night}`,
                 }))}
-                emptyText="Hacen falta al menos 3 apuestas."
+                emptyText="Nadie apuesta de madrugada… aún."
               />
             </div>
           </section>
