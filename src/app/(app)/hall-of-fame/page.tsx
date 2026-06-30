@@ -18,6 +18,9 @@ import {
   Dices,
   Skull,
   Wallet,
+  Calendar,
+  Sunrise,
+  Moon,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +47,21 @@ import type { AppUser, Bet, Match } from "@/types/domain";
 
 function medal(i: number): string {
   return ["🥇", "🥈", "🥉"][i] ?? `${i + 1}.`;
+}
+
+function formatDayShort(ms: number): string {
+  return new Date(ms).toLocaleDateString("es-ES", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+/** Minutos desde medianoche → "HH:MM". */
+function formatMinOfDay(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 /** Círculo con las iniciales del jugador (sin fotos, como pediste). */
@@ -405,6 +423,60 @@ export default function HallOfFamePage() {
     }
     return { count: bets.length, stake: round2(stake), profit: round2(profit) };
   }, [bets]);
+
+  // Días más movidos (por dinero jugado), por fecha de la apuesta.
+  const topDays = useMemo(() => {
+    const byDay = new Map<
+      string,
+      { ms: number; stake: number; count: number; users: Set<string> }
+    >();
+    for (const b of bets) {
+      const d = b.createdAt.toDate();
+      const dayMs = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate()
+      ).getTime();
+      const cur =
+        byDay.get(String(dayMs)) ??
+        { ms: dayMs, stake: 0, count: 0, users: new Set<string>() };
+      if (!b.isFreebet) cur.stake += b.stake;
+      cur.count += 1;
+      cur.users.add(b.userId);
+      byDay.set(String(dayMs), cur);
+    }
+    return [...byDay.values()]
+      .sort((a, b) => b.stake - a.stake)
+      .slice(0, 3);
+  }, [bets]);
+
+  // Horario medio de registro por jugador (madrugadores vs búhos). Hace falta
+  // un mínimo de apuestas para que la media sea significativa.
+  const timeRecords = useMemo(() => {
+    const byUser = new Map<string, { sumMin: number; count: number }>();
+    for (const b of bets) {
+      const d = (b.addedAt ?? b.createdAt).toDate();
+      const min = d.getHours() * 60 + d.getMinutes();
+      const cur = byUser.get(b.userId) ?? { sumMin: 0, count: 0 };
+      cur.sumMin += min;
+      cur.count += 1;
+      byUser.set(b.userId, cur);
+    }
+    const list = [...byUser.entries()]
+      .filter(([, v]) => v.count >= 3)
+      .map(([uid, v]) => ({
+        user: usersById[uid] ?? null,
+        avgMin: v.sumMin / v.count,
+        count: v.count,
+      }))
+      .filter((x): x is { user: AppUser; avgMin: number; count: number } =>
+        Boolean(x.user)
+      );
+    return {
+      earliest: [...list].sort((a, b) => a.avgMin - b.avgMin).slice(0, 3),
+      latest: [...list].sort((a, b) => b.avgMin - a.avgMin).slice(0, 3),
+    };
+  }, [bets, usersById]);
 
   const nameOf = (uid: string) => usersById[uid]?.username ?? "—";
   const betDetail = (b: Bet) =>
@@ -802,6 +874,62 @@ export default function HallOfFamePage() {
                   value: `${m.players} jugadores`,
                 }))}
                 emptyText="Aún no hay partidos con varios jugadores."
+              />
+            </div>
+          </section>
+
+          {/* Días y horarios */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Días y horarios
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <PodiumCard
+                title="Días más movidos"
+                icon={Calendar}
+                accent="text-primary"
+                entries={topDays.map((d) => ({
+                  name: formatDayShort(d.ms),
+                  leading: (
+                    <span className="flex h-8 w-8 shrink-0 flex-col items-center justify-center rounded-md bg-muted/50 leading-none">
+                      <span className="text-[8px] uppercase text-muted-foreground">
+                        {new Date(d.ms).toLocaleDateString("es-ES", {
+                          month: "short",
+                        })}
+                      </span>
+                      <span className="text-sm font-bold">
+                        {new Date(d.ms).getDate()}
+                      </span>
+                    </span>
+                  ),
+                  detail: `${d.count} apuesta${d.count === 1 ? "" : "s"} · ${
+                    d.users.size
+                  } jugador${d.users.size === 1 ? "" : "es"}`,
+                  value: formatCurrency(d.stake),
+                }))}
+                emptyText="Aún no hay apuestas."
+              />
+              <PodiumCard
+                title="Madrugadores"
+                icon={Sunrise}
+                accent="text-amber-500"
+                entries={timeRecords.earliest.map((p) => ({
+                  name: p.user.username,
+                  detail: `${p.count} apuestas`,
+                  value: formatMinOfDay(p.avgMin),
+                }))}
+                emptyText="Hacen falta al menos 3 apuestas."
+              />
+              <PodiumCard
+                title="Búhos nocturnos"
+                icon={Moon}
+                accent="text-indigo-500"
+                entries={timeRecords.latest.map((p) => ({
+                  name: p.user.username,
+                  detail: `${p.count} apuestas`,
+                  value: formatMinOfDay(p.avgMin),
+                }))}
+                emptyText="Hacen falta al menos 3 apuestas."
               />
             </div>
           </section>
