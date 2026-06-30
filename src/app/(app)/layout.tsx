@@ -12,6 +12,7 @@ import { OnboardingGate } from "@/components/layout/onboarding-gate";
 import { DataKeepAlive } from "@/components/layout/data-keep-alive";
 import { InstallBanner } from "@/components/layout/install-banner";
 import { PageTransition } from "@/components/layout/page-transition";
+import { AchievementToaster } from "@/components/layout/achievement-toaster";
 import { BetDetailProvider } from "@/components/bets/bet-detail-dialog";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <AuthGuard>
       <OnboardingGate />
       <DataKeepAlive />
+      <AchievementToaster />
       <BetDetailProvider>
       <div className="flex min-h-screen flex-col">
         {/* Wrapper sticky para que la barra superior se quede fija al hacer

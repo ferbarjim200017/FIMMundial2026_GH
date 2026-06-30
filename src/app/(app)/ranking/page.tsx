@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
@@ -179,6 +180,16 @@ export default function RankingPage() {
     key: "roi",
     dir: "desc",
   });
+
+  // Comparación rápida: hasta 2 jugadores marcados con el botón ⚔️ de su fila.
+  const router = useRouter();
+  const [compareSel, setCompareSel] = useState<string[]>([]);
+  const toggleCompare = (uid: string) =>
+    setCompareSel((prev) =>
+      prev.includes(uid)
+        ? prev.filter((x) => x !== uid)
+        : [...prev, uid].slice(-2)
+    );
 
   // Fase del torneo que se está viendo (General / Grupos / Previa / Final).
   // Empieza en la fase ACTUAL del torneo; el usuario puede cambiarla y, una vez
@@ -818,6 +829,44 @@ export default function RankingPage() {
           )}
         </CardHeader>
         <CardContent className="p-0">
+          {compareSel.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
+              <Swords className="h-4 w-4 shrink-0 text-primary" />
+              <span className="font-medium">Comparar:</span>
+              {compareSel.map((uid) => (
+                <span
+                  key={uid}
+                  className="rounded-full border bg-card px-2 py-0.5 text-xs font-medium"
+                >
+                  {users?.find((u) => u.uid === uid)?.username ?? "—"}
+                </span>
+              ))}
+              {compareSel.length < 2 && (
+                <span className="text-xs text-muted-foreground">
+                  elige otro jugador
+                </span>
+              )}
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  disabled={compareSel.length !== 2}
+                  onClick={() =>
+                    router.push(ROUTES.compare(compareSel[0], compareSel[1]))
+                  }
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  Comparar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompareSel([])}
+                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
           {users === null ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -890,9 +939,10 @@ export default function RankingPage() {
                           </div>
                         </td>
                         <td className="px-2 py-3">
+                          <div className="flex items-center gap-1.5">
                           <Link
                             href={ROUTES.profile(u.uid)}
-                            className="flex items-center gap-3 hover:underline"
+                            className="flex min-w-0 flex-1 items-center gap-3 hover:underline"
                           >
                             <Avatar className={`h-8 w-8 ${podiumRing(rank)}`}>
                               {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
@@ -933,6 +983,20 @@ export default function RankingPage() {
                               </p>
                             </div>
                           </Link>
+                            <button
+                              type="button"
+                              onClick={() => toggleCompare(u.uid)}
+                              aria-label={`Comparar a ${u.username}`}
+                              title="Marcar para comparar"
+                              className={`shrink-0 rounded-md border p-1.5 transition-colors ${
+                                compareSel.includes(u.uid)
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:bg-accent/40"
+                              }`}
+                            >
+                              <Swords className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-2 py-3">
                           <div className="flex flex-col items-end gap-1">
