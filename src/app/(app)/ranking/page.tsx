@@ -298,21 +298,11 @@ export default function RankingPage() {
     return map;
   }, [users, activeGroup]);
 
-  // Stats por usuario de la FASE seleccionada (las que se ven en pantalla:
-  // tabla, gráficas, saldo). En "general" coinciden con todo el torneo.
-  const groupStatsByUid = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof computeUserStats>>();
-    for (const u of users ?? []) {
-      const userBets = phaseBets.filter((b) => b.userId === u.uid);
-      map.set(u.uid, computeUserStats(userBets));
-    }
-    return map;
-  }, [users, phaseBets]);
-
   // Stats GENERALES (todas las apuestas del torneo), independientes de la fase.
-  // Solo se usan para la posición canónica que alimenta las flechas de
-  // movimiento y el ranking precalculado compartido (que deben ser estables y
-  // no cambiar según la fase que cada uno tenga seleccionada).
+  // Alimentan la TABLA DE CLASIFICACIÓN (que es SIEMPRE la general), la posición
+  // canónica de las flechas de movimiento y el ranking precalculado compartido.
+  // Las gráficas "· fase" y el balance de superaumentos sí usan la fase
+  // seleccionada (phaseBets); la clasificación, no.
   const generalStatsByUid = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeUserStats>>();
     for (const u of users ?? []) {
@@ -333,12 +323,12 @@ export default function RankingPage() {
         (initial.betfair ?? 0) +
         (initial.luckia ?? 0) +
         initial.other;
-      const profit = groupStatsByUid.get(u.uid)?.totalProfit ?? 0;
+      const profit = generalStatsByUid.get(u.uid)?.totalProfit ?? 0;
       const netCash = computeCashSummary(u, activeGroup?.id).net;
       map.set(u.uid, initialSum + profit + netCash);
     }
     return map;
-  }, [users, groupStatsByUid, activeGroup]);
+  }, [users, generalStatsByUid, activeGroup]);
 
   // Auténtico "último de la clasificación": peor ROI (desempate por menor
   // beneficio), independiente de cómo esté ordenada la tabla en pantalla.
@@ -348,7 +338,7 @@ export default function RankingPage() {
     let worstRoi = Infinity;
     let worstProfit = Infinity;
     for (const u of users) {
-      const st = groupStatsByUid.get(u.uid);
+      const st = generalStatsByUid.get(u.uid);
       const roi = st?.roi ?? 0;
       const profit = st?.totalProfit ?? 0;
       if (roi < worstRoi || (roi === worstRoi && profit < worstProfit)) {
@@ -358,7 +348,7 @@ export default function RankingPage() {
       }
     }
     return worstUid;
-  }, [users, groupStatsByUid]);
+  }, [users, generalStatsByUid]);
 
   // Posición canónica (1 = primero) por ROI desc, desempate por beneficio.
   // Independiente de cómo esté ordenada la tabla en pantalla: es la posición
@@ -471,18 +461,18 @@ export default function RankingPage() {
   const maxAbsRoi = useMemo(() => {
     let m = 0;
     for (const u of users ?? []) {
-      const r = Math.abs(groupStatsByUid.get(u.uid)?.roi ?? 0);
+      const r = Math.abs(generalStatsByUid.get(u.uid)?.roi ?? 0);
       if (r > m) m = r;
     }
     return m || 1;
-  }, [users, groupStatsByUid]);
+  }, [users, generalStatsByUid]);
 
   // Lista ordenada según la columna elegida (por defecto ROI desc). Desempate
   // estable por beneficio.
   const rankedUsers = useMemo(() => {
     if (!users) return null;
     const valueOf = (u: AppUser): number | string => {
-      const s = groupStatsByUid.get(u.uid);
+      const s = generalStatsByUid.get(u.uid);
       switch (sort.key) {
         case "roi":
           return s?.roi ?? 0;
@@ -511,11 +501,11 @@ export default function RankingPage() {
       if (cmp !== 0) return cmp;
       // Desempate estable: más beneficio primero.
       return (
-        (groupStatsByUid.get(b.uid)?.totalProfit ?? 0) -
-        (groupStatsByUid.get(a.uid)?.totalProfit ?? 0)
+        (generalStatsByUid.get(b.uid)?.totalProfit ?? 0) -
+        (generalStatsByUid.get(a.uid)?.totalProfit ?? 0)
       );
     });
-  }, [users, groupStatsByUid, balanceByUid, cashByUid, sort]);
+  }, [users, generalStatsByUid, balanceByUid, cashByUid, sort]);
 
   // Mi posición + si me he movido (últimas 24 h), para el chip "Vas X.º de N".
   // La posición es SIEMPRE la de la clasificación GENERAL (ROI de todo el
@@ -564,10 +554,11 @@ export default function RankingPage() {
             <Trophy className="h-5 w-5 shrink-0 text-primary" />
             <div>
               <p className="text-sm font-semibold leading-tight">
-                Clasificación por fase
+                Análisis por fase
               </p>
               <p className="text-xs text-muted-foreground">
-                {RANKING_PHASE_DESC[phase]}
+                {RANKING_PHASE_DESC[phase]} Afecta a las gráficas y al balance de
+                superaumentos; la clasificación es siempre la general.
               </p>
             </div>
           </div>
@@ -772,14 +763,15 @@ export default function RankingPage() {
           <CardTitle className="flex flex-wrap items-center gap-2">
             Clasificación
             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
-              {RANKING_PHASE_LABELS[phase]}
+              General
             </span>
           </CardTitle>
           <CardDescription>
-            Pulsa una columna para ordenar por ese campo (vuelve a pulsar para
-            invertir). Por defecto, por <strong>ROI</strong>. Se actualiza en
-            tiempo real. Las flechas ↑↓ de posición solo aplican a la fase{" "}
-            <strong>General</strong>. <strong>Caja</strong> = retirado − ingresado.
+            Siempre la clasificación <strong>general</strong> (todo el torneo),
+            sin depender de la fase seleccionada arriba. Pulsa una columna para
+            ordenar por ese campo (vuelve a pulsar para invertir); por defecto,
+            por <strong>ROI</strong>. Se actualiza en tiempo real.{" "}
+            <strong>Caja</strong> = retirado − ingresado.
           </CardDescription>
           {myStanding && (
             <button
@@ -838,7 +830,7 @@ export default function RankingPage() {
                 <tbody className="divide-y [&_td]:whitespace-nowrap">
                   {(rankedUsers ?? users).map((u, idx) => {
                     const rank = idx + 1;
-                    const s = groupStatsByUid.get(u.uid);
+                    const s = generalStatsByUid.get(u.uid);
                     const roi = s?.roi ?? 0;
                     const profit = s?.totalProfit ?? 0;
                     const hitRate = s?.hitRate ?? 0;
