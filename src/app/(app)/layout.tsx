@@ -10,6 +10,7 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 // import { RankingCarousel } from "@/components/layout/ranking-carousel";
 import { OnboardingGate } from "@/components/layout/onboarding-gate";
 import { DataKeepAlive } from "@/components/layout/data-keep-alive";
+import { InstallBanner } from "@/components/layout/install-banner";
 import { BetDetailProvider } from "@/components/bets/bet-detail-dialog";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -29,6 +30,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <Sidebar />
           {/* En móvil dejamos espacio inferior para la BottomNav (h-14 + safe-area). */}
           <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6">
+            <InstallBanner />
             {children}
           </main>
         </div>

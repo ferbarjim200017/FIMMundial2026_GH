@@ -45,7 +45,11 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        <InstallAppButton />
+        {/* En móvil la instalación se ofrece con el InstallBanner; aquí solo en
+            escritorio para no duplicar. */}
+        <span className="hidden sm:block">
+          <InstallAppButton />
+        </span>
         <GroupSwitcher />
         <ThemeToggle />
 
