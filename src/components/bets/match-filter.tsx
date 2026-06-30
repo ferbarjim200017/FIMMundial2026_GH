@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
+import { TeamFlag } from "@/components/matches/team-flag";
 import { cn } from "@/lib/utils";
 import type { Match } from "@/types/domain";
 
@@ -80,7 +81,11 @@ export function MatchFilter({
           <SelectItem value="all">Todos los partidos</SelectItem>
           {options.map((m) => (
             <SelectItem key={m.id} value={m.id}>
-              {matchOptionLabel(m)}
+              <span className="flex items-center gap-1">
+                <TeamFlag name={m.homeLabel} />
+                <TeamFlag name={m.awayLabel} />
+                <span>{matchOptionLabel(m)}</span>
+              </span>
             </SelectItem>
           ))}
         </SelectContent>

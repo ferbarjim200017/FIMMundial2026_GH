@@ -27,13 +27,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { BetMatchFlags } from "@/components/bets/bet-match-flags";
 import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { subscribeToBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
-import { resolveBracketProvisional } from "@/features/matches/bracket-resolver";
-import { betInGroup, bookmakerLabel } from "@/features/bets/bets.utils";
+import {
+  resolveBracketProvisional,
+  resolveMatchLabels,
+} from "@/features/matches/bracket-resolver";
+import { betInGroup } from "@/features/bets/bets.utils";
 import { isTveMatch } from "@/features/matches/tve-matches";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { ROUTES } from "@/lib/constants";
@@ -196,6 +200,14 @@ export default function UpcomingPage() {
   const matchById = useMemo(() => {
     const map = new Map<string, Match>();
     for (const m of matches ?? []) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
+  // Mismo mapa pero con las etiquetas de eliminatoria resueltas al equipo real,
+  // para pintar las banderas de las apuestas pendientes (incluidas combinadas).
+  const resolvedMatchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches ?? [])) map.set(m.id, m);
     return map;
   }, [matches]);
 
@@ -393,6 +405,7 @@ export default function UpcomingPage() {
                 user={appUser ?? null}
                 kickoffMs={kickoff}
                 now={now}
+                matchById={resolvedMatchById}
               />
             ))}
           </div>
@@ -625,11 +638,14 @@ function BetRow({
   user,
   kickoffMs,
   now,
+  matchById,
 }: {
   bet: Bet;
   user: AppUser | null;
   kickoffMs: number | null;
   now: number;
+  /** Partidos (etiquetas resueltas) por id, para las banderas. */
+  matchById: Map<string, Match>;
 }) {
   const displayName = user?.username ?? "Tú";
   return (
@@ -667,7 +683,10 @@ function BetRow({
           )}
         </div>
 
-        <p className="truncate text-sm font-medium">{bet.matchLabel}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          <BetMatchFlags bet={bet} matchById={matchById} />
+          <span className="truncate">{bet.matchLabel}</span>
+        </p>
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="truncate">
             {bet.selection} @ {bet.odds.toFixed(2)} · {formatCurrency(bet.stake)}
