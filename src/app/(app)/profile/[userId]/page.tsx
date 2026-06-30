@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/select";
 import { BetsTable } from "@/components/bets/bets-table";
 import { AchievementsCard } from "@/components/profile/achievements-card";
+import { MarketStatsCard } from "@/components/profile/market-stats-card";
+import { TeamStatsCard } from "@/components/profile/team-stats-card";
 import { computeAchievements } from "@/features/bets/achievements";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
@@ -406,6 +408,10 @@ export default function ProfilePage() {
 
       {/* ─── Logros / insignias del jugador ─── */}
       <AchievementsCard achievements={achievements} />
+
+      {/* ─── Desglose por mercado y por selección ─── */}
+      <MarketStatsCard bets={groupBets} />
+      <TeamStatsCard bets={groupBets} matchById={resolvedMatchById} />
 
       {/* ─── Listado de apuestas del usuario, con filtros ─── */}
       <Card>
