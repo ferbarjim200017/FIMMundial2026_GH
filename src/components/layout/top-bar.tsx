@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { InstallAppButton } from "@/components/layout/install-app-button";
 import { GroupSwitcher } from "@/components/layout/group-switcher";
 import { initials } from "@/lib/utils";
 import { APP_NAME, ROUTES } from "@/lib/constants";
@@ -44,6 +45,7 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        <InstallAppButton />
         <GroupSwitcher />
         <ThemeToggle />
 
