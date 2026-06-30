@@ -517,13 +517,15 @@ export default function RankingPage() {
     });
   }, [users, groupStatsByUid, balanceByUid, cashByUid, sort]);
 
-  // Mi posición en la clasificación mostrada + si me he movido (últimas 24 h),
-  // para el chip "Vas X.º de N" y el aviso de novedad.
+  // Mi posición + si me he movido (últimas 24 h), para el chip "Vas X.º de N".
+  // La posición es SIEMPRE la de la clasificación GENERAL (ROI de todo el
+  // torneo, `canonicalRankByUid`), no la de la fase ni el orden de la tabla
+  // que tenga seleccionados: es "tu puesto real" en el grupo.
   const myStanding = useMemo(() => {
-    const order = rankedUsers ?? users ?? [];
-    const idx = appUser ? order.findIndex((u) => u.uid === appUser.uid) : -1;
-    if (idx < 0) return null;
-    const mv = appUser ? movements[appUser.uid] : undefined;
+    if (!appUser || !users) return null;
+    const rank = canonicalRankByUid.get(appUser.uid);
+    if (rank == null) return null;
+    const mv = movements[appUser.uid];
     const moved =
       mv &&
       mv.dir !== "flat" &&
@@ -531,8 +533,8 @@ export default function RankingPage() {
       nowMs - mv.changedAt.toMillis() < MOVEMENT_WINDOW_MS
         ? mv.dir
         : null;
-    return { rank: idx + 1, total: order.length, moved };
-  }, [rankedUsers, users, appUser, movements, nowMs]);
+    return { rank, total: users.length, moved };
+  }, [appUser, users, canonicalRankByUid, movements, nowMs]);
 
   const scrollToMe = () => {
     document
@@ -786,7 +788,8 @@ export default function RankingPage() {
               className="mt-1 inline-flex items-center gap-1.5 self-start rounded-full border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-accent/40"
             >
               <Star className="h-3.5 w-3.5 shrink-0 fill-primary text-primary" />
-              Vas <strong>{myStanding.rank}.º</strong> de {myStanding.total}
+              Vas <strong>{myStanding.rank}.º</strong> de {myStanding.total} en
+              la general
               {myStanding.moved === "up" && (
                 <span className="text-profit">· 🔼 has subido</span>
               )}
