@@ -35,6 +35,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BetsTable } from "@/components/bets/bets-table";
+import { AchievementsCard } from "@/components/profile/achievements-card";
+import { computeAchievements } from "@/features/bets/achievements";
 import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
@@ -126,6 +128,10 @@ export default function ProfilePage() {
   }, [bets, activeGroup]);
 
   const groupStats = useMemo(() => computeUserStats(groupBets), [groupBets]);
+  const achievements = useMemo(
+    () => computeAchievements(groupBets, groupStats),
+    [groupBets, groupStats]
+  );
 
   // Listado de apuestas del usuario, filtrado por búsqueda + estado + casa.
   const normalizedQuery = query.trim().toLowerCase();
@@ -397,6 +403,9 @@ export default function ProfilePage() {
           icon={<Coins className="h-4 w-4" />}
         />
       </div>
+
+      {/* ─── Logros / insignias del jugador ─── */}
+      <AchievementsCard achievements={achievements} />
 
       {/* ─── Listado de apuestas del usuario, con filtros ─── */}
       <Card>
