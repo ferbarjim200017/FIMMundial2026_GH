@@ -517,6 +517,29 @@ export default function RankingPage() {
     });
   }, [users, groupStatsByUid, balanceByUid, cashByUid, sort]);
 
+  // Mi posición en la clasificación mostrada + si me he movido (últimas 24 h),
+  // para el chip "Vas X.º de N" y el aviso de novedad.
+  const myStanding = useMemo(() => {
+    const order = rankedUsers ?? users ?? [];
+    const idx = appUser ? order.findIndex((u) => u.uid === appUser.uid) : -1;
+    if (idx < 0) return null;
+    const mv = appUser ? movements[appUser.uid] : undefined;
+    const moved =
+      mv &&
+      mv.dir !== "flat" &&
+      mv.changedAt != null &&
+      nowMs - mv.changedAt.toMillis() < MOVEMENT_WINDOW_MS
+        ? mv.dir
+        : null;
+    return { rank: idx + 1, total: order.length, moved };
+  }, [rankedUsers, users, appUser, movements, nowMs]);
+
+  const scrollToMe = () => {
+    document
+      .getElementById("ranking-me")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   // Placeholder de carga para las gráficas (se reutiliza en las tres).
   const chartSkeleton = () => (
     <div className="space-y-3">
@@ -756,6 +779,23 @@ export default function RankingPage() {
             tiempo real. Las flechas ↑↓ de posición solo aplican a la fase{" "}
             <strong>General</strong>. <strong>Caja</strong> = retirado − ingresado.
           </CardDescription>
+          {myStanding && (
+            <button
+              type="button"
+              onClick={scrollToMe}
+              className="mt-1 inline-flex items-center gap-1.5 self-start rounded-full border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-accent/40"
+            >
+              <Star className="h-3.5 w-3.5 shrink-0 fill-primary text-primary" />
+              Vas <strong>{myStanding.rank}.º</strong> de {myStanding.total}
+              {myStanding.moved === "up" && (
+                <span className="text-profit">· 🔼 has subido</span>
+              )}
+              {myStanding.moved === "down" && (
+                <span className="text-loss">· 🔽 has bajado</span>
+              )}
+              <span className="text-muted-foreground">· ir a mi posición</span>
+            </button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {users === null ? (
@@ -808,7 +848,12 @@ export default function RankingPage() {
                     return (
                       <tr
                         key={u.uid}
-                        className={`transition-colors ${podiumRow(rank)}`}
+                        id={isMe ? "ranking-me" : undefined}
+                        className={`transition-colors ${
+                          isMe
+                            ? "bg-primary/10 hover:bg-primary/20"
+                            : podiumRow(rank)
+                        }`}
                       >
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-1.5 text-base font-semibold">
