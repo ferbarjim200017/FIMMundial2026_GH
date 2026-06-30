@@ -70,7 +70,11 @@ export function BottomNav() {
                     </span>
                   )}
                 </span>
-                <span className="leading-none">{label}</span>
+                {/* En móviles muy estrechos (< 380px) solo icono, para que las
+                    7 pestañas respiren. A partir de ahí, con etiqueta. */}
+                <span className="hidden leading-none min-[380px]:block">
+                  {label}
+                </span>
               </Link>
             </li>
           );
