@@ -1,14 +1,17 @@
 "use client";
 
+import { Fragment } from "react";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { betMatchIds } from "@/features/bets/bets.utils";
 import { cn } from "@/lib/utils";
 import type { Bet, Match } from "@/types/domain";
 
 /**
- * Banderas del partido de una apuesta. Solo se muestran cuando la apuesta es a
- * UN único partido del Mundial (los combos y las apuestas a futuro no llevan
- * banderas). `matchById` debe traer los partidos con las etiquetas resueltas.
+ * Banderas de los partidos de una apuesta. Para una apuesta a UN partido
+ * muestra su par de banderas (local + visitante). Para una COMBINADA muestra
+ * un par por cada partido, separados por un "+". Las apuestas a futuro/outright
+ * (sin partido) no llevan banderas. `matchById` debe traer los partidos con las
+ * etiquetas ya resueltas.
  */
 export function BetMatchFlags({
   bet,
@@ -20,18 +23,32 @@ export function BetMatchFlags({
   className?: string;
 }) {
   const ids = betMatchIds(bet);
-  if (ids.length !== 1) return null;
-  const m = matchById.get(ids[0]);
-  if (!m) return null;
+  if (ids.length === 0) return null;
+  // Solo los partidos que sí están en el mapa (resueltos).
+  const ms = ids
+    .map((id) => matchById.get(id))
+    .filter((m): m is Match => Boolean(m));
+  if (ms.length === 0) return null;
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-0.5 align-text-bottom",
+        "inline-flex flex-wrap items-center gap-0.5 align-text-bottom",
         className
       )}
     >
-      <TeamFlag name={m.homeLabel} />
-      <TeamFlag name={m.awayLabel} />
+      {ms.map((m, i) => (
+        <Fragment key={m.id}>
+          {i > 0 && (
+            <span className="px-0.5 text-[10px] font-semibold text-muted-foreground">
+              +
+            </span>
+          )}
+          <span className="inline-flex shrink-0 items-center gap-0.5">
+            <TeamFlag name={m.homeLabel} />
+            <TeamFlag name={m.awayLabel} />
+          </span>
+        </Fragment>
+      ))}
     </span>
   );
 }
