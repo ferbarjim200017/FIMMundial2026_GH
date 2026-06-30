@@ -19,6 +19,7 @@ import {
   Skull,
   Wallet,
   Calendar,
+  CalendarCheck,
   Sunrise,
   Moon,
   type LucideIcon,
@@ -64,6 +65,19 @@ function formatTimeOfDay(ms: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Recuadro con mes + número de día, para las entradas por jornada. */
+function dayLeading(ms: number): ReactNode {
+  const d = new Date(ms);
+  return (
+    <span className="flex h-8 w-8 shrink-0 flex-col items-center justify-center rounded-md bg-muted/50 leading-none">
+      <span className="text-[8px] uppercase text-muted-foreground">
+        {d.toLocaleDateString("es-ES", { month: "short" })}
+      </span>
+      <span className="text-sm font-bold">{d.getDate()}</span>
+    </span>
+  );
 }
 
 /** Círculo con las iniciales del jugador (sin fotos, como pediste). */
@@ -531,6 +545,61 @@ export default function HallOfFamePage() {
       .slice(0, 3);
   }, [bets]);
 
+  // Mejor y peor JORNADA del grupo: día con más beneficio / más pérdida de todo
+  // el grupo. Se agrupa por el día en que se LIQUIDÓ la apuesta (settledAt; si
+  // falta, por createdAt), porque la "jornada" es cuando se gana o se pierde.
+  const dayResults = useMemo(() => {
+    const byDay = new Map<
+      string,
+      { ms: number; profit: number; count: number }
+    >();
+    for (const b of bets) {
+      if (b.status === "pending") continue;
+      const d = (b.settledAt ?? b.createdAt).toDate();
+      const dayMs = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate()
+      ).getTime();
+      const cur = byDay.get(String(dayMs)) ?? { ms: dayMs, profit: 0, count: 0 };
+      cur.profit += b.profit ?? 0;
+      cur.count += 1;
+      byDay.set(String(dayMs), cur);
+    }
+    const list = [...byDay.values()].map((d) => ({
+      ...d,
+      profit: round2(d.profit),
+    }));
+    return {
+      best: list
+        .filter((d) => d.profit > 0)
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3),
+      worst: list
+        .filter((d) => d.profit < 0)
+        .sort((a, b) => a.profit - b.profit)
+        .slice(0, 3),
+    };
+  }, [bets]);
+
+  // "El más constante": jugadores por nº de DÍAS DISTINTOS en los que han
+  // registrado al menos una apuesta (mayor regularidad = más constante).
+  const mostConsistent = useMemo(() => {
+    const byUser = new Map<string, Set<string>>();
+    for (const b of bets) {
+      const d = b.createdAt.toDate();
+      const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const set = byUser.get(b.userId) ?? new Set<string>();
+      set.add(dayKey);
+      byUser.set(b.userId, set);
+    }
+    return [...byUser.entries()]
+      .map(([uid, days]) => ({ user: usersById[uid] ?? null, days: days.size }))
+      .filter((x): x is { user: AppUser; days: number } => Boolean(x.user))
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 3);
+  }, [bets, usersById]);
+
   // Top-3 de APUESTAS individuales más madrugadoras y más nocturnas.
   //  - Madrugadores: apuestas de 08:00 a 12:59, ordenadas de más temprana a más
   //    tarde (la más cercana a las 08:00 es la más madrugadora).
@@ -996,24 +1065,43 @@ export default function HallOfFamePage() {
                 accent="text-primary"
                 entries={topDays.map((d) => ({
                   name: formatDayShort(d.ms),
-                  leading: (
-                    <span className="flex h-8 w-8 shrink-0 flex-col items-center justify-center rounded-md bg-muted/50 leading-none">
-                      <span className="text-[8px] uppercase text-muted-foreground">
-                        {new Date(d.ms).toLocaleDateString("es-ES", {
-                          month: "short",
-                        })}
-                      </span>
-                      <span className="text-sm font-bold">
-                        {new Date(d.ms).getDate()}
-                      </span>
-                    </span>
-                  ),
+                  leading: dayLeading(d.ms),
                   detail: `${d.count} apuesta${d.count === 1 ? "" : "s"} · ${
                     d.users.size
                   } jugador${d.users.size === 1 ? "" : "es"}`,
                   value: formatCurrency(d.stake),
                 }))}
                 emptyText="Aún no hay apuestas."
+              />
+              <PodiumCard
+                title="Mejor jornada del grupo"
+                icon={TrendingUp}
+                accent="text-emerald-500"
+                entries={dayResults.best.map((d) => ({
+                  name: formatDayShort(d.ms),
+                  leading: dayLeading(d.ms),
+                  detail: `${d.count} apuesta${d.count === 1 ? "" : "s"} liquidada${
+                    d.count === 1 ? "" : "s"
+                  }`,
+                  value: `+${formatCurrency(d.profit)}`,
+                  valueClass: "text-profit",
+                }))}
+                emptyText="El grupo aún no ha cerrado un día en verde."
+              />
+              <PodiumCard
+                title="Peor jornada del grupo"
+                icon={TrendingDown}
+                accent="text-red-500"
+                entries={dayResults.worst.map((d) => ({
+                  name: formatDayShort(d.ms),
+                  leading: dayLeading(d.ms),
+                  detail: `${d.count} apuesta${d.count === 1 ? "" : "s"} liquidada${
+                    d.count === 1 ? "" : "s"
+                  }`,
+                  value: formatCurrency(d.profit),
+                  valueClass: "text-loss",
+                }))}
+                emptyText="El grupo aún no ha cerrado un día en rojo."
               />
               <PodiumCard
                 title="Madrugadores"
@@ -1147,6 +1235,17 @@ export default function HallOfFamePage() {
                         : undefined,
                 }))}
                 emptyText="Nadie ha ingresado ni retirado aún."
+              />
+              <PodiumCard
+                title="El más constante"
+                icon={CalendarCheck}
+                accent="text-teal-500"
+                entries={mostConsistent.map((p) => ({
+                  name: p.user.username,
+                  detail: "días distintos con apuestas",
+                  value: `${p.days} día${p.days === 1 ? "" : "s"}`,
+                }))}
+                emptyText="Aún no hay actividad suficiente."
               />
             </div>
           </section>
