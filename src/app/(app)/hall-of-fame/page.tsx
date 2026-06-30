@@ -132,7 +132,7 @@ function PodiumCard({
   emptyText?: string;
 }) {
   return (
-    <Card className="transition-shadow hover:shadow-md">
+    <Card className="min-w-0 transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <span
@@ -162,22 +162,25 @@ function PodiumCard({
                   : "hover:bg-accent/30"
               )}
             >
-              <div className="flex items-center gap-2.5 px-2 py-1.5">
-                <span className="w-6 shrink-0 text-center text-base leading-none">
+              <div className="flex items-start gap-2.5 px-2 py-1.5">
+                <span className="mt-0.5 w-6 shrink-0 text-center text-base leading-none">
                   {medal(i)}
                 </span>
                 {e.leading ?? <Initial name={e.name} />}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{e.name}</p>
                   {e.detail && (
-                    <p className="truncate text-xs text-muted-foreground">
+                    // En móvil el detalle puede ser largo (selección · casa ·
+                    // cuota): dejamos que haga salto de línea para que se lea
+                    // entero, en vez de cortarse fuera de la tarjeta.
+                    <p className="break-words text-xs text-muted-foreground">
                       {e.detail}
                     </p>
                   )}
                 </div>
                 <span
                   className={cn(
-                    "shrink-0 font-mono text-sm font-semibold",
+                    "mt-0.5 shrink-0 font-mono text-sm font-semibold",
                     e.valueClass
                   )}
                 >

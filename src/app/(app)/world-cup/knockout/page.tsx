@@ -139,10 +139,11 @@ function BracketConnector({ n, dir }: { n: number; dir: "right" | "left" }) {
   }
   return (
     <div className="flex w-2.5 shrink-0 flex-col sm:w-5">
-      {/* Espaciador invisible para alinear con las cabeceras de las rondas. */}
-      <div className="invisible mb-1.5 px-0.5 py-0.5 text-[8px] sm:text-[10px]">
-        ·
-      </div>
+      {/* Espaciador de la MISMA altura fija que la cabecera de ronda (h-5 +
+          mb-1.5), para que el cuerpo del conector arranque exactamente a la
+          misma altura que el de las columnas y las líneas caigan en el centro
+          de cada tarjeta. */}
+      <div className="mb-1.5 h-5" aria-hidden />
       <div className="relative flex-1">
         {segments.map((s, i) => (
           <span key={i} className="absolute bg-border" style={s} />
@@ -550,16 +551,15 @@ export default function KnockoutPage() {
                 >
                   <div
                     className={cn(
-                      "mb-1.5 truncate rounded px-0.5 py-0.5 text-center text-[8px] font-bold uppercase tracking-tight sm:text-[10px]",
+                      "mb-1.5 flex h-5 items-center justify-center gap-0.5 rounded px-0.5 text-[8px] font-bold uppercase tracking-tight sm:text-[10px]",
                       style.chip
                     )}
                   >
-                    {style.emoji}
+                    <span>{style.emoji}</span>
                     <span className="hidden sm:inline">
-                      {" "}
                       {style.shortLabel ?? style.label}
                     </span>
-                    {arrow && <span className="ml-0.5">{arrow}</span>}
+                    {arrow && <span>{arrow}</span>}
                   </div>
                   {/* Cada partido en una celda flex-1: al haber la mitad de
                       partidos en la ronda siguiente, su celda ocupa el doble y
