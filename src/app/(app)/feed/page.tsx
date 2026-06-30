@@ -43,6 +43,7 @@ import {
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { MatchFilter } from "@/components/bets/match-filter";
+import { BetMatchFlags } from "@/components/bets/bet-match-flags";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
@@ -858,8 +859,9 @@ function GroupedFeedItem({
               Escalera
             </span>
           </p>
-          <p className="truncate text-sm font-medium">
-            {betDisplayLabel(first, matchById)}
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <BetMatchFlags bet={first} matchById={matchById} />
+            <span className="truncate">{betDisplayLabel(first, matchById)}</span>
           </p>
           <p className="text-xs text-muted-foreground">
             Stake total {formatCurrency(totalStake)} · {timestamp}
@@ -998,8 +1000,9 @@ function FeedItem({
             )}
           </div>
 
-          <p className="block truncate text-sm font-medium">
-            {betDisplayLabel(bet, matchById)}
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <BetMatchFlags bet={bet} matchById={matchById} />
+            <span className="truncate">{betDisplayLabel(bet, matchById)}</span>
           </p>
 
           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

@@ -39,6 +39,8 @@ import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { getUser, updateUserProfile } from "@/features/users/users.service";
 import { subscribeToBets } from "@/features/bets/bets.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
 import {
   betInGroup,
   bookmakerLabel,
@@ -54,7 +56,7 @@ import {
   formatPercent,
   initials,
 } from "@/lib/utils";
-import type { AppUser, Bet, BetStatus, Bookmaker } from "@/types/domain";
+import type { AppUser, Bet, BetStatus, Bookmaker, Match } from "@/types/domain";
 
 export default function ProfilePage() {
   const params = useParams<{ userId: string }>();
@@ -69,6 +71,7 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [bets, setBets] = useState<Bet[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   // Filtros del listado de apuestas del usuario.
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<BetStatus | "all" | "settled">("all");
@@ -107,6 +110,15 @@ export default function ProfilePage() {
     const unsub = subscribeToBets({ userId: params.userId }, setBets);
     return unsub;
   }, [params.userId]);
+
+  useEffect(() => subscribeToMatches(setMatches, () => setMatches([])), []);
+
+  // Partidos con los huecos de eliminatoria resueltos, para la tabla de apuestas.
+  const resolvedMatchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
 
   const groupBets = useMemo(() => {
     if (!activeGroup) return [];
@@ -465,6 +477,7 @@ export default function ProfilePage() {
             bets={filteredBets}
             ownerUid={me?.uid ?? ""}
             isAdmin={isAdmin}
+            matchById={resolvedMatchById}
           />
         </CardContent>
       </Card>

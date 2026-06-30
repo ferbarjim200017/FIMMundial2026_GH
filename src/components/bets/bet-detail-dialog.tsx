@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -25,6 +26,10 @@ import { BetHistory } from "@/components/bets/bet-history";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useAuth } from "@/features/auth/auth.context";
 import { getUser } from "@/features/users/users.service";
+import { subscribeToMatches } from "@/features/matches/matches.service";
+import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
+import { betDisplayLabel } from "@/features/bets/bets.utils";
+import { BetMatchFlags } from "@/components/bets/bet-match-flags";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -34,7 +39,7 @@ import {
   initials,
   profitClass,
 } from "@/lib/utils";
-import type { AppUser, Bet } from "@/types/domain";
+import type { AppUser, Bet, Match } from "@/types/domain";
 
 function marketLabel(value: string): string {
   return MARKET_OPTIONS.find((m) => m.value === value)?.label ?? value;
@@ -100,6 +105,15 @@ function BetDetailDialog({
 }) {
   const { appUser, isAdmin } = useAuth();
 
+  // Partidos (con etiquetas resueltas) para pintar el equipo real + banderas.
+  const [matches, setMatches] = useState<Match[]>([]);
+  useEffect(() => subscribeToMatches(setMatches, () => setMatches([])), []);
+  const matchById = useMemo(() => {
+    const map = new Map<string, Match>();
+    for (const m of resolveMatchLabels(matches)) map.set(m.id, m);
+    return map;
+  }, [matches]);
+
   // Si no nos pasaron el autor (o es de otra apuesta), lo resolvemos por uid.
   useEffect(() => {
     if (!open || !bet) return;
@@ -160,7 +174,10 @@ function BetDetailDialog({
         {/* Apuesta */}
         <div className="space-y-3">
           <div>
-            <p className="text-base font-semibold">{bet.matchLabel}</p>
+            <p className="flex items-center gap-1.5 text-base font-semibold">
+              <BetMatchFlags bet={bet} matchById={matchById} />
+              <span>{betDisplayLabel(bet, matchById)}</span>
+            </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider">
                 {marketLabel(bet.market)}
