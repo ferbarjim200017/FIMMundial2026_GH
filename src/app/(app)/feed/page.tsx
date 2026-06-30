@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   ArrowUpRight,
   ArrowDownRight,
+  Bell,
   ChevronDown,
   Clock,
   Coins,
@@ -40,6 +41,7 @@ import { MatchFilter } from "@/components/bets/match-filter";
 import { BetMatchFlags } from "@/components/bets/bet-match-flags";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
+import { useAuth } from "@/features/auth/auth.context";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { useGroup } from "@/features/groups/groups.context";
@@ -133,6 +135,10 @@ export default function FeedPage() {
   const [allBets, setAllBets] = useState<Bet[] | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const { memberUids, activeGroup, groupMembers } = useGroup();
+  const { appUser } = useAuth();
+  // Marca de tiempo de la última visita al feed (por grupo) para resaltar las
+  // novedades. Se lee al entrar y se reescribe a "ahora" para la próxima vez.
+  const [lastSeen, setLastSeen] = useState<number | null>(null);
 
   // Mapa de autores para pintar el feed. Las apuestas mostradas se filtran a
   // miembros del grupo activo, que ya están en memoria vía GroupProvider, así
@@ -180,6 +186,20 @@ export default function FeedPage() {
     };
   }, []);
 
+  // Lee la última visita guardada (para resaltar novedades) y marca "ahora"
+  // como nueva última visita. Por grupo activo.
+  useEffect(() => {
+    if (!activeGroup) return;
+    const key = `fim:feed-seen:${activeGroup.id}`;
+    try {
+      const raw = localStorage.getItem(key);
+      setLastSeen(raw != null ? Number(raw) : null);
+      localStorage.setItem(key, String(Date.now()));
+    } catch {
+      setLastSeen(null);
+    }
+  }, [activeGroup]);
+
   // Filtra a las apuestas TAGGEADAS con el grupo activo. La membresía del
   // usuario en el grupo se queda como segunda condición de seguridad — una
   // apuesta antigua sin groupId que no se haya migrado quedaría fuera, lo
@@ -191,6 +211,21 @@ export default function FeedPage() {
       (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
   }, [allBets, memberUids, activeGroup]);
+
+  // Una apuesta es "novedad" si es de OTRO miembro y su actividad (alta o
+  // liquidación) es posterior a tu última visita al feed.
+  const isNewBet = useCallback(
+    (b: Bet) =>
+      lastSeen != null &&
+      appUser != null &&
+      b.userId !== appUser.uid &&
+      eventDate(b).getTime() > lastSeen,
+    [lastSeen, appUser]
+  );
+  const newCount = useMemo(
+    () => (bets ? bets.filter(isNewBet).length : 0),
+    [bets, isNewBet]
+  );
 
   // Resort por timestamp efectivo (settledAt si existe, si no createdAt)
   // para que las apuestas recién liquidadas suban arriba aunque sean antiguas.
@@ -427,6 +462,16 @@ export default function FeedPage() {
           curso.
         </p>
       </div>
+
+      {newCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+          <Bell className="h-4 w-4 shrink-0 text-primary" />
+          <span>
+            <strong>{newCount}</strong> novedad{newCount === 1 ? "" : "es"} desde
+            tu última visita
+          </span>
+        </div>
+      )}
 
       {sortedBets && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
@@ -712,6 +757,7 @@ export default function FeedPage() {
                 bets={e.bets}
                 user={usersById[e.bets[0].userId] ?? null}
                 matchById={resolvedMatchById}
+                isNew={e.bets.some(isNewBet)}
               />
             ) : (
               <FeedItem
@@ -719,6 +765,7 @@ export default function FeedPage() {
                 bet={e.bet}
                 user={usersById[e.bet.userId] ?? null}
                 matchById={resolvedMatchById}
+                isNew={isNewBet(e.bet)}
               />
             )
           )}
@@ -814,10 +861,12 @@ function GroupedFeedItem({
   bets,
   user,
   matchById,
+  isNew = false,
 }: {
   bets: Bet[];
   user: AppUser | null;
   matchById: Map<string, Match>;
+  isNew?: boolean;
 }) {
   const { openBet } = useBetDetail();
   const [open, setOpen] = useState(false);
@@ -832,7 +881,7 @@ function GroupedFeedItem({
   });
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn("overflow-hidden", isNew && "ring-1 ring-primary/50")}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -853,6 +902,11 @@ function GroupedFeedItem({
               <Layers className="h-3 w-3" />
               Escalera
             </span>
+            {isNew && (
+              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                Nuevo
+              </span>
+            )}
           </p>
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <BetMatchFlags bet={first} matchById={matchById} />
@@ -920,10 +974,12 @@ function FeedItem({
   bet,
   user,
   matchById,
+  isNew = false,
 }: {
   bet: Bet;
   user: AppUser | null;
   matchById: Map<string, Match>;
+  isNew?: boolean;
 }) {
   const { openBet } = useBetDetail();
   const accent =
@@ -960,7 +1016,8 @@ function FeedItem({
       aria-label={`Abrir apuesta de ${displayName}`}
       className={cn(
         "relative cursor-pointer overflow-hidden transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        accent
+        accent,
+        isNew && "ring-1 ring-primary/50"
       )}
     >
       <CardContent className="relative flex items-start gap-3 p-4">
@@ -991,6 +1048,11 @@ function FeedItem({
             {bet.isFreebet && (
               <span className="rounded-full bg-purple-600/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">
                 Freebet
+              </span>
+            )}
+            {isNew && (
+              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                Nuevo
               </span>
             )}
           </div>
