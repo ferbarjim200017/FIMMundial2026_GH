@@ -18,9 +18,28 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
+  applicationName: APP_NAME,
   title: { default: APP_NAME, template: `%s | ${APP_NAME}` },
   description:
     "Tracker privado de apuestas y estadísticas del Mundial 2026 — para competir entre amigos. Solo registra apuestas externas, no procesa pagos.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
+  // Permite "Añadir a pantalla de inicio" en iOS abriendo a pantalla completa.
+  appleWebApp: {
+    capable: true,
+    title: APP_NAME,
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    siteName: APP_NAME,
+    title: APP_NAME,
+    description:
+      "Tracker privado de apuestas y estadísticas del Mundial 2026 para competir entre amigos.",
+  },
 };
 
 export const viewport: Viewport = {
