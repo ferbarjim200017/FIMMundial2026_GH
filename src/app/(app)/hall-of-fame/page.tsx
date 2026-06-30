@@ -532,8 +532,8 @@ export default function HallOfFamePage() {
   }, [bets]);
 
   // Top-3 de APUESTAS individuales más madrugadoras y más nocturnas.
-  //  - Madrugadores: apuestas de 06:00 a 09:59, ordenadas de más temprana a más
-  //    tarde (la más madrugadora primero).
+  //  - Madrugadores: apuestas de 08:00 a 12:59, ordenadas de más temprana a más
+  //    tarde (la más cercana a las 08:00 es la más madrugadora).
   //  - Búhos: apuestas de 22:00 a 05:59; se ordenan por lo "tarde en la noche"
   //    que se registraron (cuanto más cerca de las 06:00 de la madrugada, más
   //    búho), midiendo los minutos transcurridos desde las 22:00.
@@ -550,7 +550,7 @@ export default function HallOfFamePage() {
         minOfDay: d.getHours() * 60 + d.getMinutes(),
       });
     }
-    const inMorning = (m: number) => m >= 6 * 60 && m < 10 * 60; // 06:00–09:59
+    const inMorning = (m: number) => m >= 8 * 60 && m < 13 * 60; // 08:00–12:59
     const inNight = (m: number) => m >= 22 * 60 || m < 6 * 60; // 22:00–05:59
     const nightProg = (m: number) => (m >= 22 * 60 ? m - 22 * 60 : m + 2 * 60);
     return {
