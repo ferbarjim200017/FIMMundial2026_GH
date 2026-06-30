@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Award,
   Crown,
   TrendingUp,
   TrendingDown,
@@ -41,6 +42,7 @@ import {
   computeUserStats,
   round2,
 } from "@/features/bets/bets.utils";
+import { computeAchievements } from "@/features/bets/achievements";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { cn, formatCurrency, formatPercent, initials, profitClass } from "@/lib/utils";
 import type { AppUser, Bet, Match } from "@/types/domain";
@@ -294,6 +296,8 @@ interface PlayerAgg {
   worst: Bet | null;
   worstStreak: number;
   stats: ReturnType<typeof computeUserStats>;
+  /** Nº de logros desbloqueados (para el record "El más logrado"). */
+  achievements: number;
 }
 
 /** Racha más larga de DERROTAS seguidas. Simétrica a `bestStreak` (victorias):
@@ -724,6 +728,7 @@ export default function HallOfFamePage() {
             .filter((b) => !b.isFreebet)
             .reduce((acc, b) => acc + b.stake, 0)
         );
+        const stats = computeUserStats(userBets);
         return {
           user,
           betsCount: userBets.length,
@@ -731,7 +736,10 @@ export default function HallOfFamePage() {
           best,
           worst,
           worstStreak: worstLossStreak(settledU),
-          stats: computeUserStats(userBets),
+          stats,
+          achievements: computeAchievements(userBets, stats).filter(
+            (a) => a.earned
+          ).length,
         };
       })
       .filter((p) => p.betsCount > 0);
@@ -792,6 +800,14 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.stats.betsLost > 0)
         .sort((a, b) => b.stats.betsLost - a.stats.betsLost)
+        .slice(0, 3),
+    [perPlayer]
+  );
+  const mostAchievements = useMemo(
+    () =>
+      [...perPlayer]
+        .filter((p) => p.achievements > 0)
+        .sort((a, b) => b.achievements - a.achievements)
         .slice(0, 3),
     [perPlayer]
   );
@@ -1249,6 +1265,17 @@ export default function HallOfFamePage() {
                   value: `${p.days} día${p.days === 1 ? "" : "s"}`,
                 }))}
                 emptyText="Aún no hay actividad suficiente."
+              />
+              <PodiumCard
+                title="El más logrado"
+                icon={Award}
+                accent="text-yellow-500"
+                entries={mostAchievements.map((p) => ({
+                  name: p.user.username,
+                  detail: "logros desbloqueados",
+                  value: `🏅 ${p.achievements}`,
+                }))}
+                emptyText="Aún nadie ha desbloqueado logros."
               />
             </div>
           </section>

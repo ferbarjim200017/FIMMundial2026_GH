@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LineChart, Minus, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import {
   Card,
@@ -14,10 +14,18 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RankingChart } from "@/components/ranking/ranking-chart";
 import { BackButton } from "@/components/layout/back-button";
 import { getUser } from "@/features/users/users.service";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
+import { useAuth } from "@/features/auth/auth.context";
 import { useGroup } from "@/features/groups/groups.context";
 import { betInGroup, computeUserStats, getInitialBalances } from "@/features/bets/bets.utils";
 import {
@@ -149,6 +157,79 @@ function CompareSkeleton() {
   );
 }
 
+/** Selector de dos jugadores del grupo para lanzar el cara a cara. */
+function ComparePicker({
+  members,
+  initialA,
+  initialB,
+}: {
+  members: AppUser[];
+  initialA: string;
+  initialB: string;
+}) {
+  const router = useRouter();
+  const [a, setA] = useState(initialA);
+  const [b, setB] = useState(initialB);
+  const canGo = !!a && !!b && a !== b;
+  const options = (exclude: string) =>
+    members
+      .filter((m) => m.uid !== exclude)
+      .map((m) => (
+        <SelectItem key={m.uid} value={m.uid}>
+          {m.username}
+        </SelectItem>
+      ));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Comparar jugadores</CardTitle>
+        <CardDescription>
+          Elige dos miembros del grupo para verlos métrica a métrica.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Jugador 1</label>
+            <Select value={a} onValueChange={setA}>
+              <SelectTrigger>
+                <SelectValue placeholder="Elegir…" />
+              </SelectTrigger>
+              <SelectContent>{options(b)}</SelectContent>
+            </Select>
+          </div>
+          <span className="hidden pb-2 text-center text-sm font-bold text-muted-foreground sm:block">
+            VS
+          </span>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Jugador 2</label>
+            <Select value={b} onValueChange={setB}>
+              <SelectTrigger>
+                <SelectValue placeholder="Elegir…" />
+              </SelectTrigger>
+              <SelectContent>{options(a)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <Button
+          disabled={!canGo}
+          onClick={() => canGo && router.push(ROUTES.compare(a, b))}
+          className="w-full gap-1.5 sm:w-auto"
+        >
+          <Swords className="h-4 w-4" />
+          Comparar
+        </Button>
+        {members.length < 2 && (
+          <p className="text-xs text-muted-foreground">
+            Necesitas al menos 2 miembros en el grupo para comparar.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ComparePage() {
   return (
     <Suspense fallback={<CompareSkeleton />}>
@@ -161,7 +242,8 @@ function CompareContent() {
   const search = useSearchParams();
   const aUid = search.get("a") ?? "";
   const bUid = search.get("b") ?? "";
-  const { activeGroup, memberUids } = useGroup();
+  const { activeGroup, memberUids, groupMembers } = useGroup();
+  const { appUser } = useAuth();
 
   const [userA, setUserA] = useState<AppUser | null>(null);
   const [userB, setUserB] = useState<AppUser | null>(null);
@@ -248,16 +330,20 @@ function CompareContent() {
 
   if (!aUid || !bUid || !userA || !userB) {
     return (
-      <Card>
-        <CardContent className="space-y-3 p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Faltan usuarios para comparar, o uno de ellos no existe.
-          </p>
-          <Button asChild variant="outline">
-            <Link href={ROUTES.ranking}>Ir al ranking</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <BackButton fallbackHref={ROUTES.ranking} />
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Swords className="h-5 w-5 text-primary" />
+            Cara a cara
+          </h1>
+        </div>
+        <ComparePicker
+          members={groupMembers}
+          initialA={aUid || appUser?.uid || ""}
+          initialB={bUid}
+        />
+      </div>
     );
   }
 
@@ -300,6 +386,9 @@ function CompareContent() {
             {userA.username} vs {userB.username}
           </p>
         </div>
+        <Button asChild variant="outline" size="sm" className="ml-auto shrink-0">
+          <Link href="/compare">Cambiar</Link>
+        </Button>
       </div>
 
       <Card className="border-primary/40">

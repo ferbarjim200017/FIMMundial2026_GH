@@ -10,6 +10,7 @@ import {
   LineChart,
   Minus,
   Star,
+  Swords,
   Ticket,
   TrendingDown,
   Trophy,
@@ -57,6 +58,7 @@ import {
   computeUserStats,
   getInitialBalances,
 } from "@/features/bets/bets.utils";
+import { computeAchievements } from "@/features/bets/achievements";
 import { useGroup } from "@/features/groups/groups.context";
 import { useAuth } from "@/features/auth/auth.context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -311,6 +313,22 @@ export default function RankingPage() {
     }
     return map;
   }, [users, bets]);
+
+  // Logros desbloqueados por usuario, para el contador 🏅 de cada fila.
+  const achievementsByUid = useMemo(() => {
+    const map = new Map<string, { earned: number; total: number }>();
+    for (const u of users ?? []) {
+      const st = generalStatsByUid.get(u.uid);
+      if (!st) continue;
+      const userBets = bets.filter((b) => b.userId === u.uid);
+      const list = computeAchievements(userBets, st);
+      map.set(u.uid, {
+        earned: list.filter((a) => a.earned).length,
+        total: list.length,
+      });
+    }
+    return map;
+  }, [users, bets, generalStatsByUid]);
 
   // Saldo actual del usuario en el grupo = saldo inicial del grupo + profit.
   const balanceByUid = useMemo(() => {
@@ -765,6 +783,13 @@ export default function RankingPage() {
             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
               General
             </span>
+            <Link
+              href="/compare"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-accent/40"
+            >
+              <Swords className="h-3.5 w-3.5 text-primary" />
+              Comparar
+            </Link>
           </CardTitle>
           <CardDescription>
             Siempre la clasificación <strong>general</strong> (todo el torneo),
@@ -837,6 +862,7 @@ export default function RankingPage() {
                     const balance = balanceByUid.get(u.uid) ?? 0;
                     const cash = cashByUid.get(u.uid) ?? 0;
                     const isMe = appUser?.uid === u.uid;
+                    const ach = achievementsByUid.get(u.uid);
                     // Farolillo rojo: el auténtico último por ROI, da igual
                     // cómo esté ordenada la tabla.
                     const isLast = u.uid === lastPlaceUid;
@@ -894,8 +920,16 @@ export default function RankingPage() {
                                   </span>
                                 )}
                               </div>
-                              <p className="truncate text-xs text-muted-foreground">
-                                @{u.username}
+                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <span className="truncate">@{u.username}</span>
+                                {ach && ach.earned > 0 && (
+                                  <span
+                                    className="shrink-0"
+                                    title={`${ach.earned} de ${ach.total} logros`}
+                                  >
+                                    🏅 {ach.earned}
+                                  </span>
+                                )}
                               </p>
                             </div>
                           </Link>
