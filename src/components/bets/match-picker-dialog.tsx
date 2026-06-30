@@ -122,10 +122,10 @@ export function MatchPickerDialog({
   // la lista se hace en baja prioridad, así escribir no se atasca.
   const deferredSearch = useDeferredValue(search);
   const [showFinished, setShowFinished] = useState(false);
-  // Por defecto el selector muestra solo los partidos de la jornada de hoy
-  // (ventana 9:00 → 9:00, la misma del dashboard). Con "Ver todos" se
-  // muestran el resto. Además de ser más cómodo, renderizar menos filas hace
-  // que el diálogo abra más fluido.
+  // Por defecto el selector muestra AYER + HOY + MAÑANA (tres jornadas de 9:00
+  // a 9:00); la ventana se desplaza sola cada día a las 9:00. Con "Ver todos"
+  // se muestran el resto. Renderizar menos filas hace que el diálogo abra más
+  // fluido.
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Renderizar las ~104 filas a la vez que corre la animación de apertura del
@@ -183,13 +183,17 @@ export function MatchPickerDialog({
           (m.city ?? "").toLowerCase().includes(s)
       );
     }
-    // Sin búsqueda: por defecto solo la jornada actual (9:00 → 9:00). El
-    // botón "Ver todos los partidos" desactiva este filtro.
+    // Sin búsqueda: por defecto AYER + HOY + MAÑANA (tres jornadas de 9:00 a
+    // 9:00). Como la jornada arranca a las 9:00, la ventana se desplaza sola
+    // cada día a esa hora. "Ver todos los partidos" desactiva este filtro.
     if (!showAll) {
       const { startMs, endMs } = currentDayWindow();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const winStart = startMs - dayMs; // inicio de la jornada de ayer
+      const winEnd = endMs + dayMs; // fin de la jornada de mañana
       return base.filter((m) => {
         const k = m.kickoffUtc.toMillis();
-        return k >= startMs && k < endMs;
+        return k >= winStart && k < winEnd;
       });
     }
     return base;
@@ -277,14 +281,14 @@ export function MatchPickerDialog({
             <span>
               {showAll
                 ? "Mostrando todos los partidos"
-                : "Mostrando la jornada de hoy (desde las 9:00)"}
+                : "Mostrando ayer, hoy y mañana (jornadas de 9:00)"}
             </span>
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
               className="font-medium text-primary hover:underline"
             >
-              {showAll ? "Ver solo hoy" : "Ver todos los partidos"}
+              {showAll ? "Ver solo estos días" : "Ver todos los partidos"}
             </button>
           </div>
         )}
@@ -307,7 +311,7 @@ export function MatchPickerDialog({
                 "Sin resultados para esa búsqueda."
               ) : !showAll ? (
                 <>
-                  No hay partidos en la jornada de hoy.
+                  No hay partidos entre ayer, hoy y mañana.
                   <br />
                   <button
                     type="button"
