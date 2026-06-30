@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CheckCircle2, MoreHorizontal, Pencil, Receipt, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import {
   DropdownMenu,
@@ -147,9 +148,11 @@ export function BetsTable({
 
   if (bets.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
-        No hay apuestas registradas todavía.
-      </div>
+      <EmptyState
+        icon={Receipt}
+        title="No hay apuestas todavía"
+        subtitle="Cuando se registre alguna que cuadre con los filtros, aparecerá aquí."
+      />
     );
   }
 

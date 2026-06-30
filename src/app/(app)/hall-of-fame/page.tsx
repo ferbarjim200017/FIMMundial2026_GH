@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
@@ -690,9 +691,11 @@ export default function HallOfFamePage() {
       </Card>
 
       {!hasData ? (
-        <div className="py-16 text-center text-sm text-muted-foreground">
-          Aún no hay apuestas en este grupo. ¡Que empiece la fiesta!
-        </div>
+        <EmptyState
+          icon={Crown}
+          title="Aún no hay records"
+          subtitle="En cuanto el grupo empiece a registrar apuestas, aquí saldrán los mejores (y los peores). ¡Que empiece la fiesta!"
+        />
       ) : (
         <>
           {/* Records por apuesta */}

@@ -38,6 +38,7 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { MatchFilter } from "@/components/bets/match-filter";
 import { BetMatchFlags } from "@/components/bets/bet-match-flags";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
@@ -695,11 +696,11 @@ export default function FeedPage() {
           </CardContent>
         </Card>
       ) : filteredBets.length === 0 ? (
-        <Card>
-          <CardContent className="px-6 py-8 text-center text-sm text-muted-foreground">
-            No hay actividad para este filtro.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Receipt}
+          title="No hay actividad para este filtro"
+          subtitle="Prueba a cambiar los filtros o el periodo para ver más apuestas."
+        />
       ) : (
         <div className="space-y-3">
           {feedEntries.map((e) =>
