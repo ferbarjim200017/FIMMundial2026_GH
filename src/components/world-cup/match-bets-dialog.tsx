@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ClipboardCheck, Eye, Search, Tv, X } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Clock, Eye, Search, Tv, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,7 @@ import { ROUTES } from "@/lib/constants";
 import {
   cn,
   formatCurrency,
+  formatDateTime,
   initials,
   profitClass,
 } from "@/lib/utils";
@@ -541,6 +542,10 @@ export function MatchBetsDialog({ match, open, onOpenChange }: Props) {
             {match.groupId && ` · Grupo ${match.groupId}`}
             {match.matchday && ` · J${match.matchday}`}
           </DialogDescription>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            {formatDateTime(match.kickoffUtc.toDate())}
+          </p>
         </DialogHeader>
 
         {/* Solo admins: poner/editar el resultado y marcar si lo da La 1. */}
