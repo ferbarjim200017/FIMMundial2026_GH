@@ -28,6 +28,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TeamFlag } from "@/components/matches/team-flag";
+import { useBetDetail } from "@/components/bets/bet-detail-dialog";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
@@ -113,6 +114,8 @@ interface PodiumEntry {
   /** Contenido extra que se muestra DEBAJO de la fila (p. ej. el desglose de
    *  jugadores de un partido). */
   extra?: ReactNode;
+  /** Si se pasa, la fila es clicable (p. ej. abre la ficha de la apuesta). */
+  onClick?: () => void;
 }
 
 /**
@@ -154,17 +157,9 @@ function PodiumCard({
             {emptyText ?? "Sin datos todavía."}
           </p>
         ) : (
-          entries.map((e, i) => (
-            <div
-              key={i}
-              className={cn(
-                "rounded-lg transition-colors",
-                i === 0
-                  ? "bg-amber-400/10 ring-1 ring-amber-400/20"
-                  : "hover:bg-accent/30"
-              )}
-            >
-              <div className="flex items-start gap-2.5 px-2 py-1.5">
+          entries.map((e, i) => {
+            const row = (
+              <div className="flex w-full items-start gap-2.5 px-2 py-1.5 text-left">
                 <span className="mt-0.5 w-6 shrink-0 text-center text-base leading-none">
                   {medal(i)}
                 </span>
@@ -189,9 +184,33 @@ function PodiumCard({
                   {e.value}
                 </span>
               </div>
-              {e.extra && <div className="px-2 pb-2 pl-10">{e.extra}</div>}
-            </div>
-          ))
+            );
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "rounded-lg transition-colors",
+                  i === 0
+                    ? "bg-amber-400/10 ring-1 ring-amber-400/20"
+                    : "hover:bg-accent/30"
+                )}
+              >
+                {e.onClick ? (
+                  <button
+                    type="button"
+                    onClick={e.onClick}
+                    title="Ver la apuesta"
+                    className="w-full cursor-pointer rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {row}
+                  </button>
+                ) : (
+                  row
+                )}
+                {e.extra && <div className="px-2 pb-2 pl-10">{e.extra}</div>}
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>
@@ -337,6 +356,7 @@ export default function HallOfFamePage() {
   const [allBets, setAllBets] = useState<Bet[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const { activeGroup, groupMembers, memberUids } = useGroup();
+  const { openBet } = useBetDetail();
 
   useEffect(
     () => subscribeToMatches(setMatches, () => setMatches([])),
@@ -614,13 +634,14 @@ export default function HallOfFamePage() {
   //    que se registraron (cuanto más cerca de las 06:00 de la madrugada, más
   //    búho), midiendo los minutos transcurridos desde las 22:00.
   const timeRecords = useMemo(() => {
-    type TimedBet = { user: AppUser; ms: number; minOfDay: number };
+    type TimedBet = { bet: Bet; user: AppUser; ms: number; minOfDay: number };
     const timed: TimedBet[] = [];
     for (const b of bets) {
       const user = usersById[b.userId];
       if (!user) continue;
       const d = (b.addedAt ?? b.createdAt).toDate();
       timed.push({
+        bet: b,
         user,
         ms: d.getTime(),
         minOfDay: d.getHours() * 60 + d.getMinutes(),
@@ -884,6 +905,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={records.topProfit.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: betDetail(b),
                   value: formatCurrency(b.profit ?? 0),
                   valueClass: profitClass(b.profit ?? 0),
@@ -895,6 +917,7 @@ export default function HallOfFamePage() {
                 accent="text-red-500"
                 entries={records.topLoss.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: betDetail(b),
                   value: formatCurrency(b.profit ?? 0),
                   valueClass: profitClass(b.profit ?? 0),
@@ -906,6 +929,7 @@ export default function HallOfFamePage() {
                 accent="text-sky-500"
                 entries={records.topOdds.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
                     b.bookmaker,
                     b.bookmakerLabel
@@ -920,6 +944,7 @@ export default function HallOfFamePage() {
                 accent="text-amber-500"
                 entries={records.topStake.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: betDetail(b),
                   value: formatCurrency(b.stake),
                 }))}
@@ -930,6 +955,7 @@ export default function HallOfFamePage() {
                 accent="text-violet-500"
                 entries={records.topCombo.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: `${b.matchLabel || b.selection || "Combinada"} · @${b.odds.toFixed(
                     2
                   )}`,
@@ -944,6 +970,7 @@ export default function HallOfFamePage() {
                 accent="text-pink-500"
                 entries={records.topFreebet.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: betDetail(b),
                   value: formatCurrency(b.profit ?? 0),
                   valueClass: profitClass(b.profit ?? 0),
@@ -956,6 +983,7 @@ export default function HallOfFamePage() {
                 accent="text-teal-500"
                 entries={records.safestWon.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
                     b.bookmaker,
                     b.bookmakerLabel
@@ -970,6 +998,7 @@ export default function HallOfFamePage() {
                 accent="text-rose-500"
                 entries={records.biggestFail.map((b) => ({
                   name: nameOf(b.userId),
+                  onClick: () => openBet(b, usersById[b.userId] ?? null),
                   detail: `${b.selection || b.matchLabel || "—"} · ${bookmakerLabel(
                     b.bookmaker,
                     b.bookmakerLabel
@@ -1130,6 +1159,7 @@ export default function HallOfFamePage() {
                   name: t.user.username,
                   detail: formatDayShort(t.ms),
                   value: formatTimeOfDay(t.ms),
+                  onClick: () => openBet(t.bet, t.user),
                 }))}
                 emptyText="Nadie apuesta a primera hora… aún."
               />
@@ -1141,6 +1171,7 @@ export default function HallOfFamePage() {
                   name: t.user.username,
                   detail: formatDayShort(t.ms),
                   value: formatTimeOfDay(t.ms),
+                  onClick: () => openBet(t.bet, t.user),
                 }))}
                 emptyText="Nadie apuesta de madrugada… aún."
               />
