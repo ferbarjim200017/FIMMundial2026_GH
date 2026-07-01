@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Award,
   Crown,
@@ -29,6 +30,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
+import { MatchBetsDialog } from "@/components/world-cup/match-bets-dialog";
+import { ROUTES } from "@/lib/constants";
 import { subscribeToAllBets } from "@/features/bets/bets.service";
 import { subscribeToMatches } from "@/features/matches/matches.service";
 import { resolveMatchLabels } from "@/features/matches/bracket-resolver";
@@ -199,7 +202,7 @@ function PodiumCard({
                   <button
                     type="button"
                     onClick={e.onClick}
-                    title="Ver la apuesta"
+                    title="Ver detalle"
                     className="w-full cursor-pointer rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {row}
@@ -357,6 +360,9 @@ export default function HallOfFamePage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const { activeGroup, groupMembers, memberUids } = useGroup();
   const { openBet } = useBetDetail();
+  const router = useRouter();
+  // Partido cuyo popup de apuestas está abierto (al clicar un record de partido).
+  const [betsFor, setBetsFor] = useState<Match | null>(null);
 
   useEffect(
     () => subscribeToMatches(setMatches, () => setMatches([])),
@@ -510,6 +516,7 @@ export default function HallOfFamePage() {
       return {
         id,
         label: labelOf(id),
+        match: m,
         home: m?.homeLabel,
         away: m?.awayLabel,
         stake: round2(v.stake),
@@ -1023,6 +1030,7 @@ export default function HallOfFamePage() {
                 accent="text-amber-500"
                 entries={matchRecords.mostStaked.map((m) => ({
                   name: m.label,
+                  onClick: m.match ? () => setBetsFor(m.match!) : undefined,
                   leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"} · ${
                     m.players
@@ -1046,6 +1054,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={matchRecords.mostWon.map((m) => ({
                   name: m.label,
+                  onClick: m.match ? () => setBetsFor(m.match!) : undefined,
                   leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: `+${formatCurrency(m.profit)}`,
@@ -1069,6 +1078,7 @@ export default function HallOfFamePage() {
                 accent="text-red-500"
                 entries={matchRecords.mostLost.map((m) => ({
                   name: m.label,
+                  onClick: m.match ? () => setBetsFor(m.match!) : undefined,
                   leading: matchFlags(m.home, m.away),
                   detail: `${m.count} apuesta${m.count === 1 ? "" : "s"}`,
                   value: formatCurrency(m.profit),
@@ -1092,6 +1102,7 @@ export default function HallOfFamePage() {
                 accent="text-primary"
                 entries={matchRecords.mostBets.map((m) => ({
                   name: m.label,
+                  onClick: m.match ? () => setBetsFor(m.match!) : undefined,
                   leading: matchFlags(m.home, m.away),
                   detail: `${formatCurrency(m.stake)} jugado`,
                   value: `${m.count}`,
@@ -1190,6 +1201,7 @@ export default function HallOfFamePage() {
                 accent="text-primary"
                 entries={mostBets.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: `${p.betsCount}`,
                 }))}
               />
@@ -1199,6 +1211,7 @@ export default function HallOfFamePage() {
                 accent="text-amber-500"
                 entries={mostStaked.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: formatCurrency(p.totalStaked),
                 }))}
               />
@@ -1208,6 +1221,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={mostProfit.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: formatCurrency(p.stats.totalProfit),
                   valueClass: profitClass(p.stats.totalProfit),
                 }))}
@@ -1218,6 +1232,7 @@ export default function HallOfFamePage() {
                 accent="text-orange-500"
                 entries={bestStreak.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: `${p.stats.bestStreak} ✅`,
                 }))}
                 emptyText="Sin rachas todavía."
@@ -1228,6 +1243,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={bestHitRate.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   detail: `${p.stats.betsWon}/${
                     p.stats.betsWon + p.stats.betsLost
                   } decididas`,
@@ -1241,6 +1257,7 @@ export default function HallOfFamePage() {
                 accent="text-sky-500"
                 entries={worstStreaks.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: `${p.worstStreak} ❌`,
                 }))}
                 emptyText="Nadie encadena derrotas… aún."
@@ -1251,6 +1268,7 @@ export default function HallOfFamePage() {
                 accent="text-violet-500"
                 entries={craziest.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   detail: "cuota media",
                   value: `@${p.stats.avgOdds.toFixed(2)}`,
                 }))}
@@ -1261,6 +1279,7 @@ export default function HallOfFamePage() {
                 accent="text-red-500"
                 entries={mostLost.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   value: `${p.stats.betsLost}`,
                 }))}
                 emptyText="Nadie ha perdido todavía."
@@ -1271,6 +1290,7 @@ export default function HallOfFamePage() {
                 accent="text-emerald-500"
                 entries={topWithdrawn.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   detail: `Ingresado ${formatCurrency(
                     p.deposits
                   )} · Retirado ${formatCurrency(p.withdrawals)}`,
@@ -1292,6 +1312,7 @@ export default function HallOfFamePage() {
                 accent="text-teal-500"
                 entries={mostConsistent.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   detail: "días distintos con apuestas",
                   value: `${p.days} día${p.days === 1 ? "" : "s"}`,
                 }))}
@@ -1303,6 +1324,7 @@ export default function HallOfFamePage() {
                 accent="text-yellow-500"
                 entries={mostAchievements.map((p) => ({
                   name: p.user.username,
+                  onClick: () => router.push(ROUTES.profile(p.user.uid)),
                   detail: "logros desbloqueados",
                   value: `🏅 ${p.achievements}`,
                 }))}
@@ -1378,6 +1400,12 @@ export default function HallOfFamePage() {
           </section>
         </>
       )}
+
+      <MatchBetsDialog
+        match={betsFor}
+        open={!!betsFor}
+        onOpenChange={(o) => !o && setBetsFor(null)}
+      />
     </div>
   );
 }
