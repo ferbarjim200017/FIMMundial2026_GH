@@ -23,15 +23,24 @@ export function formatPercent(value: number, digits = 1): string {
 }
 
 export function formatDate(date: Date): string {
+  // Incluye el día de la semana, p. ej. "sábado, 4 de julio de 2026".
   return new Intl.DateTimeFormat(LOCALE, {
-    dateStyle: "medium",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   }).format(date);
 }
 
 export function formatDateTime(date: Date): string {
+  // Con día de la semana + hora, p. ej. "sábado, 4 de julio de 2026, 3:00".
   return new Intl.DateTimeFormat(LOCALE, {
-    dateStyle: "medium",
-    timeStyle: "short",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 }
 
