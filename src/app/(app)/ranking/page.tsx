@@ -77,6 +77,7 @@ import type {
   MatchStage,
   RankMovement,
   RankMovementMap,
+  UserStats,
 } from "@/types/domain";
 
 function medal(rank: number) {
@@ -176,11 +177,6 @@ export default function RankingPage() {
   }, []);
 
   // Columna por la que se ordena el ranking (por defecto ROI descendente).
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
-    key: "roi",
-    dir: "desc",
-  });
-
   // Comparación rápida: hasta 2 jugadores marcados con el botón ⚔️ de su fila.
   const router = useRouter();
   const [compareSel, setCompareSel] = useState<string[]>([]);
@@ -196,39 +192,6 @@ export default function RankingPage() {
   // que la toca a mano, dejamos de auto-seleccionar.
   const [phase, setPhase] = useState<RankingPhase>("general");
   const [phaseTouched, setPhaseTouched] = useState(false);
-
-  function handleSort(key: SortKey) {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: key === "username" ? "asc" : "desc" }
-    );
-  }
-
-  // Cabecera de columna clicable: ordena por ese campo (y al re-pulsar invierte).
-  const sortTh = (k: SortKey, label: string, thClass: string) => (
-    <th className={thClass}>
-      <button
-        type="button"
-        onClick={() => handleSort(k)}
-        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
-          sort.key === k ? "text-foreground" : ""
-        }`}
-        aria-label={`Ordenar por ${label}`}
-      >
-        {label}
-        {sort.key === k ? (
-          sort.dir === "asc" ? (
-            <ArrowUp className="h-3 w-3" />
-          ) : (
-            <ArrowDown className="h-3 w-3" />
-          )
-        ) : (
-          <ArrowUpDown className="h-3 w-3 opacity-30" />
-        )}
-      </button>
-    </th>
-  );
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -325,6 +288,17 @@ export default function RankingPage() {
     return map;
   }, [users, bets]);
 
+  // Stats por usuario de la FASE seleccionada (para la 2.ª tabla de
+  // clasificación). En "general" coinciden con generalStatsByUid.
+  const phaseStatsByUid = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeUserStats>>();
+    for (const u of users ?? []) {
+      const userBets = phaseBets.filter((b) => b.userId === u.uid);
+      map.set(u.uid, computeUserStats(userBets));
+    }
+    return map;
+  }, [users, phaseBets]);
+
   // Logros desbloqueados por usuario, para el contador 🏅 de cada fila.
   const achievementsByUid = useMemo(() => {
     const map = new Map<string, { earned: number; total: number }>();
@@ -358,26 +332,6 @@ export default function RankingPage() {
     }
     return map;
   }, [users, generalStatsByUid, activeGroup]);
-
-  // Auténtico "último de la clasificación": peor ROI (desempate por menor
-  // beneficio), independiente de cómo esté ordenada la tabla en pantalla.
-  const lastPlaceUid = useMemo(() => {
-    if (!users || users.length < 2) return null;
-    let worstUid: string | null = null;
-    let worstRoi = Infinity;
-    let worstProfit = Infinity;
-    for (const u of users) {
-      const st = generalStatsByUid.get(u.uid);
-      const roi = st?.roi ?? 0;
-      const profit = st?.totalProfit ?? 0;
-      if (roi < worstRoi || (roi === worstRoi && profit < worstProfit)) {
-        worstRoi = roi;
-        worstProfit = profit;
-        worstUid = u.uid;
-      }
-    }
-    return worstUid;
-  }, [users, generalStatsByUid]);
 
   // Posición canónica (1 = primero) por ROI desc, desempate por beneficio.
   // Independiente de cómo esté ordenada la tabla en pantalla: es la posición
@@ -486,55 +440,6 @@ export default function RankingPage() {
     });
   }, [activeGroup, users, bets]);
 
-  // Mayor |ROI| del grupo, para escalar la barra de ROI en línea de la tabla.
-  const maxAbsRoi = useMemo(() => {
-    let m = 0;
-    for (const u of users ?? []) {
-      const r = Math.abs(generalStatsByUid.get(u.uid)?.roi ?? 0);
-      if (r > m) m = r;
-    }
-    return m || 1;
-  }, [users, generalStatsByUid]);
-
-  // Lista ordenada según la columna elegida (por defecto ROI desc). Desempate
-  // estable por beneficio.
-  const rankedUsers = useMemo(() => {
-    if (!users) return null;
-    const valueOf = (u: AppUser): number | string => {
-      const s = generalStatsByUid.get(u.uid);
-      switch (sort.key) {
-        case "roi":
-          return s?.roi ?? 0;
-        case "profit":
-          return s?.totalProfit ?? 0;
-        case "balance":
-          return balanceByUid.get(u.uid) ?? 0;
-        case "cash":
-          return cashByUid.get(u.uid) ?? 0;
-        case "hitRate":
-          return s?.hitRate ?? 0;
-        case "betsCount":
-          return s?.betsCount ?? 0;
-        case "username":
-          return u.username.toLowerCase();
-      }
-    };
-    return [...users].sort((a, b) => {
-      const va = valueOf(a);
-      const vb = valueOf(b);
-      let cmp =
-        typeof va === "string" && typeof vb === "string"
-          ? va.localeCompare(vb, "es")
-          : (va as number) - (vb as number);
-      cmp = sort.dir === "asc" ? cmp : -cmp;
-      if (cmp !== 0) return cmp;
-      // Desempate estable: más beneficio primero.
-      return (
-        (generalStatsByUid.get(b.uid)?.totalProfit ?? 0) -
-        (generalStatsByUid.get(a.uid)?.totalProfit ?? 0)
-      );
-    });
-  }, [users, generalStatsByUid, balanceByUid, cashByUid, sort]);
 
   // Mi posición + si me he movido (últimas 24 h), para el chip "Vas X.º de N".
   // La posición es SIEMPRE la de la clasificación GENERAL (ROI de todo el
@@ -786,7 +691,48 @@ export default function RankingPage() {
         </Card>
       </div>
 
-      {/* ─── Tabla de clasificación ─── */}
+      {/* ─── Clasificación: General + fase seleccionada (dos tablas) ─── */}
+      {/* Barra de comparación, compartida por las dos tablas. */}
+      {compareSel.length > 0 && (
+        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm shadow-sm">
+          <Swords className="h-4 w-4 shrink-0 text-primary" />
+          <span className="font-medium">Comparar:</span>
+          {compareSel.map((uid) => (
+            <span
+              key={uid}
+              className="rounded-full border bg-background px-2 py-0.5 text-xs font-medium"
+            >
+              {users?.find((u) => u.uid === uid)?.username ?? "—"}
+            </span>
+          ))}
+          {compareSel.length < 2 && (
+            <span className="text-xs text-muted-foreground">
+              elige otro jugador
+            </span>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              disabled={compareSel.length !== 2}
+              onClick={() =>
+                router.push(ROUTES.compare(compareSel[0], compareSel[1]))
+              }
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              Comparar
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompareSel([])}
+              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Clasificación GENERAL (todo el torneo) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
@@ -796,17 +742,16 @@ export default function RankingPage() {
             </span>
             <Link
               href="/compare"
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-accent/40"
+              className="ml-auto inline-flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent/40"
             >
-              <Swords className="h-3.5 w-3.5 text-primary" />
-              Comparar
+              <Swords className="h-4 w-4 text-primary" />
+              Comparar jugadores
             </Link>
           </CardTitle>
           <CardDescription>
-            Siempre la clasificación <strong>general</strong> (todo el torneo),
-            sin depender de la fase seleccionada arriba. Pulsa una columna para
-            ordenar por ese campo (vuelve a pulsar para invertir); por defecto,
-            por <strong>ROI</strong>. Se actualiza en tiempo real.{" "}
+            Todo el torneo (todas las apuestas). Pulsa una columna para ordenar
+            (vuelve a pulsar para invertir); por defecto, por{" "}
+            <strong>ROI</strong>. Se actualiza en tiempo real.{" "}
             <strong>Caja</strong> = retirado − ingresado.
           </CardDescription>
           {myStanding && (
@@ -829,238 +774,398 @@ export default function RankingPage() {
           )}
         </CardHeader>
         <CardContent className="p-0">
-          {compareSel.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
-              <Swords className="h-4 w-4 shrink-0 text-primary" />
-              <span className="font-medium">Comparar:</span>
-              {compareSel.map((uid) => (
-                <span
-                  key={uid}
-                  className="rounded-full border bg-card px-2 py-0.5 text-xs font-medium"
-                >
-                  {users?.find((u) => u.uid === uid)?.username ?? "—"}
-                </span>
-              ))}
-              {compareSel.length < 2 && (
-                <span className="text-xs text-muted-foreground">
-                  elige otro jugador
-                </span>
-              )}
-              <div className="ml-auto flex gap-2">
-                <button
-                  type="button"
-                  disabled={compareSel.length !== 2}
-                  onClick={() =>
-                    router.push(ROUTES.compare(compareSel[0], compareSel[1]))
-                  }
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                >
-                  Comparar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCompareSel([])}
-                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
           {users === null ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                  <Skeleton className="h-4 flex-1" />
-                  <Skeleton className="h-4 w-12" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-              ))}
-            </div>
+            <RankingSkeleton />
           ) : users.length === 0 ? (
             <div className="px-6 py-8 text-center text-sm text-muted-foreground">
               Aún no hay usuarios registrados.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              {/* min-w fuerza que en móvil la tabla sea más ancha que la
-                  pantalla → el contenedor (overflow-x-auto) permite desplazar
-                  horizontalmente para ver todas las columnas. En PC el
-                  contenedor es más ancho que 640px, así que no cambia nada. */}
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground [&_th]:whitespace-nowrap">
-                  <tr>
-                    <th className="px-3 py-3 w-20">#</th>
-                    {sortTh("username", "Usuario", "px-2 py-3")}
-                    {sortTh("roi", "ROI", "px-2 py-3 text-right")}
-                    {sortTh("profit", "Beneficio", "px-2 py-3 text-right")}
-                    {sortTh("balance", "Saldo", "px-2 py-3 text-right")}
-                    {sortTh("cash", "Caja", "px-2 py-3 text-right")}
-                    {sortTh("hitRate", "% Acierto", "px-2 py-3 text-right")}
-                    {sortTh("betsCount", "Apuestas", "px-4 py-3 text-right")}
-                  </tr>
-                </thead>
-                <tbody className="divide-y [&_td]:whitespace-nowrap">
-                  {(rankedUsers ?? users).map((u, idx) => {
-                    const rank = idx + 1;
-                    const s = generalStatsByUid.get(u.uid);
-                    const roi = s?.roi ?? 0;
-                    const profit = s?.totalProfit ?? 0;
-                    const hitRate = s?.hitRate ?? 0;
-                    const balance = balanceByUid.get(u.uid) ?? 0;
-                    const cash = cashByUid.get(u.uid) ?? 0;
-                    const isMe = appUser?.uid === u.uid;
-                    const ach = achievementsByUid.get(u.uid);
-                    // Farolillo rojo: el auténtico último por ROI, da igual
-                    // cómo esté ordenada la tabla.
-                    const isLast = u.uid === lastPlaceUid;
-                    return (
-                      <tr
-                        key={u.uid}
-                        id={isMe ? "ranking-me" : undefined}
-                        className={`transition-colors ${
-                          isMe
-                            ? "bg-primary/10 hover:bg-primary/20"
-                            : podiumRow(rank)
-                        }`}
-                      >
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-1.5 text-base font-semibold">
-                            <span>{medal(rank)}</span>
-                            <RankMovementIndicator
-                              entry={
-                                phase === "general"
-                                  ? movements[u.uid]
-                                  : undefined
-                              }
-                              nowMs={nowMs}
-                            />
-                          </div>
-                        </td>
-                        <td className="px-2 py-3">
-                          <div className="flex items-center gap-1.5">
-                          <Link
-                            href={ROUTES.profile(u.uid)}
-                            className="flex min-w-0 flex-1 items-center gap-3 hover:underline"
-                          >
-                            <Avatar className={`h-8 w-8 ${podiumRing(rank)}`}>
-                              {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
-                              <AvatarFallback>{initials(u.username)}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="truncate font-medium">
-                                  {u.username}
-                                </span>
-                                {isMe && (
-                                  <Star
-                                    className="h-4 w-4 shrink-0 fill-primary text-primary"
-                                    aria-label="Eres tú"
-                                  />
-                                )}
-                                {isLast && (
-                                  <span
-                                    className="shrink-0 text-xl leading-none"
-                                    role="img"
-                                    aria-label="Farolillo rojo: último de la clasificación"
-                                    title="Farolillo rojo: último de la clasificación"
-                                  >
-                                    🤡
-                                  </span>
-                                )}
-                              </div>
-                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span className="truncate">@{u.username}</span>
-                                {ach && ach.earned > 0 && (
-                                  <span
-                                    className="shrink-0"
-                                    title={`${ach.earned} de ${ach.total} logros`}
-                                  >
-                                    🏅 {ach.earned}
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </Link>
-                            <button
-                              type="button"
-                              onClick={() => toggleCompare(u.uid)}
-                              aria-label={`Comparar a ${u.username}`}
-                              title="Marcar para comparar"
-                              className={`shrink-0 rounded-md border p-1.5 transition-colors ${
-                                compareSel.includes(u.uid)
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "text-muted-foreground hover:bg-accent/40"
-                              }`}
-                            >
-                              <Swords className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-3">
-                          <div className="flex flex-col items-end gap-1">
-                            <span
-                              className={`font-mono font-bold tabular-nums ${profitClass(
-                                roi
-                              )}`}
-                            >
-                              {roi > 0 ? "+" : ""}
-                              {formatPercent(roi)}
-                            </span>
-                            <span className="block h-1 w-16 overflow-hidden rounded-full bg-muted">
-                              <span
-                                className="block h-full rounded-full"
-                                style={{
-                                  width: `${Math.min(
-                                    100,
-                                    (Math.abs(roi) / maxAbsRoi) * 100
-                                  )}%`,
-                                  marginLeft: roi < 0 ? "auto" : undefined,
-                                  backgroundColor:
-                                    roi >= 0
-                                      ? "hsl(var(--profit))"
-                                      : "hsl(var(--loss))",
-                                }}
-                              />
-                            </span>
-                          </div>
-                        </td>
-                        <td
-                          className={`px-2 py-3 text-right font-mono ${profitClass(
-                            profit
-                          )}`}
-                        >
-                          {profit > 0 ? "+" : ""}
-                          {formatCurrency(profit)}
-                        </td>
-                        <td className="px-2 py-3 text-right font-mono">
-                          {formatCurrency(balance)}
-                        </td>
-                        <td
-                          className={`px-2 py-3 text-right font-mono ${profitClass(
-                            cash
-                          )}`}
-                          title="Retirado − ingresado (positivo = te has llevado más)"
-                        >
-                          {cash > 0 ? "+" : ""}
-                          {formatCurrency(cash)}
-                        </td>
-                        <td className="px-2 py-3 text-right font-mono text-muted-foreground">
-                          {formatPercent(hitRate)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                          {s?.betsCount ?? 0}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <RankingTable
+              users={users}
+              statsByUid={generalStatsByUid}
+              balanceByUid={balanceByUid}
+              cashByUid={cashByUid}
+              achievementsByUid={achievementsByUid}
+              appUser={appUser}
+              movements={movements}
+              nowMs={nowMs}
+              showMovement
+              showGlobalCols
+              markMe
+              compareSel={compareSel}
+              onToggleCompare={toggleCompare}
+            />
           )}
         </CardContent>
       </Card>
+
+      {/* Clasificación de la FASE seleccionada (solo si no es la general) */}
+      {phase !== "general" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Clasificación
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                {RANKING_PHASE_LABELS[phase]}
+              </span>
+            </CardTitle>
+            <CardDescription>
+              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}):
+              ROI, beneficio, % de acierto y apuestas de esa fase.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {users === null ? (
+              <RankingSkeleton />
+            ) : users.length === 0 ? (
+              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                Aún no hay usuarios registrados.
+              </div>
+            ) : (
+              <RankingTable
+                users={users}
+                statsByUid={phaseStatsByUid}
+                balanceByUid={balanceByUid}
+                cashByUid={cashByUid}
+                achievementsByUid={achievementsByUid}
+                appUser={appUser}
+                movements={movements}
+                nowMs={nowMs}
+                showMovement={false}
+                showGlobalCols={false}
+                markMe={false}
+                compareSel={compareSel}
+                onToggleCompare={toggleCompare}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/** Placeholder de carga de una tabla de clasificación. */
+function RankingSkeleton() {
+  return (
+    <div className="space-y-2 p-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Tabla de clasificación reutilizable. Se usa para la General (con Saldo/Caja y
+ * flechas de movimiento) y para la fase seleccionada (sin esas columnas ni
+ * flechas). Cada instancia gestiona su propio orden de columnas.
+ */
+function RankingTable({
+  users,
+  statsByUid,
+  balanceByUid,
+  cashByUid,
+  achievementsByUid,
+  appUser,
+  movements,
+  nowMs,
+  showMovement,
+  showGlobalCols,
+  markMe,
+  compareSel,
+  onToggleCompare,
+}: {
+  users: AppUser[];
+  statsByUid: Map<string, UserStats>;
+  balanceByUid: Map<string, number>;
+  cashByUid: Map<string, number>;
+  achievementsByUid: Map<string, { earned: number; total: number }>;
+  appUser: AppUser | null;
+  movements: RankMovementMap;
+  nowMs: number;
+  showMovement: boolean;
+  showGlobalCols: boolean;
+  markMe: boolean;
+  compareSel: string[];
+  onToggleCompare: (uid: string) => void;
+}) {
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "roi",
+    dir: "desc",
+  });
+  const handleSort = (key: SortKey) =>
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "username" ? "asc" : "desc" }
+    );
+  const sortTh = (k: SortKey, label: string, thClass: string) => (
+    <th className={thClass}>
+      <button
+        type="button"
+        onClick={() => handleSort(k)}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
+          sort.key === k ? "text-foreground" : ""
+        }`}
+        aria-label={`Ordenar por ${label}`}
+      >
+        {label}
+        {sort.key === k ? (
+          sort.dir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </button>
+    </th>
+  );
+
+  const maxAbsRoi = useMemo(() => {
+    let m = 0;
+    for (const u of users) {
+      const r = Math.abs(statsByUid.get(u.uid)?.roi ?? 0);
+      if (r > m) m = r;
+    }
+    return m || 1;
+  }, [users, statsByUid]);
+
+  const lastPlaceUid = useMemo(() => {
+    if (users.length < 2) return null;
+    let worstUid: string | null = null;
+    let worstRoi = Infinity;
+    let worstProfit = Infinity;
+    for (const u of users) {
+      const st = statsByUid.get(u.uid);
+      const roi = st?.roi ?? 0;
+      const profit = st?.totalProfit ?? 0;
+      if (roi < worstRoi || (roi === worstRoi && profit < worstProfit)) {
+        worstRoi = roi;
+        worstProfit = profit;
+        worstUid = u.uid;
+      }
+    }
+    return worstUid;
+  }, [users, statsByUid]);
+
+  const rankedUsers = useMemo(() => {
+    const valueOf = (u: AppUser): number | string => {
+      const s = statsByUid.get(u.uid);
+      switch (sort.key) {
+        case "roi":
+          return s?.roi ?? 0;
+        case "profit":
+          return s?.totalProfit ?? 0;
+        case "balance":
+          return balanceByUid.get(u.uid) ?? 0;
+        case "cash":
+          return cashByUid.get(u.uid) ?? 0;
+        case "hitRate":
+          return s?.hitRate ?? 0;
+        case "betsCount":
+          return s?.betsCount ?? 0;
+        case "username":
+          return u.username.toLowerCase();
+      }
+    };
+    return [...users].sort((a, b) => {
+      const va = valueOf(a);
+      const vb = valueOf(b);
+      let cmp =
+        typeof va === "string" && typeof vb === "string"
+          ? va.localeCompare(vb, "es")
+          : (va as number) - (vb as number);
+      cmp = sort.dir === "asc" ? cmp : -cmp;
+      if (cmp !== 0) return cmp;
+      return (
+        (statsByUid.get(b.uid)?.totalProfit ?? 0) -
+        (statsByUid.get(a.uid)?.totalProfit ?? 0)
+      );
+    });
+  }, [users, statsByUid, balanceByUid, cashByUid, sort]);
+
+  return (
+    <div className="overflow-x-auto">
+      <table
+        className={`w-full text-sm ${
+          showGlobalCols ? "min-w-[640px]" : "min-w-[520px]"
+        }`}
+      >
+        <thead className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground [&_th]:whitespace-nowrap">
+          <tr>
+            <th className="px-3 py-3 w-20">#</th>
+            {sortTh("username", "Usuario", "px-2 py-3")}
+            {sortTh("roi", "ROI", "px-2 py-3 text-right")}
+            {sortTh("profit", "Beneficio", "px-2 py-3 text-right")}
+            {showGlobalCols && sortTh("balance", "Saldo", "px-2 py-3 text-right")}
+            {showGlobalCols && sortTh("cash", "Caja", "px-2 py-3 text-right")}
+            {sortTh("hitRate", "% Acierto", "px-2 py-3 text-right")}
+            {sortTh("betsCount", "Apuestas", "px-4 py-3 text-right")}
+          </tr>
+        </thead>
+        <tbody className="divide-y [&_td]:whitespace-nowrap">
+          {rankedUsers.map((u, idx) => {
+            const rank = idx + 1;
+            const s = statsByUid.get(u.uid);
+            const roi = s?.roi ?? 0;
+            const profit = s?.totalProfit ?? 0;
+            const hitRate = s?.hitRate ?? 0;
+            const balance = balanceByUid.get(u.uid) ?? 0;
+            const cash = cashByUid.get(u.uid) ?? 0;
+            const isMe = appUser?.uid === u.uid;
+            const ach = achievementsByUid.get(u.uid);
+            const isLast = u.uid === lastPlaceUid;
+            return (
+              <tr
+                key={u.uid}
+                id={markMe && isMe ? "ranking-me" : undefined}
+                className={`transition-colors ${
+                  isMe ? "bg-primary/10 hover:bg-primary/20" : podiumRow(rank)
+                }`}
+              >
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-1.5 text-base font-semibold">
+                    <span>{medal(rank)}</span>
+                    {showMovement && (
+                      <RankMovementIndicator
+                        entry={movements[u.uid]}
+                        nowMs={nowMs}
+                      />
+                    )}
+                  </div>
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={ROUTES.profile(u.uid)}
+                      className="flex min-w-0 flex-1 items-center gap-3 hover:underline"
+                    >
+                      <Avatar className={`h-8 w-8 ${podiumRing(rank)}`}>
+                        {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
+                        <AvatarFallback>{initials(u.username)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-medium">
+                            {u.username}
+                          </span>
+                          {isMe && (
+                            <Star
+                              className="h-4 w-4 shrink-0 fill-primary text-primary"
+                              aria-label="Eres tú"
+                            />
+                          )}
+                          {isLast && (
+                            <span
+                              className="shrink-0 text-xl leading-none"
+                              role="img"
+                              aria-label="Farolillo rojo: último de la clasificación"
+                              title="Farolillo rojo: último de la clasificación"
+                            >
+                              🤡
+                            </span>
+                          )}
+                        </div>
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="truncate">@{u.username}</span>
+                          {ach && ach.earned > 0 && (
+                            <span
+                              className="shrink-0"
+                              title={`${ach.earned} de ${ach.total} logros`}
+                            >
+                              🏅 {ach.earned}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => onToggleCompare(u.uid)}
+                      aria-label={`Comparar a ${u.username}`}
+                      title="Marcar para comparar"
+                      className={`shrink-0 rounded-md border p-1.5 transition-colors ${
+                        compareSel.includes(u.uid)
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent/40"
+                      }`}
+                    >
+                      <Swords className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`font-mono font-bold tabular-nums ${profitClass(
+                        roi
+                      )}`}
+                    >
+                      {roi > 0 ? "+" : ""}
+                      {formatPercent(roi)}
+                    </span>
+                    <span className="block h-1 w-16 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (Math.abs(roi) / maxAbsRoi) * 100
+                          )}%`,
+                          marginLeft: roi < 0 ? "auto" : undefined,
+                          backgroundColor:
+                            roi >= 0
+                              ? "hsl(var(--profit))"
+                              : "hsl(var(--loss))",
+                        }}
+                      />
+                    </span>
+                  </div>
+                </td>
+                <td
+                  className={`px-2 py-3 text-right font-mono ${profitClass(
+                    profit
+                  )}`}
+                >
+                  {profit > 0 ? "+" : ""}
+                  {formatCurrency(profit)}
+                </td>
+                {showGlobalCols && (
+                  <td className="px-2 py-3 text-right font-mono">
+                    {formatCurrency(balance)}
+                  </td>
+                )}
+                {showGlobalCols && (
+                  <td
+                    className={`px-2 py-3 text-right font-mono ${profitClass(
+                      cash
+                    )}`}
+                    title="Retirado − ingresado (positivo = te has llevado más)"
+                  >
+                    {cash > 0 ? "+" : ""}
+                    {formatCurrency(cash)}
+                  </td>
+                )}
+                <td className="px-2 py-3 text-right font-mono text-muted-foreground">
+                  {formatPercent(hitRate)}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                  {s?.betsCount ?? 0}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
