@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Award,
+  ChevronDown,
   Crown,
   TrendingUp,
   TrendingDown,
@@ -123,8 +124,8 @@ interface PodiumEntry {
 
 /**
  * Tarjeta de podio reutilizable (sirve tanto para records de apuestas como
- * para rankings de jugadores y partidos). Muestra hasta 3 entradas con su
- * medalla y resalta el 1.º.
+ * para rankings de jugadores y partidos). Muestra por defecto el top-3 y, si
+ * hay más entradas, un botón para desplegar el resto (hasta `PODIUM_LIMIT`).
  */
 function PodiumCard({
   title,
@@ -132,13 +133,19 @@ function PodiumCard({
   accent,
   entries,
   emptyText,
+  collapsedCount = 3,
 }: {
   title: string;
   icon: LucideIcon;
   accent?: string;
   entries: PodiumEntry[];
   emptyText?: string;
+  /** Nº de entradas visibles antes de desplegar (top-3 por defecto). */
+  collapsedCount?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = entries.length > collapsedCount;
+  const visible = expanded ? entries : entries.slice(0, collapsedCount);
   return (
     <Card className="min-w-0 transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
@@ -160,7 +167,7 @@ function PodiumCard({
             {emptyText ?? "Sin datos todavía."}
           </p>
         ) : (
-          entries.map((e, i) => {
+          visible.map((e, i) => {
             const row = (
               <div className="flex w-full items-start gap-2.5 px-2 py-1.5 text-left">
                 <span className="mt-0.5 w-6 shrink-0 text-center text-base leading-none">
@@ -214,6 +221,21 @@ function PodiumCard({
               </div>
             );
           })
+        )}
+        {canExpand && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+          >
+            {expanded ? "Ver menos" : `Ver top ${entries.length}`}
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                expanded && "rotate-180"
+              )}
+            />
+          </button>
         )}
       </CardContent>
     </Card>
@@ -353,6 +375,14 @@ function worstLossStreak(bets: Bet[]): number {
  *  (evita que alguien con 1 sola apuesta ganada salga con 100%). */
 const MIN_DECIDED_FOR_HITRATE = 5;
 
+/** Nº de entradas que guarda cada podio. Se muestran 3 y el resto se despliega
+ *  con el botón "Ver top N" de cada tarjeta. */
+const PODIUM_LIMIT = 10;
+
+/** Cuántos jugadores se listan en el desglose por partido (dentro de cada
+ *  record de partido). Se deja corto para no saturar la tarjeta. */
+const MATCH_BREAKDOWN_LIMIT = 3;
+
 // ── Página ───────────────────────────────────────────────────────────────
 
 export default function HallOfFamePage() {
@@ -426,7 +456,7 @@ export default function HallOfFamePage() {
         }))
         .filter((p) => p.deposits > 0 || p.withdrawals > 0)
         .sort((a, b) => b.netWithdrawn - a.netWithdrawn)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [groupMembers, cashByUid]
   );
 
@@ -502,17 +532,17 @@ export default function HallOfFamePage() {
       const topWinners = players
         .filter((p) => p.profit > 0)
         .sort((a, b) => b.profit - a.profit)
-        .slice(0, 3);
+        .slice(0, MATCH_BREAKDOWN_LIMIT);
       const topLosers = players
         .filter((p) => p.profit < 0)
         .sort((a, b) => a.profit - b.profit)
-        .slice(0, 3);
+        .slice(0, MATCH_BREAKDOWN_LIMIT);
       // Top-3 por dinero jugado (stake) en este partido.
       const topStakers = [...v.stakeByUser.entries()]
         .map(([uid, s]) => ({ uid, stake: round2(s) }))
         .filter((p) => p.stake > 0)
         .sort((a, b) => b.stake - a.stake)
-        .slice(0, 3);
+        .slice(0, MATCH_BREAKDOWN_LIMIT);
       return {
         id,
         label: labelOf(id),
@@ -529,16 +559,16 @@ export default function HallOfFamePage() {
       };
     });
     return {
-      mostStaked: [...list].sort((a, b) => b.stake - a.stake).slice(0, 3),
-      mostBets: [...list].sort((a, b) => b.count - a.count).slice(0, 3),
+      mostStaked: [...list].sort((a, b) => b.stake - a.stake).slice(0, PODIUM_LIMIT),
+      mostBets: [...list].sort((a, b) => b.count - a.count).slice(0, PODIUM_LIMIT),
       mostWon: [...list]
         .filter((m) => m.profit > 0)
         .sort((a, b) => b.profit - a.profit)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
       mostLost: [...list]
         .filter((m) => m.profit < 0)
         .sort((a, b) => a.profit - b.profit)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     };
   }, [bets, matchById]);
 
@@ -576,7 +606,7 @@ export default function HallOfFamePage() {
     }
     return [...byDay.values()]
       .sort((a, b) => b.stake - a.stake)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
   }, [bets]);
 
   // Mejor y peor JORNADA del grupo: día con más beneficio / más pérdida de todo
@@ -608,11 +638,11 @@ export default function HallOfFamePage() {
       best: list
         .filter((d) => d.profit > 0)
         .sort((a, b) => b.profit - a.profit)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
       worst: list
         .filter((d) => d.profit < 0)
         .sort((a, b) => a.profit - b.profit)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     };
   }, [bets]);
 
@@ -631,7 +661,7 @@ export default function HallOfFamePage() {
       .map(([uid, days]) => ({ user: usersById[uid] ?? null, days: days.size }))
       .filter((x): x is { user: AppUser; days: number } => Boolean(x.user))
       .sort((a, b) => b.days - a.days)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
   }, [bets, usersById]);
 
   // Top-3 de APUESTAS individuales más madrugadoras y más nocturnas.
@@ -661,11 +691,11 @@ export default function HallOfFamePage() {
       earliest: timed
         .filter((t) => inMorning(t.minOfDay))
         .sort((a, b) => a.minOfDay - b.minOfDay)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
       latest: timed
         .filter((t) => inNight(t.minOfDay))
         .sort((a, b) => nightProg(b.minOfDay) - nightProg(a.minOfDay))
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     };
   }, [bets, usersById]);
 
@@ -676,56 +706,56 @@ export default function HallOfFamePage() {
       b.bookmakerLabel
     )} · cuota ${b.odds.toFixed(2)}`;
 
-  // ── Records por apuesta (Top 3) ──
+  // ── Records por apuesta (top desplegable) ──
   const records = useMemo(() => {
     const settled = bets.filter((b) => b.status !== "pending");
 
     const topProfit = [...settled]
       .filter((b) => (b.profit ?? 0) > 0)
       .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     const topLoss = [...settled]
       .filter((b) => (b.profit ?? 0) < 0)
       .sort((a, b) => (a.profit ?? 0) - (b.profit ?? 0))
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     // "Acertada" = ganada DE VERDAD (status won). Un cashout NO cuenta como
     // acierto aunque deje beneficio: cerraste antes y no se cumplió la cuota.
     const topOdds = [...settled]
       .filter((b) => b.status === "won")
       .sort((a, b) => b.odds - a.odds)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     // "Mayor dinero apostado": dinero real, así que fuera freebets. Cuenta
     // incluso si la apuesta sigue pendiente (el dinero ya está jugado).
     const topStake = [...bets]
       .filter((b) => !b.isFreebet)
       .sort((a, b) => b.stake - a.stake)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     const topCombo = [...settled]
       .filter((b) => b.isCombo && b.status === "won")
       .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     // Freebet más rentable: la apuesta gratis que más beneficio dejó.
     const topFreebet = [...settled]
       .filter((b) => b.isFreebet && b.status === "won")
       .sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     // La más segura ganada: cuota más BAJA acertada (status won de verdad).
     const safestWon = [...settled]
       .filter((b) => b.status === "won")
       .sort((a, b) => a.odds - b.odds)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     // El bombazo fallado: cuota más ALTA perdida (status lost).
     const biggestFail = [...settled]
       .filter((b) => b.status === "lost")
       .sort((a, b) => b.odds - a.odds)
-      .slice(0, 3);
+      .slice(0, PODIUM_LIMIT);
 
     return {
       topProfit,
@@ -773,20 +803,20 @@ export default function HallOfFamePage() {
       .filter((p) => p.betsCount > 0);
   }, [groupMembers, bets]);
 
-  // ── Podios de jugadores (Top 3) ──
+  // ── Podios de jugadores (top desplegable) ──
   const mostBets = useMemo(
-    () => [...perPlayer].sort((a, b) => b.betsCount - a.betsCount).slice(0, 3),
+    () => [...perPlayer].sort((a, b) => b.betsCount - a.betsCount).slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const mostStaked = useMemo(
-    () => [...perPlayer].sort((a, b) => b.totalStaked - a.totalStaked).slice(0, 3),
+    () => [...perPlayer].sort((a, b) => b.totalStaked - a.totalStaked).slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const mostProfit = useMemo(
     () =>
       [...perPlayer]
         .sort((a, b) => b.stats.totalProfit - a.stats.totalProfit)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const bestStreak = useMemo(
@@ -794,7 +824,7 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.stats.bestStreak > 0)
         .sort((a, b) => b.stats.bestStreak - a.stats.bestStreak)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const bestHitRate = useMemo(
@@ -804,7 +834,7 @@ export default function HallOfFamePage() {
           (p) => p.stats.betsWon + p.stats.betsLost >= MIN_DECIDED_FOR_HITRATE
         )
         .sort((a, b) => b.stats.hitRate - a.stats.hitRate)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const worstStreaks = useMemo(
@@ -812,7 +842,7 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.worstStreak > 0)
         .sort((a, b) => b.worstStreak - a.worstStreak)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const craziest = useMemo(
@@ -820,7 +850,7 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.stats.avgOdds > 0)
         .sort((a, b) => b.stats.avgOdds - a.stats.avgOdds)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const mostLost = useMemo(
@@ -828,7 +858,7 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.stats.betsLost > 0)
         .sort((a, b) => b.stats.betsLost - a.stats.betsLost)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
   const mostAchievements = useMemo(
@@ -836,7 +866,7 @@ export default function HallOfFamePage() {
       [...perPlayer]
         .filter((p) => p.achievements > 0)
         .sort((a, b) => b.achievements - a.achievements)
-        .slice(0, 3),
+        .slice(0, PODIUM_LIMIT),
     [perPlayer]
   );
 
