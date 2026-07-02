@@ -48,6 +48,8 @@ import { CashNetCard } from "@/components/bets/cash-net-card";
 import { PendingUploadsBanner } from "@/components/bets/pending-uploads-banner";
 import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
+import { MarketStatsCard } from "@/components/profile/market-stats-card";
+import { TeamStatsCard } from "@/components/profile/team-stats-card";
 import { LiveTvBanner } from "@/components/matches/live-tv-banner";
 import { CashMovementDialog } from "@/components/dashboard/cash-movement-dialog";
 import {
@@ -517,6 +519,21 @@ export default function DashboardPage() {
           />
         </div>
       </section>
+
+      {/* ─────── Tus estadísticas (por mercado y selección) ─────── */}
+      {bets.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Tus estadísticas</h2>
+            <p className="text-sm text-muted-foreground">
+              Tus mercados y las selecciones que más dinero te dan y te quitan
+              en este grupo.
+            </p>
+          </div>
+          <MarketStatsCard bets={bets} />
+          <TeamStatsCard bets={bets} matchById={resolvedMatchById} />
+        </section>
+      )}
 
       {/* ─────── Últimas apuestas ─────── */}
       <Card>
