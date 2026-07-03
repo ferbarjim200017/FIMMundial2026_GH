@@ -74,17 +74,19 @@ export function MatchFilter({
     <div className={cn("space-y-1", className)}>
       <label className="text-xs text-muted-foreground">Partido</label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 w-full">
+        {/* min-w-0 en el <span> del valor para que el texto largo trunque en vez
+            de empujar el chevron y salirse de la caja al elegir un partido. */}
+        <SelectTrigger className="h-9 w-full [&>span]:min-w-0">
           <SelectValue placeholder="Todos" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos los partidos</SelectItem>
           {options.map((m) => (
             <SelectItem key={m.id} value={m.id}>
-              <span className="flex items-center gap-1">
+              <span className="flex min-w-0 items-center gap-1">
                 <TeamFlag name={m.homeLabel} />
                 <TeamFlag name={m.awayLabel} />
-                <span>{matchOptionLabel(m)}</span>
+                <span className="truncate">{matchOptionLabel(m)}</span>
               </span>
             </SelectItem>
           ))}
