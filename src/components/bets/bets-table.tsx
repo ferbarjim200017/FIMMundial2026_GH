@@ -16,6 +16,7 @@ import { BetStatusBadge } from "@/components/bets/bet-status-badge";
 import { BetMatchFlags } from "@/components/bets/bet-match-flags";
 import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
+import { BulkEditDialog } from "@/components/bets/bulk-edit-dialog";
 import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
 import { queueSettle } from "@/features/bets/pending-settles";
 import { betDisplayLabel } from "@/features/bets/bets.utils";
@@ -55,20 +56,30 @@ export function BetsTable({
 }: Props) {
   const { openBet } = useBetDetail();
   const [settling, setSettling] = useState<Bet | null>(null);
-  // Selección múltiple para liquidar en bloque.
+  // Selección múltiple para liquidar o editar en bloque.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Diálogo de edición en bloque de las apuestas seleccionadas.
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
 
   function canManage(bet: Bet): boolean {
     return isAdmin || bet.userId === ownerUid;
   }
 
-  // Solo se pueden seleccionar las que el usuario puede gestionar y están
-  // pendientes (la liquidación en bloque es ganada/perdida/nula).
+  // Se pueden seleccionar todas las que el usuario puede gestionar (cualquier
+  // estado): la edición en bloque vale para pendientes y liquidadas. La
+  // liquidación en bloque solo aplica al subconjunto pendiente.
   const selectableIds = bets
-    .filter((b) => canManage(b) && b.status === "pending" && !isDraft(b))
+    .filter((b) => canManage(b) && !isDraft(b))
     .map((b) => b.id);
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  // Apuestas seleccionadas presentes en la vista + subconjunto pendiente (el
+  // único que se puede liquidar en bloque).
+  const selectedBets = bets.filter((b) => selected.has(b.id));
+  const pendingSelectedIds = selectedBets
+    .filter((b) => b.status === "pending")
+    .map((b) => b.id);
 
   function toggleOne(id: string) {
     setSelected((prev) => {
@@ -88,7 +99,8 @@ export function BetsTable({
   }
 
   function handleBulk(status: "won" | "lost" | "void") {
-    const ids = [...selected];
+    // Solo las pendientes: liquidar una ya liquidada no tiene sentido.
+    const ids = pendingSelectedIds;
     if (ids.length === 0) return;
     const label = { won: "ganadas", lost: "perdidas", void: "nulas" }[status];
     if (
@@ -168,25 +180,38 @@ export function BetsTable({
           <div className="ml-auto flex flex-wrap gap-2">
             <Button
               size="sm"
-              onClick={() => handleBulk("won")}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              Ganadas
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => handleBulk("lost")}
-            >
-              Perdidas
-            </Button>
-            <Button
-              size="sm"
               variant="outline"
-              onClick={() => handleBulk("void")}
+              onClick={() => setBulkEditOpen(true)}
+              className="gap-1.5"
             >
-              Nulas
+              <Pencil className="h-4 w-4" />
+              Editar
             </Button>
+            {pendingSelectedIds.length > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => handleBulk("won")}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  Ganadas
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleBulk("lost")}
+                >
+                  Perdidas
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulk("void")}
+                >
+                  Nulas
+                </Button>
+              </>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -238,7 +263,7 @@ export function BetsTable({
                   // En modo selección (ya hay algo marcado) un clic en cualquier
                   // parte de la fila la marca/desmarca, si es seleccionable. Si no
                   // hay nada marcado, se comporta como antes: abre el detalle.
-                  if (selected.size > 0 && canManage(b) && b.status === "pending") {
+                  if (selected.size > 0 && canManage(b) && !isDraft(b)) {
                     toggleOne(b.id);
                   } else {
                     openBet(b);
@@ -246,7 +271,7 @@ export function BetsTable({
                 }}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  {canManage(b) && b.status === "pending" && !isDraft(b) && (
+                  {canManage(b) && !isDraft(b) && (
                     <input
                       type="checkbox"
                       checked={selected.has(b.id)}
@@ -381,6 +406,15 @@ export function BetsTable({
           bet={settling}
           open={!!settling}
           onOpenChange={(o) => !o && setSettling(null)}
+        />
+      )}
+
+      {bulkEditOpen && selectedBets.length > 0 && (
+        <BulkEditDialog
+          bets={selectedBets}
+          open={bulkEditOpen}
+          onOpenChange={setBulkEditOpen}
+          onDone={() => setSelected(new Set())}
         />
       )}
     </>
