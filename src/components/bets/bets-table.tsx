@@ -65,21 +65,22 @@ export function BetsTable({
     return isAdmin || bet.userId === ownerUid;
   }
 
-  // Se pueden seleccionar todas las que el usuario puede gestionar (cualquier
-  // estado): la edición en bloque vale para pendientes y liquidadas. La
-  // liquidación en bloque solo aplica al subconjunto pendiente.
+  // Solo se pueden seleccionar las apuestas que el usuario puede gestionar y
+  // que siguen PENDIENTES: una vez finalizada (ganada/perdida/nula/cashout) ya
+  // no se puede marcar. Las acciones en bloque (liquidar y editar) aplican
+  // solo a pendientes.
   const selectableIds = bets
-    .filter((b) => canManage(b) && !isDraft(b))
+    .filter((b) => canManage(b) && !isDraft(b) && b.status === "pending")
     .map((b) => b.id);
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
 
-  // Apuestas seleccionadas presentes en la vista + subconjunto pendiente (el
-  // único que se puede liquidar en bloque).
-  const selectedBets = bets.filter((b) => selected.has(b.id));
-  const pendingSelectedIds = selectedBets
-    .filter((b) => b.status === "pending")
-    .map((b) => b.id);
+  // Apuestas seleccionadas y aún pendientes (las finalizadas ya no cuentan
+  // para las acciones en bloque aunque quedaran marcadas antes).
+  const selectedBets = bets.filter(
+    (b) => selected.has(b.id) && b.status === "pending"
+  );
+  const pendingSelectedIds = selectedBets.map((b) => b.id);
 
   function toggleOne(id: string) {
     setSelected((prev) => {
@@ -263,7 +264,12 @@ export function BetsTable({
                   // En modo selección (ya hay algo marcado) un clic en cualquier
                   // parte de la fila la marca/desmarca, si es seleccionable. Si no
                   // hay nada marcado, se comporta como antes: abre el detalle.
-                  if (selected.size > 0 && canManage(b) && !isDraft(b)) {
+                  if (
+                    selected.size > 0 &&
+                    canManage(b) &&
+                    !isDraft(b) &&
+                    b.status === "pending"
+                  ) {
                     toggleOne(b.id);
                   } else {
                     openBet(b);
@@ -271,7 +277,7 @@ export function BetsTable({
                 }}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  {canManage(b) && !isDraft(b) && (
+                  {canManage(b) && !isDraft(b) && b.status === "pending" && (
                     <input
                       type="checkbox"
                       checked={selected.has(b.id)}
