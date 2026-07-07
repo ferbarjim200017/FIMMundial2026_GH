@@ -286,6 +286,7 @@ function CompareContent() {
       initials.winamax +
       (initials.betfair ?? 0) +
       (initials.luckia ?? 0) +
+      (initials.williamhill ?? 0) +
       initials.other +
       stats.totalProfit;
     return { stats, balance };
@@ -303,6 +304,7 @@ function CompareContent() {
       initials.winamax +
       (initials.betfair ?? 0) +
       (initials.luckia ?? 0) +
+      (initials.williamhill ?? 0) +
       initials.other +
       stats.totalProfit;
     return { stats, balance };

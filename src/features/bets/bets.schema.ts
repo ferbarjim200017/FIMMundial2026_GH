@@ -5,6 +5,7 @@ export const BOOKMAKERS = [
   "winamax",
   "betfair",
   "luckia",
+  "williamhill",
   "other",
 ] as const;
 
@@ -40,6 +41,7 @@ export const BOOKMAKER_OPTIONS = [
   { value: "winamax", label: "Winamax" },
   { value: "betfair", label: "Betfair" },
   { value: "luckia", label: "Luckia" },
+  { value: "williamhill", label: "William Hill" },
   { value: "other", label: "Otra" },
 ] as const;
 

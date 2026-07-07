@@ -325,6 +325,7 @@ export default function RankingPage() {
         initial.winamax +
         (initial.betfair ?? 0) +
         (initial.luckia ?? 0) +
+        (initial.williamhill ?? 0) +
         initial.other;
       const profit = generalStatsByUid.get(u.uid)?.totalProfit ?? 0;
       const netCash = computeCashSummary(u, activeGroup?.id).net;

@@ -217,16 +217,16 @@ export default function DashboardPage() {
 
   // Casas opcionales (Betfair/Luckia): se muestran si tienen actividad
   // (apuestas, dinero o saldo inicial) o si el usuario las ha añadido a mano.
-  const OPTIONAL_HOUSES = ["betfair", "luckia"] as const;
+  const OPTIONAL_HOUSES = ["betfair", "luckia", "williamhill"] as const;
   const shownHouses = appUser.shownBookmakers ?? [];
   const userHidden = appUser.hiddenBookmakers ?? [];
-  const houseHasActivity = (b: "betfair" | "luckia") =>
+  const houseHasActivity = (b: "betfair" | "luckia" | "williamhill") =>
     summary[b].betsCount > 0 ||
     summary[b].netCash !== 0 ||
     summary[b].initial !== 0;
   // Ocultada a mano (hiddenBookmakers) tiene prioridad: no se muestra aunque
   // tenga actividad (las apuestas siguen contando en las estadísticas).
-  const showHouse = (b: "betfair" | "luckia") =>
+  const showHouse = (b: "betfair" | "luckia" | "williamhill") =>
     !userHidden.includes(b) && (houseHasActivity(b) || shownHouses.includes(b));
   const hiddenHouses = OPTIONAL_HOUSES.filter((b) => !showHouse(b));
 
@@ -413,6 +413,21 @@ export default function DashboardPage() {
               betsCount={summary.luckia.betsCount}
               onHide={() =>
                 hideBookmaker(appUser.uid, "luckia").catch(console.error)
+              }
+            />
+          )}
+          {showHouse("williamhill") && (
+            <BookmakerCard
+              uid={appUser.uid}
+              groupId={activeGroup?.id ?? null}
+              bookmaker="williamhill"
+              initial={summary.williamhill.initial}
+              profit={summary.williamhill.profit}
+              current={summary.williamhill.current}
+              pendingStake={summary.williamhill.pendingStake}
+              betsCount={summary.williamhill.betsCount}
+              onHide={() =>
+                hideBookmaker(appUser.uid, "williamhill").catch(console.error)
               }
             />
           )}
@@ -747,7 +762,7 @@ function BookmakerCard({
 }: {
   uid: string;
   groupId: string | null;
-  bookmaker: "bet365" | "winamax" | "betfair" | "luckia";
+  bookmaker: "bet365" | "winamax" | "betfair" | "luckia" | "williamhill";
   initial: number;
   profit: number;
   current: number;
@@ -813,6 +828,8 @@ function BookmakerCard({
       ? "border-2 border-red-500/70"
       : bookmaker === "betfair"
       ? "border-2 border-yellow-500/80"
+      : bookmaker === "williamhill"
+      ? "border-2 border-blue-600/80"
       : "border-2 border-orange-500/80";
 
   return (

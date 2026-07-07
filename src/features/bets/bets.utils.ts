@@ -350,6 +350,7 @@ export function bookmakerLabel(
   if (bookmaker === "winamax") return "Winamax";
   if (bookmaker === "betfair") return "Betfair";
   if (bookmaker === "luckia") return "Luckia";
+  if (bookmaker === "williamhill") return "William Hill";
   return custom?.trim() || "Otra";
 }
 
@@ -370,6 +371,7 @@ const KEYS: BookmakerKey[] = [
   "winamax",
   "betfair",
   "luckia",
+  "williamhill",
   "other",
 ];
 
@@ -383,6 +385,7 @@ export function netCashByBookmaker(
     winamax: 0,
     betfair: 0,
     luckia: 0,
+    williamhill: 0,
     other: 0,
   };
   for (const m of user.cashMovements ?? []) {
@@ -460,6 +463,7 @@ export function computeRankingStanding(
     initial.winamax +
     (initial.betfair ?? 0) +
     (initial.luckia ?? 0) +
+    (initial.williamhill ?? 0) +
     initial.other +
     stats.totalProfit +
     computeCashSummary(user, groupId).net;

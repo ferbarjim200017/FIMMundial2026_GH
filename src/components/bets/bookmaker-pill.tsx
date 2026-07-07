@@ -15,7 +15,7 @@ interface Props {
 /**
  * Etiqueta con borde de color por casa de apuestas. Mismo código en
  * cualquier punto de la web — verde para Bet365, rojo para Winamax,
- * azul para "Otra".
+ * azul para William Hill, celeste para "Otra".
  */
 export function BookmakerPill({
   bookmaker,
@@ -32,6 +32,8 @@ export function BookmakerPill({
       ? "border-yellow-500/80 text-yellow-600 dark:text-yellow-400"
       : bookmaker === "luckia"
       ? "border-orange-500/80 text-orange-600 dark:text-orange-400"
+      : bookmaker === "williamhill"
+      ? "border-blue-600/80 text-blue-700 dark:text-blue-400"
       : "border-sky-500/70 text-sky-600 dark:text-sky-400";
 
   return (

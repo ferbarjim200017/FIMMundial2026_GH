@@ -185,6 +185,7 @@ export default function ProfilePage() {
       initials.winamax +
       (initials.betfair ?? 0) +
       (initials.luckia ?? 0) +
+      (initials.williamhill ?? 0) +
       initials.other;
     return {
       initial,
