@@ -390,12 +390,14 @@ function worstLossStreak(bets: Bet[]): number {
  *  (evita que alguien con 1 sola apuesta ganada salga con 100%). */
 const MIN_DECIDED_FOR_HITRATE = 5;
 
-/** Fases (cerradas o en juego) para las que se muestra un campeón propio, en
- *  orden. Cada una calcula su beneficio con SOLO las apuestas de esa fase. */
-const CHAMPION_PHASES = ["grupos", "previa", "final"] as const;
+/** Nº mínimo de apuestas para entrar en el podio de ROI (evita ROIs enormes
+ *  con una sola apuesta). */
+const MIN_BETS_FOR_ROI = 3;
 
-/** Acento visual de cada banner de campeón, por fase. */
-const PHASE_ACCENT: Record<(typeof CHAMPION_PHASES)[number], string> = {
+/** Acento visual del banner del rey, según la fase seleccionada. */
+const PHASE_ACCENT: Record<RankingPhase, string> = {
+  general:
+    "border-yellow-500/40 bg-gradient-to-br from-yellow-500/15 via-amber-500/5 to-transparent",
   grupos:
     "border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-transparent",
   previa:
@@ -471,35 +473,40 @@ export default function HallOfFamePage() {
     return map;
   }, [groupMembers]);
 
-  // ── Campeón por FASE ──
-  // Para cada fase (grupos, segunda fase, final) calculamos su rey: el jugador
-  // con más beneficio en ESA fase, con el beneficio/ROI/acierto de esa fase
-  // (no el global). Independiente del selector de fase de arriba.
-  const championsByPhase = useMemo(() => {
-    return CHAMPION_PHASES.map((key) => {
-      const pBets = groupBets.filter((b) =>
-        betInRankingPhase(b, key, stageByMatchId)
-      );
-      let champion:
-        | {
-            user: AppUser;
-            count: number;
-            stats: ReturnType<typeof computeUserStats>;
-          }
-        | null = null;
-      for (const user of groupMembers) {
-        const ub = pBets.filter((b) => b.userId === user.uid);
-        if (ub.length === 0) continue;
-        const stats = computeUserStats(ub);
-        if (!champion || stats.totalProfit > champion.stats.totalProfit) {
-          champion = { user, count: ub.length, stats };
-        }
-      }
-      return { key, label: RANKING_PHASE_LABELS[key], champion };
-    });
-  }, [groupBets, groupMembers, stageByMatchId]);
-
-  const hasAnyChampion = championsByPhase.some((p) => p.champion);
+  // ── Campeones de la FASE SELECCIONADA ──
+  // El rey (más beneficio) y los podios se calculan con las apuestas de la fase
+  // elegida arriba (`bets` ya viene filtrado por fase). Si eliges "Segunda
+  // fase", sale quien más ha ganado SOLO en esa fase, y su podio top 1/2/3.
+  const phaseLeaders = useMemo(() => {
+    const players = groupMembers
+      .map((user) => {
+        const ub = bets.filter((b) => b.userId === user.uid);
+        return { user, count: ub.length, stats: computeUserStats(ub) };
+      })
+      .filter((p) => p.count > 0);
+    const byProfit = [...players].sort(
+      (a, b) => b.stats.totalProfit - a.stats.totalProfit
+    );
+    const byRoi = [...players]
+      .filter((p) => p.count >= MIN_BETS_FOR_ROI)
+      .sort((a, b) => b.stats.roi - a.stats.roi);
+    const byHitRate = [...players]
+      .filter(
+        (p) => p.stats.betsWon + p.stats.betsLost >= MIN_DECIDED_FOR_HITRATE
+      )
+      .sort((a, b) => b.stats.hitRate - a.stats.hitRate);
+    return {
+      champion: byProfit[0] ?? null,
+      byProfit: byProfit.slice(0, PODIUM_LIMIT),
+      byRoi: byRoi.slice(0, PODIUM_LIMIT),
+      byHitRate: byHitRate.slice(0, PODIUM_LIMIT),
+    };
+  }, [groupMembers, bets]);
+  // Const local para que TS lo estreche a no-nulo dentro del `&&` de la UI.
+  const phaseChampion = phaseLeaders.champion;
+  // Etiqueta de la fase seleccionada (para títulos de la sección de campeones).
+  const phaseLabel =
+    phase === "general" ? "General" : RANKING_PHASE_LABELS[phase];
 
   // Caja por jugador: ingresos, retiradas y NETO RETIRADO (retirado − ingresado).
   // Positivo = se ha llevado más dinero del que metió (bueno, es su dinero).
@@ -1035,59 +1042,95 @@ export default function HallOfFamePage() {
         </CardContent>
       </Card>
 
-      {/* ─── Campeón por fase (beneficio de CADA fase, no el global) ─── */}
-      {hasAnyChampion && (
+      {/* ─── Campeones de la fase seleccionada (rey + podios top 1/2/3) ─── */}
+      {phaseChampion && (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             <Trophy className="h-4 w-4 text-yellow-500" />
-            Campeones por fase
+            Campeones · {phaseLabel}
           </h2>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {championsByPhase.map(
-              ({ key, label, champion }) =>
-                champion && (
-                  <Card
-                    key={key}
-                    className={cn("overflow-hidden", PHASE_ACCENT[key])}
-                  >
-                    <CardContent className="flex items-center gap-3 p-4">
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/20 text-xl">
-                        👑
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Rey · {label}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            router.push(ROUTES.profile(champion.user.uid))
-                          }
-                          className="max-w-full truncate text-left text-lg font-bold hover:underline"
-                        >
-                          {champion.user.username}
-                        </button>
-                        <p className="text-[11px] text-muted-foreground">
-                          {champion.count} apuesta
-                          {champion.count === 1 ? "" : "s"} · ROI{" "}
-                          {formatPercent(champion.stats.roi)} ·{" "}
-                          {formatPercent(champion.stats.hitRate)} acierto
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          "shrink-0 font-mono text-lg font-bold",
-                          profitClass(champion.stats.totalProfit)
-                        )}
-                      >
-                        {champion.stats.totalProfit > 0 ? "+" : ""}
-                        {formatCurrency(champion.stats.totalProfit)}
-                      </span>
-                    </CardContent>
-                  </Card>
-                )
-            )}
+          {/* Rey de la fase */}
+          <Card className={cn("overflow-hidden", PHASE_ACCENT[phase])}>
+            <CardContent className="flex flex-wrap items-center gap-4 p-5">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/20 text-2xl">
+                👑
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Rey · {phaseLabel}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(ROUTES.profile(phaseChampion.user.uid))
+                  }
+                  className="max-w-full truncate text-left text-xl font-bold hover:underline"
+                >
+                  {phaseChampion.user.username}
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  {phaseChampion.count} apuesta
+                  {phaseChampion.count === 1 ? "" : "s"} · ROI{" "}
+                  {formatPercent(phaseChampion.stats.roi)} ·{" "}
+                  {formatPercent(phaseChampion.stats.hitRate)} acierto
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 font-mono text-2xl font-bold",
+                  profitClass(phaseChampion.stats.totalProfit)
+                )}
+              >
+                {phaseChampion.stats.totalProfit > 0 ? "+" : ""}
+                {formatCurrency(phaseChampion.stats.totalProfit)}
+              </span>
+            </CardContent>
+          </Card>
+
+          {/* Podios top 1/2/3 de la fase seleccionada (se despliegan a top N) */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <PodiumCard
+              title="Más beneficio"
+              icon={TrendingUp}
+              accent="text-emerald-500"
+              entries={phaseLeaders.byProfit.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.count} apuesta${p.count === 1 ? "" : "s"}`,
+                value: `${
+                  p.stats.totalProfit > 0 ? "+" : ""
+                }${formatCurrency(p.stats.totalProfit)}`,
+                valueClass: profitClass(p.stats.totalProfit),
+              }))}
+            />
+            <PodiumCard
+              title="Mejor ROI"
+              icon={Percent}
+              accent="text-sky-500"
+              entries={phaseLeaders.byRoi.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.count} apuesta${p.count === 1 ? "" : "s"}`,
+                value: formatPercent(p.stats.roi),
+                valueClass: profitClass(p.stats.roi),
+              }))}
+              emptyText={`Hacen falta ${MIN_BETS_FOR_ROI} apuestas.`}
+            />
+            <PodiumCard
+              title="Mejor % de acierto"
+              icon={Target}
+              accent="text-teal-500"
+              entries={phaseLeaders.byHitRate.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.stats.betsWon}/${
+                  p.stats.betsWon + p.stats.betsLost
+                } decididas`,
+                value: formatPercent(p.stats.hitRate),
+              }))}
+              emptyText={`Hacen falta ${MIN_DECIDED_FOR_HITRATE} apuestas decididas.`}
+            />
           </div>
         </section>
       )}
