@@ -25,9 +25,17 @@ import {
   CalendarCheck,
   Sunrise,
   Moon,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TeamFlag } from "@/components/matches/team-flag";
 import { useBetDetail } from "@/components/bets/bet-detail-dialog";
@@ -48,9 +56,16 @@ import {
   round2,
 } from "@/features/bets/bets.utils";
 import { computeAchievements } from "@/features/bets/achievements";
+import {
+  betInRankingPhase,
+  RANKING_PHASE_DESC,
+  RANKING_PHASE_LABELS,
+  RANKING_PHASES,
+  type RankingPhase,
+} from "@/features/matches/phases";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { cn, formatCurrency, formatPercent, initials, profitClass } from "@/lib/utils";
-import type { AppUser, Bet, Match } from "@/types/domain";
+import type { AppUser, Bet, Match, MatchStage } from "@/types/domain";
 
 // ── Helpers de presentación ──────────────────────────────────────────────
 
@@ -375,6 +390,10 @@ function worstLossStreak(bets: Bet[]): number {
  *  (evita que alguien con 1 sola apuesta ganada salga con 100%). */
 const MIN_DECIDED_FOR_HITRATE = 5;
 
+/** Nº mínimo de apuestas para entrar en el podio de ROI de la fase de grupos
+ *  (evita ROIs enormes con una sola apuesta). */
+const MIN_BETS_FOR_ROI = 3;
+
 /** Nº de entradas que guarda cada podio. Se muestran 3 y el resto se despliega
  *  con el botón "Ver top N" de cada tarjeta. */
 const PODIUM_LIMIT = 10;
@@ -393,6 +412,9 @@ export default function HallOfFamePage() {
   const router = useRouter();
   // Partido cuyo popup de apuestas está abierto (al clicar un record de partido).
   const [betsFor, setBetsFor] = useState<Match | null>(null);
+  // Fase por la que se filtran TODOS los records (General por defecto = todo el
+  // torneo). El palmarés de la fase de grupos es aparte y no depende de esto.
+  const [phase, setPhase] = useState<RankingPhase>("general");
 
   useEffect(
     () => subscribeToMatches(setMatches, () => setMatches([])),
@@ -410,19 +432,69 @@ export default function HallOfFamePage() {
     return subscribeToAllBets(setAllBets);
   }, []);
 
-  // Apuestas del grupo activo y de sus miembros.
-  const bets = useMemo(() => {
+  // Apuestas del grupo activo y de sus miembros (todas las fases).
+  const groupBets = useMemo(() => {
     if (!activeGroup) return [];
     return allBets.filter(
       (b) => betInGroup(b, activeGroup.id) && memberUids.has(b.userId)
     );
   }, [allBets, activeGroup, memberUids]);
 
+  // Etapa de cada partido, para clasificar cada apuesta por fase del torneo.
+  const stageByMatchId = useMemo(() => {
+    const map = new Map<string, MatchStage>();
+    for (const m of matches) map.set(m.id, m.stage);
+    return map;
+  }, [matches]);
+
+  // Apuestas de la fase seleccionada. El selector de fase filtra TODOS los
+  // records y podios de la página (en "general" son todas). El resto del código
+  // sigue usando `bets`, así que basta con acotarlo aquí.
+  const bets = useMemo(
+    () => groupBets.filter((b) => betInRankingPhase(b, phase, stageByMatchId)),
+    [groupBets, phase, stageByMatchId]
+  );
+
   const usersById = useMemo(() => {
     const map: Record<string, AppUser> = {};
     for (const u of groupMembers) map[u.uid] = u;
     return map;
   }, [groupMembers]);
+
+  // ── Palmarés de la FASE DE GRUPOS ──
+  // Campeones de la fase de grupos (ya cerrada): se calcula SIEMPRE sobre las
+  // apuestas de grupos, independientemente del selector de fase de arriba. Es un
+  // "palmarés" fijo de esa fase: rey del beneficio, mejor ROI y mejor % acierto.
+  const groupPhaseChampions = useMemo(() => {
+    const gBets = groupBets.filter((b) =>
+      betInRankingPhase(b, "grupos", stageByMatchId)
+    );
+    const players = groupMembers
+      .map((user) => {
+        const ub = gBets.filter((b) => b.userId === user.uid);
+        return { user, count: ub.length, stats: computeUserStats(ub) };
+      })
+      .filter((p) => p.count > 0);
+    const byProfit = [...players].sort(
+      (a, b) => b.stats.totalProfit - a.stats.totalProfit
+    );
+    const byRoi = [...players]
+      .filter((p) => p.count >= MIN_BETS_FOR_ROI)
+      .sort((a, b) => b.stats.roi - a.stats.roi);
+    const byHitRate = [...players]
+      .filter(
+        (p) => p.stats.betsWon + p.stats.betsLost >= MIN_DECIDED_FOR_HITRATE
+      )
+      .sort((a, b) => b.stats.hitRate - a.stats.hitRate);
+    return {
+      hasData: gBets.length > 0,
+      betsCount: gBets.length,
+      champion: byProfit[0] ?? null,
+      byProfit: byProfit.slice(0, PODIUM_LIMIT),
+      byRoi: byRoi.slice(0, PODIUM_LIMIT),
+      byHitRate: byHitRate.slice(0, PODIUM_LIMIT),
+    };
+  }, [groupBets, groupMembers, stageByMatchId]);
 
   // Caja por jugador: ingresos, retiradas y NETO RETIRADO (retirado − ingresado).
   // Positivo = se ha llevado más dinero del que metió (bueno, es su dinero).
@@ -899,6 +971,10 @@ export default function HallOfFamePage() {
                 <span className="font-medium text-foreground">
                   {activeGroup.name}
                 </span>{" "}
+                ·{" "}
+                {phase === "general"
+                  ? "todo el torneo"
+                  : RANKING_PHASE_LABELS[phase]}{" "}
                 · se actualiza solo
               </p>
             </div>
@@ -922,11 +998,141 @@ export default function HallOfFamePage() {
         </CardContent>
       </Card>
 
+      {/* ─── Selector de fase (filtra todos los records de abajo) ─── */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Trophy className="h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="text-sm font-semibold leading-tight">
+                Records por fase
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {RANKING_PHASE_DESC[phase]} Filtra todos los records de abajo.
+              </p>
+            </div>
+          </div>
+          <Select
+            value={phase}
+            onValueChange={(v) => setPhase(v as RankingPhase)}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RANKING_PHASES.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {RANKING_PHASE_LABELS[p]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* ─── Palmarés de la fase de grupos (fijo, ya cerrada) ─── */}
+      {groupPhaseChampions.hasData && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            Campeones de la fase de grupos
+          </h2>
+
+          {groupPhaseChampions.champion && (
+            <Card className="overflow-hidden border-yellow-500/40 bg-gradient-to-br from-yellow-500/15 via-amber-500/5 to-transparent">
+              <CardContent className="flex flex-wrap items-center gap-4 p-5">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/20 text-2xl">
+                  👑
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Rey de la fase de grupos
+                  </p>
+                  <p className="truncate text-xl font-bold">
+                    {groupPhaseChampions.champion.user.username}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {groupPhaseChampions.champion.count} apuesta
+                    {groupPhaseChampions.champion.count === 1 ? "" : "s"} · ROI{" "}
+                    {formatPercent(groupPhaseChampions.champion.stats.roi)} ·{" "}
+                    {formatPercent(groupPhaseChampions.champion.stats.hitRate)}{" "}
+                    acierto
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 font-mono text-2xl font-bold",
+                    profitClass(groupPhaseChampions.champion.stats.totalProfit)
+                  )}
+                >
+                  {groupPhaseChampions.champion.stats.totalProfit > 0 ? "+" : ""}
+                  {formatCurrency(
+                    groupPhaseChampions.champion.stats.totalProfit
+                  )}
+                </span>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <PodiumCard
+              title="Más beneficio"
+              icon={TrendingUp}
+              accent="text-emerald-500"
+              entries={groupPhaseChampions.byProfit.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.count} apuesta${p.count === 1 ? "" : "s"}`,
+                value: `${
+                  p.stats.totalProfit > 0 ? "+" : ""
+                }${formatCurrency(p.stats.totalProfit)}`,
+                valueClass: profitClass(p.stats.totalProfit),
+              }))}
+            />
+            <PodiumCard
+              title="Mejor ROI"
+              icon={Percent}
+              accent="text-sky-500"
+              entries={groupPhaseChampions.byRoi.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.count} apuesta${p.count === 1 ? "" : "s"}`,
+                value: formatPercent(p.stats.roi),
+                valueClass: profitClass(p.stats.roi),
+              }))}
+              emptyText={`Hacen falta ${MIN_BETS_FOR_ROI} apuestas.`}
+            />
+            <PodiumCard
+              title="Mejor % de acierto"
+              icon={Target}
+              accent="text-teal-500"
+              entries={groupPhaseChampions.byHitRate.map((p) => ({
+                name: p.user.username,
+                onClick: () => router.push(ROUTES.profile(p.user.uid)),
+                detail: `${p.stats.betsWon}/${
+                  p.stats.betsWon + p.stats.betsLost
+                } decididas`,
+                value: formatPercent(p.stats.hitRate),
+              }))}
+              emptyText={`Hacen falta ${MIN_DECIDED_FOR_HITRATE} apuestas decididas.`}
+            />
+          </div>
+        </section>
+      )}
+
       {!hasData ? (
         <EmptyState
           icon={Crown}
-          title="Aún no hay records"
-          subtitle="En cuanto el grupo empiece a registrar apuestas, aquí saldrán los mejores (y los peores). ¡Que empiece la fiesta!"
+          title={
+            phase === "general"
+              ? "Aún no hay records"
+              : `Sin apuestas en ${RANKING_PHASE_LABELS[phase]}`
+          }
+          subtitle={
+            phase === "general"
+              ? "En cuanto el grupo empiece a registrar apuestas, aquí saldrán los mejores (y los peores). ¡Que empiece la fiesta!"
+              : "No hay apuestas de esta fase todavía. Prueba con otra fase en el selector de arriba."
+          }
         />
       ) : (
         <>

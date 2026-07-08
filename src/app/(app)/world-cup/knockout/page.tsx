@@ -511,7 +511,7 @@ export default function KnockoutPage() {
           <CollapsibleSection
             open={openPrev}
             onToggle={() => setOpenPrev((o) => !o)}
-            title="Fases previas"
+            title="Segunda fase"
             subtitle="Dieciseisavos · Octavos"
             emoji="🎯"
             count={PREVIA_STAGES.reduce((a, s) => a + byStage[s].length, 0)}

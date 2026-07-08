@@ -10,7 +10,7 @@ import { betMatchIds } from "@/features/bets/bets.utils";
  *
  *  - "general": todo el torneo (comportamiento clásico).
  *  - "grupos":  solo apuestas de la fase de grupos.
- *  - "previa":  Fases previas → dieciseisavos (r32) + octavos (r16).
+ *  - "previa":  Segunda fase → dieciseisavos (r32) + octavos (r16).
  *  - "final":   Fase final → cuartos (qf) + semis (sf) + 3.er puesto + final.
  *
  * Una apuesta cuenta en una fase si TODOS sus partidos pertenecen a ella
@@ -30,7 +30,7 @@ export const RANKING_PHASES: RankingPhase[] = [
 export const RANKING_PHASE_LABELS: Record<RankingPhase, string> = {
   general: "General",
   grupos: "Fase de grupos",
-  previa: "Fase previa",
+  previa: "Segunda fase",
   final: "Fase final",
 };
 
@@ -41,7 +41,7 @@ export const RANKING_PHASE_DESC: Record<RankingPhase, string> = {
   final: "Cuartos, semifinales y final.",
 };
 
-/** Fases del Mundial agrupadas en "Fases previas" y "Fase final" (para el
+/** Fases del Mundial agrupadas en "Segunda fase" y "Fase final" (para el
  *  cuadro eliminatorio). El 3.er puesto se muestra aparte. */
 export const PREVIA_STAGES: MatchStage[] = ["r32", "r16"];
 export const FINAL_STAGES: MatchStage[] = ["qf", "sf", "final"];

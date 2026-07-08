@@ -187,7 +187,7 @@ export default function RankingPage() {
         : [...prev, uid].slice(-2)
     );
 
-  // Fase del torneo que se está viendo (General / Grupos / Previa / Final).
+  // Fase del torneo que se está viendo (General / Grupos / Segunda fase / Final).
   // Empieza en la fase ACTUAL del torneo; el usuario puede cambiarla y, una vez
   // que la toca a mano, dejamos de auto-seleccionar.
   const [phase, setPhase] = useState<RankingPhase>("general");
@@ -511,7 +511,7 @@ export default function RankingPage() {
               <SelectItem value="general">General</SelectItem>
               <SelectItem value="grupos">Fase de grupos</SelectItem>
               <SelectItem value="previa">
-                Fase previa · 16avos y 8avos
+                Segunda fase · 16avos y 8avos
               </SelectItem>
               <SelectItem value="final">
                 Fase final · cuartos, semis y final
