@@ -31,17 +31,9 @@ import { CashNetCard } from "@/components/bets/cash-net-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   betInRankingPhase,
-  currentRankingPhase,
-  RANKING_PHASE_DESC,
   RANKING_PHASE_LABELS,
+  RANKING_PHASES,
   type RankingPhase,
 } from "@/features/matches/phases";
 import {
@@ -187,12 +179,6 @@ export default function RankingPage() {
         : [...prev, uid].slice(-2)
     );
 
-  // Fase del torneo que se está viendo (General / Grupos / Segunda fase / Final).
-  // Empieza en la fase ACTUAL del torneo; el usuario puede cambiarla y, una vez
-  // que la toca a mano, dejamos de auto-seleccionar.
-  const [phase, setPhase] = useState<RankingPhase>("general");
-  const [phaseTouched, setPhaseTouched] = useState(false);
-
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setAllBets([]);
@@ -221,13 +207,6 @@ export default function RankingPage() {
     );
   }, [allBets, memberUids, activeGroup]);
 
-  // Preselección de la fase ACTUAL del torneo (mientras el usuario no elija una
-  // a mano). Se recalcula cuando llegan/cambian los partidos.
-  useEffect(() => {
-    if (phaseTouched || matches.length === 0) return;
-    setPhase(currentRankingPhase(matches));
-  }, [matches, phaseTouched]);
-
   // Etapa de cada partido, para clasificar cada apuesta por fase.
   const stageByMatchId = useMemo(() => {
     const map = new Map<string, MatchStage>();
@@ -235,18 +214,35 @@ export default function RankingPage() {
     return map;
   }, [matches]);
 
-  // Apuestas que cuentan en la fase seleccionada. En "general" son todas; en el
-  // resto, solo las cuyos partidos pertenecen a esa fase (knockout desde 0).
-  const phaseBets = useMemo(
-    () => bets.filter((b) => betInRankingPhase(b, phase, stageByMatchId)),
-    [bets, phase, stageByMatchId]
+  // Fases (con apuestas) que se muestran, en orden y sin "general". Cada bloque
+  // de gráficas y cada clasificación por fase se renderiza para TODAS ellas, no
+  // solo una: así se ven a la vez la fase de grupos, la segunda fase y la final.
+  const activePhases = useMemo(
+    () =>
+      RANKING_PHASES.filter(
+        (p) =>
+          p !== "general" &&
+          bets.some((b) => betInRankingPhase(b, p, stageByMatchId))
+      ),
+    [bets, stageByMatchId]
   );
 
-  // Balance del grupo en apuestas de tipo superaumento, acotado a la fase
-  // seleccionada.
+  // Apuestas de cada fase (para las gráficas por fase).
+  const betsByPhase = useMemo(() => {
+    const map = new Map<RankingPhase, Bet[]>();
+    for (const p of activePhases) {
+      map.set(
+        p,
+        bets.filter((b) => betInRankingPhase(b, p, stageByMatchId))
+      );
+    }
+    return map;
+  }, [bets, activePhases, stageByMatchId]);
+
+  // Balance del grupo en apuestas de tipo superaumento (todo el torneo).
   const superaumento = useMemo(
-    () => computeSuperaumentoSummary(phaseBets),
-    [phaseBets]
+    () => computeSuperaumentoSummary(bets),
+    [bets]
   );
 
   // Caja del grupo: dinero TOTAL ingresado y retirado por todos los miembros.
@@ -275,10 +271,9 @@ export default function RankingPage() {
   }, [users, activeGroup]);
 
   // Stats GENERALES (todas las apuestas del torneo), independientes de la fase.
-  // Alimentan la TABLA DE CLASIFICACIÓN (que es SIEMPRE la general), la posición
-  // canónica de las flechas de movimiento y el ranking precalculado compartido.
-  // Las gráficas "· fase" y el balance de superaumentos sí usan la fase
-  // seleccionada (phaseBets); la clasificación, no.
+  // Alimentan la CLASIFICACIÓN GENERAL, la posición canónica de las flechas de
+  // movimiento y el ranking precalculado compartido. Las clasificaciones por
+  // fase usan sus propias stats (statsByPhaseAndUid).
   const generalStatsByUid = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeUserStats>>();
     for (const u of users ?? []) {
@@ -288,16 +283,22 @@ export default function RankingPage() {
     return map;
   }, [users, bets]);
 
-  // Stats por usuario de la FASE seleccionada (para la 2.ª tabla de
-  // clasificación). En "general" coinciden con generalStatsByUid.
-  const phaseStatsByUid = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof computeUserStats>>();
-    for (const u of users ?? []) {
-      const userBets = phaseBets.filter((b) => b.userId === u.uid);
-      map.set(u.uid, computeUserStats(userBets));
+  // Stats por usuario y fase (para las tablas de clasificación de cada fase).
+  const statsByPhaseAndUid = useMemo(() => {
+    const map = new Map<RankingPhase, Map<string, UserStats>>();
+    for (const p of activePhases) {
+      const pb = betsByPhase.get(p) ?? [];
+      const inner = new Map<string, UserStats>();
+      for (const u of users ?? []) {
+        inner.set(
+          u.uid,
+          computeUserStats(pb.filter((b) => b.userId === u.uid))
+        );
+      }
+      map.set(p, inner);
     }
     return map;
-  }, [users, phaseBets]);
+  }, [users, activePhases, betsByPhase]);
 
   // Logros desbloqueados por usuario, para el contador 🏅 de cada fila.
   const achievementsByUid = useMemo(() => {
@@ -482,45 +483,6 @@ export default function RankingPage() {
 
   return (
     <div className="space-y-6">
-      {/* ─── Selector de fase (define el alcance de toda la página) ─── */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Trophy className="h-5 w-5 shrink-0 text-primary" />
-            <div>
-              <p className="text-sm font-semibold leading-tight">
-                Análisis por fase
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {RANKING_PHASE_DESC[phase]} Afecta a las gráficas y al balance de
-                superaumentos; la clasificación es siempre la general.
-              </p>
-            </div>
-          </div>
-          <Select
-            value={phase}
-            onValueChange={(v) => {
-              setPhase(v as RankingPhase);
-              setPhaseTouched(true);
-            }}
-          >
-            <SelectTrigger className="h-9 w-full sm:w-[250px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="general">General</SelectItem>
-              <SelectItem value="grupos">Fase de grupos</SelectItem>
-              <SelectItem value="previa">
-                Segunda fase · 16avos y 8avos
-              </SelectItem>
-              <SelectItem value="final">
-                Fase final · cuartos, semis y final
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
       {/* ─── Balance general de superaumentos ─── */}
       <Card>
         <CardHeader>
@@ -599,7 +561,7 @@ export default function RankingPage() {
       {/* grid-cols-1 en móvil: limita la columna al ancho disponible para que
           el SVG de las gráficas no la "estire" y se desborde a la derecha. */}
       <div className="grid grid-cols-1 gap-6">
-        {/* General: TODO el torneo (no depende del selector de fase). */}
+        {/* General: TODO el torneo. */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -620,29 +582,35 @@ export default function RankingPage() {
           </CardContent>
         </Card>
 
-        {/* Fase actual: la fase seleccionada arriba (por defecto, la del torneo). */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              <LineChart className="h-4 w-4 text-primary" />
-              Evolución del beneficio
-              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
-                {RANKING_PHASE_LABELS[phase]}
-              </span>
-            </CardTitle>
-            <CardDescription>
-              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}).
-              Cámbiala con el desplegable de fase.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {users === null ? (
-              chartSkeleton()
-            ) : (
-              <RankingChart users={users} bets={phaseBets} matches={matches} />
-            )}
-          </CardContent>
-        </Card>
+        {/* Una gráfica por cada fase con apuestas (grupos, segunda fase, final). */}
+        {activePhases.map((p) => (
+          <Card key={p}>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                <LineChart className="h-4 w-4 text-primary" />
+                Evolución del beneficio
+                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                  {RANKING_PHASE_LABELS[p]}
+                </span>
+              </CardTitle>
+              <CardDescription>
+                Solo apuestas de {RANKING_PHASE_LABELS[p]}. Cada línea arranca en
+                0 € en esta fase.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {users === null ? (
+                chartSkeleton()
+              ) : (
+                <RankingChart
+                  users={users}
+                  bets={betsByPhase.get(p) ?? []}
+                  matches={matches}
+                />
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* ─── Apuestas por jugador: General + fase seleccionada ─── */}
@@ -668,28 +636,30 @@ export default function RankingPage() {
           </CardContent>
         </Card>
 
-        {/* Fase actual: la fase seleccionada arriba (por defecto, la del torneo). */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              Apuestas por jugador
-              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
-                {RANKING_PHASE_LABELS[phase]}
-              </span>
-            </CardTitle>
-            <CardDescription>
-              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {users === null ? (
-              chartSkeleton()
-            ) : (
-              <BetsBarChart users={users} bets={phaseBets} />
-            )}
-          </CardContent>
-        </Card>
+        {/* Una gráfica por cada fase con apuestas (grupos, segunda fase, final). */}
+        {activePhases.map((p) => (
+          <Card key={p}>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Apuestas por jugador
+                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                  {RANKING_PHASE_LABELS[p]}
+                </span>
+              </CardTitle>
+              <CardDescription>
+                Solo apuestas de {RANKING_PHASE_LABELS[p]}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {users === null ? (
+                chartSkeleton()
+              ) : (
+                <BetsBarChart users={users} bets={betsByPhase.get(p) ?? []} />
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* ─── Clasificación: General + fase seleccionada (dos tablas) ─── */}
@@ -801,19 +771,19 @@ export default function RankingPage() {
         </CardContent>
       </Card>
 
-      {/* Clasificación de la FASE seleccionada (solo si no es la general) */}
-      {phase !== "general" && (
-        <Card>
+      {/* Una clasificación por cada fase con apuestas (grupos, segunda, final) */}
+      {activePhases.map((p) => (
+        <Card key={p}>
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
               Clasificación
               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
-                {RANKING_PHASE_LABELS[phase]}
+                {RANKING_PHASE_LABELS[p]}
               </span>
             </CardTitle>
             <CardDescription>
-              Solo la fase seleccionada arriba ({RANKING_PHASE_LABELS[phase]}):
-              ROI, beneficio, % de acierto y apuestas de esa fase.
+              Solo apuestas de {RANKING_PHASE_LABELS[p]}: ROI, beneficio, % de
+              acierto y apuestas de esa fase.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -826,7 +796,7 @@ export default function RankingPage() {
             ) : (
               <RankingTable
                 users={users}
-                statsByUid={phaseStatsByUid}
+                statsByUid={statsByPhaseAndUid.get(p) ?? new Map()}
                 balanceByUid={balanceByUid}
                 cashByUid={cashByUid}
                 achievementsByUid={achievementsByUid}
@@ -842,7 +812,7 @@ export default function RankingPage() {
             )}
           </CardContent>
         </Card>
-      )}
+      ))}
     </div>
   );
 }
