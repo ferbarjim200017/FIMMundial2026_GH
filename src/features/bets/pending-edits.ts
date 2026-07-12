@@ -8,6 +8,7 @@ import {
   type UpdateBetInput,
 } from "@/features/bets/bets.service";
 import { calcProfit } from "@/features/bets/bets.utils";
+import { betNoLongerExists } from "@/features/bets/pending-settles";
 import { Timestamp } from "firebase/firestore";
 import type { Bet } from "@/types/domain";
 
@@ -123,8 +124,10 @@ export async function flushPendingEdits(): Promise<{
         await updateBet(p.input);
         removePendingEdit(p.betId);
         flushed += 1;
-      } catch {
-        // Lo dejamos en la cola para el próximo intento.
+      } catch (err) {
+        // Si la apuesta ya se borró, la edición es huérfana: la quitamos para no
+        // dejar la cola atascada. Otros errores se quedan para reintentar.
+        if (betNoLongerExists(err)) removePendingEdit(p.betId);
       }
     }
   } finally {

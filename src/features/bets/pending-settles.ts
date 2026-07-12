@@ -38,6 +38,24 @@ export interface PendingSettle {
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
+/**
+ * True si el error indica que la apuesta ya NO existe en Firestore (se borró
+ * después de encolar el cambio). En ese caso la entrada de la cola es huérfana
+ * y nunca podrá subirse, así que hay que quitarla en vez de reintentar siempre.
+ */
+export function betNoLongerExists(err: unknown): boolean {
+  if (
+    err &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code?: string }).code === "not-found"
+  ) {
+    return true;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /no encontrada|not-found|no document to update/i.test(msg);
+}
+
 function read(): PendingSettle[] {
   if (typeof window === "undefined") return [];
   try {
@@ -130,8 +148,11 @@ export async function flushPendingSettles(): Promise<{
         await settleBet(p.betId, p.status, p.cashoutProfit);
         removePendingSettle(p.betId);
         flushed += 1;
-      } catch {
-        // Lo dejamos en la cola para el próximo intento.
+      } catch (err) {
+        // Si la apuesta ya se borró, la entrada es huérfana: la quitamos para no
+        // dejar la cola atascada "sin subir" para siempre. Otros errores (cuota,
+        // red) los dejamos en la cola para el próximo intento.
+        if (betNoLongerExists(err)) removePendingSettle(p.betId);
       }
     }
   } finally {

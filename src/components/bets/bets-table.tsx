@@ -18,7 +18,8 @@ import { BookmakerPill } from "@/components/bets/bookmaker-pill";
 import { SettleBetDialog } from "@/components/bets/settle-bet-dialog";
 import { BulkEditDialog } from "@/components/bets/bulk-edit-dialog";
 import { deleteBet, unsettleBet } from "@/features/bets/bets.service";
-import { queueSettle } from "@/features/bets/pending-settles";
+import { queueSettle, removePendingSettle } from "@/features/bets/pending-settles";
+import { removePendingEdit } from "@/features/bets/pending-edits";
 import { betDisplayLabel } from "@/features/bets/bets.utils";
 import { MARKET_OPTIONS } from "@/features/bets/bets.schema";
 import { formatCurrency, formatDateTime, profitClass } from "@/lib/utils";
@@ -126,6 +127,10 @@ export function BetsTable({
 
   async function handleDelete(bet: Bet) {
     if (!confirm(`¿Eliminar la apuesta "${bet.matchLabel} - ${bet.selection}"?`)) return;
+    // Quita cualquier cambio local sin subir de esta apuesta ANTES de borrarla,
+    // para que no quede una liquidación/edición huérfana atascada en la cola.
+    removePendingSettle(bet.id);
+    removePendingEdit(bet.id);
     try {
       await deleteBet(bet.id);
     } catch (err) {
