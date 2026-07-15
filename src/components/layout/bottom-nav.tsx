@@ -10,6 +10,7 @@ import {
   Crown,
   Globe2,
   Newspaper,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -23,6 +24,7 @@ const NAV = [
   { href: ROUTES.hallOfFame, label: "Fama", icon: Crown },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
+  { href: ROUTES.conexion, label: "Winamax", icon: Link2 },
 ] as const;
 
 /**
@@ -41,7 +43,7 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Navegación principal"
     >
-      <ul className="grid h-14 grid-cols-7">
+      <ul className="grid h-14 grid-cols-8">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

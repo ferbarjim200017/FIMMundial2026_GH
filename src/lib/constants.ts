@@ -18,6 +18,7 @@ export const ROUTES = {
   profile: (uid: string) => `/profile/${uid}`,
   worldCup: "/world-cup",
   feed: "/feed",
+  conexion: "/conexion",
   admin: "/admin",
   compare: (a: string, b: string) => `/compare?a=${a}&b=${b}`,
   upcoming: "/upcoming",

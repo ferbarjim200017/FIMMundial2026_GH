@@ -10,6 +10,7 @@ import {
   Crown,
   Globe2,
   Newspaper,
+  Link2,
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const NAV = [
   { href: ROUTES.hallOfFame, label: "Salón de la fama", icon: Crown },
   { href: ROUTES.worldCup, label: "Mundial", icon: Globe2 },
   { href: ROUTES.feed, label: "Feed", icon: Newspaper },
+  { href: ROUTES.conexion, label: "Conexión Winamax", icon: Link2 },
 ] as const;
 
 export function Sidebar() {
